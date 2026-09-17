@@ -10,4 +10,4 @@ mvnw.cmd spring-boot:run -pl admin-service
 mvnw.cmd spring-boot:run -pl live-service
 ```
 
-`mvnw.cmd` 尚未补齐（进度 T0.2）。凭证：`VHALL_APP_KEY` / `VHALL_APP_SECRET`。
+凭证：`VHALL_APP_KEY` / `VHALL_APP_SECRET`。

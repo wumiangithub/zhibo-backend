@@ -21,7 +21,7 @@ public class VhallProperties {
 
     private String appSecret = "";
 
-    /** 0=MD5（默认），1=RSA。 */
+    /** 0=MD5（默认），1=RSA，2=SHA256，3=SM3。本阶段只用 MD5。 */
     private int signType = 0;
 
     /** 微吼要求的 platform 请求头，固定 15。 */
