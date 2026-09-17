@@ -1,6 +1,7 @@
 package com.zhibo.admin.activity;
 
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
+import com.zhibo.admin.activity.dto.ActivityEmbedResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
@@ -26,6 +27,7 @@ public class ActivityController {
 
     private final ActivityService activityService;
     private final HostService hostService;
+    private final EmbedService embedService;
 
     @PostMapping
     public ApiResponse<CreateActivityResponse> create(@Valid @RequestBody CreateActivityRequest request) {
@@ -56,5 +58,11 @@ public class ActivityController {
     @GetMapping("/{id}/host")
     public ApiResponse<ActivityHostResponse> host(@PathVariable long id) {
         return ApiResponse.ok(hostService.host(id));
+    }
+
+    /** 管理后台嵌入（iframe；此页不能开播）。 */
+    @GetMapping("/{id}/embed")
+    public ApiResponse<ActivityEmbedResponse> embed(@PathVariable long id) {
+        return ApiResponse.ok(embedService.embed(id));
     }
 }
