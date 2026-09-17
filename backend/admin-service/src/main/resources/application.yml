@@ -1,0 +1,20 @@
+server:
+  port: 8081
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: admin-service
+  profiles:
+    # 没指定 profile 时走 local：DEBUG + 允许空凭证启动
+    default: local
+  jackson:
+    default-property-inclusion: non_null
+
+# 微吼默认值在 VhallProperties 里；这里只注入凭证，避免两份 yml 复制超时/platform
+vhall:
+  app-key: ${VHALL_APP_KEY:}
+  app-secret: ${VHALL_APP_SECRET:}

@@ -1,0 +1,6 @@
+logging:
+  level:
+    com.zhibo: DEBUG
+
+vhall:
+  fail-on-missing-credentials: false

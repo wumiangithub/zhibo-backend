@@ -1,0 +1,18 @@
+server:
+  port: 8082
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: live-service
+  profiles:
+    default: local
+  jackson:
+    default-property-inclusion: non_null
+
+vhall:
+  app-key: ${VHALL_APP_KEY:}
+  app-secret: ${VHALL_APP_SECRET:}
