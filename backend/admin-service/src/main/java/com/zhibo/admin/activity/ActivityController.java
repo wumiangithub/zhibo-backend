@@ -1,6 +1,7 @@
 package com.zhibo.admin.activity;
 
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
+import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 活动管理 API。路径对齐 API约定草案；字段用 activity 语义。
+ * 活动管理 API。路径对齐 API约定；字段用 activity 语义。
  */
 @RestController
 @RequestMapping("/api/activities")
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ActivityController {
 
     private final ActivityService activityService;
+    private final HostService hostService;
 
     @PostMapping
     public ApiResponse<CreateActivityResponse> create(@Valid @RequestBody CreateActivityRequest request) {
@@ -48,5 +50,11 @@ public class ActivityController {
     @GetMapping("/{id}")
     public ApiResponse<ActivityDetailResponse> detail(@PathVariable long id) {
         return ApiResponse.ok(activityService.detail(id));
+    }
+
+    /** 主持人开播链接（新窗口打开，不要 iframe）。 */
+    @GetMapping("/{id}/host")
+    public ApiResponse<ActivityHostResponse> host(@PathVariable long id) {
+        return ApiResponse.ok(hostService.host(id));
     }
 }

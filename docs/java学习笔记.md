@@ -2,6 +2,8 @@
 
 | 日期 | 概念 | 前端类比 | 位置 |
 |------|------|----------|------|
+| 2026-09-17 | `UriComponentsBuilder` 拼 query | `URLSearchParams` / `new URL().searchParams` | `WatchService` |
+| 2026-09-17 | `RestClient` GET + query 签名 | axios `params`；GET 与 POST form 共用一套签名 | `VhallClient#get` |
 | 2026-09-17 | `@RestController` + `@RequestMapping` | Express Router / 一组路由 | `ActivityController` |
 | 2026-09-17 | `@Service` + 构造注入 | 前端 service 层；依赖由框架注入 | `ActivityService` |
 | 2026-09-17 | `@Valid` + Bean Validation | zod / yup 校验请求体 | `CreateActivityRequest` |

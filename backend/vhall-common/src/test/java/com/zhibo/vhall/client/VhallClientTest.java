@@ -101,4 +101,20 @@ class VhallClientTest {
         assertTrue(ex.getCause() != null);
         server.verify();
     }
+
+    @Test
+    void get_sendsSignedQueryAndParses() {
+        server.expect(requestTo(org.hamcrest.Matchers.startsWith(
+                        "https://saas-open.vhall.com/v3/webinars/live/get-role-url?")))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("platform", "15"))
+                .andRespond(withSuccess("""
+                        {"code":200,"msg":"ok","data":{"page_url":"https://host"},"request_id":"g1"}
+                        """, MediaType.APPLICATION_JSON));
+
+        Map data = client.getForData("/v3/webinars/live/get-role-url",
+                Map.of("webinar_id", 1, "type", 1), Map.class);
+        assertEquals("https://host", data.get("page_url"));
+        server.verify();
+    }
 }

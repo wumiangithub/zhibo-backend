@@ -20,11 +20,13 @@ class ActivityControllerTest {
 
     private MockMvc mockMvc;
     private ActivityService activityService;
+    private HostService hostService;
 
     @BeforeEach
     void setUp() {
         activityService = mock(ActivityService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new ActivityController(activityService))
+        hostService = mock(HostService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new ActivityController(activityService, hostService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -68,5 +70,17 @@ class ActivityControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(9))
                 .andExpect(jsonPath("$.data.title").value("X"));
+    }
+
+    @Test
+    void host_returnsOk() throws Exception {
+        var host = new com.zhibo.admin.activity.dto.ActivityHostResponse();
+        host.setHostUrl("https://host.example/page");
+        when(hostService.host(9L)).thenReturn(host);
+
+        mockMvc.perform(get("/api/activities/9/host").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.hostUrl").value("https://host.example/page"));
     }
 }

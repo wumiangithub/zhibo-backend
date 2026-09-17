@@ -13,6 +13,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -79,6 +80,36 @@ public class VhallClient {
      */
     public <T> T postForData(String path, Map<String, ?> businessParams, Class<T> dataType) {
         return post(path, businessParams, dataType).requireData();
+    }
+
+    /**
+     * GET（查询串签名），用于如参会地址等接口。
+     */
+    public <T> VhallResponse<T> get(String path, Map<String, ?> businessParams, Class<T> dataType) {
+        String requestId = newRequestId();
+        Map<String, Object> allParams = buildSignedParams(businessParams);
+        MultiValueMap<String, String> query = toForm(allParams);
+        String uri = UriComponentsBuilder.fromPath(path)
+                .queryParams(query)
+                .toUriString();
+
+        log.debug("Vhall GET {} request-id={}", path, requestId);
+        String body;
+        try {
+            body = restClient.get()
+                    .uri(uri)
+                    .header("platform", String.valueOf(properties.getPlatform()))
+                    .header("request-id", requestId)
+                    .retrieve()
+                    .body(String.class);
+        } catch (RestClientException e) {
+            throw new VhallException("微吼 HTTP 调用失败: " + path, e);
+        }
+        return parseResponse(body, dataType);
+    }
+
+    public <T> T getForData(String path, Map<String, ?> businessParams, Class<T> dataType) {
+        return get(path, businessParams, dataType).requireData();
     }
 
     private Map<String, Object> buildSignedParams(Map<String, ?> businessParams) {
