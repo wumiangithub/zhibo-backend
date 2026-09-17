@@ -2,6 +2,7 @@
 
 | 日期 | 概念 | 前端类比 | 位置 |
 |------|------|----------|------|
+| 2026-09-17 | 独立 `StatsController` 子路径 | 前端 `/activities/:id/stats` 嵌套路由 | `StatsController` |
 | 2026-09-17 | `UriComponentsBuilder` 拼 query | `URLSearchParams` / `new URL().searchParams` | `WatchService` |
 | 2026-09-17 | `RestClient` GET + query 签名 | axios `params`；GET 与 POST form 共用一套签名 | `VhallClient#get` |
 | 2026-09-17 | `@RestController` + `@RequestMapping` | Express Router / 一组路由 | `ActivityController` |
