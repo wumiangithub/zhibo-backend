@@ -13,4 +13,4 @@
 - [docs/进度.md](docs/进度.md) — 后端勾选和下一步
 - [docs/java学习笔记.md](docs/java学习笔记.md) — 教过的 Java 概念
 
-规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；密钥走环境变量；包名 `com.zhibo.vhall`。
+规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；密钥走仓库根 `.env`（勿提交）；包名 `com.zhibo.vhall`。

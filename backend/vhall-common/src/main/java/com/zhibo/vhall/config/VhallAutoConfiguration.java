@@ -31,9 +31,10 @@ public class VhallAutoConfiguration {
         if (properties.isFailOnMissingCredentials()) {
             throw new IllegalStateException(
                     "未配置 VHALL_APP_KEY / VHALL_APP_SECRET。"
-                            + " 本地开发请使用 --spring.profiles.active=local，或设置环境变量。");
+                            + " 请在仓库根目录复制 .env.example 为 .env 并填写，"
+                            + "或使用 --spring.profiles.active=local。");
         }
-        log.warn("VHALL_APP_KEY / VHALL_APP_SECRET 为空，调用微吼会失败。本地练习可先忽略。");
+        log.warn("VHALL_APP_KEY / VHALL_APP_SECRET 为空（未读到 .env），调用微吼会失败。本地练习可先忽略。");
     }
 
     @Bean
