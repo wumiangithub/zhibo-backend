@@ -32,7 +32,7 @@ public class ActivityService {
     public CreateActivityResponse create(CreateActivityRequest request) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("subject", request.getTitle().trim());
-        params.put("start_time", request.getStartTime().trim());
+        params.put("start_time", toVhallStartTime(request.getStartTime()));
         params.put("webinar_type", request.getType());
 
         @SuppressWarnings("unchecked")
@@ -42,6 +42,23 @@ public class ActivityService {
             throw new IllegalStateException("微吼未返回 webinar_id");
         }
         return new CreateActivityResponse(id);
+    }
+
+    /**
+     * 对外契约是 {@code yyyy-MM-dd HH:mm:ss}；微吼 create 只要 {@code Y-m-d H:i}（到分钟）。
+     */
+    static String toVhallStartTime(String startTime) {
+        if (startTime == null || startTime.isBlank()) {
+            throw new IllegalArgumentException("开始时间不能为空");
+        }
+        String value = startTime.trim();
+        if (value.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+            return value.substring(0, 16);
+        }
+        if (value.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}")) {
+            return value;
+        }
+        throw new IllegalArgumentException("开始时间格式须为 yyyy-MM-dd HH:mm:ss");
     }
 
     public ActivityListResponse list(int page, int pageSize, String keyword, Integer state) {

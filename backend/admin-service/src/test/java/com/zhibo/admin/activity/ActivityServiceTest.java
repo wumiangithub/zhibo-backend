@@ -48,7 +48,7 @@ class ActivityServiceTest {
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(vhallClient).postForData(eq(ActivityService.PATH_CREATE), captor.capture(), eq(Map.class));
         assertEquals("测试活动", captor.getValue().get("subject"));
-        assertEquals("2026-10-01 20:00:00", captor.getValue().get("start_time"));
+        assertEquals("2026-10-01 20:00", captor.getValue().get("start_time"));
         assertEquals(2, captor.getValue().get("webinar_type"));
     }
 
