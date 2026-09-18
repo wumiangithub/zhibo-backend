@@ -1,27 +1,45 @@
 package com.zhibo.admin.stats;
 
+import com.zhibo.admin.activity.ActivityService;
 import com.zhibo.admin.stats.dto.ActivityStatsResponse;
 import com.zhibo.admin.stats.dto.OnlineTrendResponse;
 import com.zhibo.vhall.client.VhallClient;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 观看数据：概览 + 在线趋势。
  */
 @Service
-@RequiredArgsConstructor
 public class StatsService {
 
     static final String PATH_INFO = "/v3/webinars/webinar/info";
     static final String PATH_ONLINE_NOW = "/v3/data-center/webinar/current-online-number";
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
 
+    static final Duration ONLINE_CACHE_TTL = Duration.ofSeconds(60);
+
+    private static final DateTimeFormatter API_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private final VhallClient vhallClient;
+    private final Clock clock;
+    private final ConcurrentHashMap<Long, CachedOnline> onlineCache = new ConcurrentHashMap<>();
+
+    public StatsService(VhallClient vhallClient, Clock clock) {
+        this.vhallClient = vhallClient;
+        this.clock = clock;
+    }
 
     public ActivityStatsResponse summary(long activityId) {
         requirePositiveId(activityId);
@@ -30,41 +48,43 @@ public class StatsService {
         Map<String, Object> info = vhallClient.postForData(
                 PATH_INFO, Map.of("webinar_id", activityId), Map.class);
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> online = vhallClient.postForData(
-                PATH_ONLINE_NOW, Map.of("webinar_id", activityId), Map.class);
-
         ActivityStatsResponse response = new ActivityStatsResponse();
         response.setId(activityId);
         response.setTitle(asString(info.get("subject")));
         response.setState(asInteger(info.get("webinar_state")));
         response.setType(asInteger(info.get("webinar_type")));
         response.setPv(asInteger(info.get("pv")));
-        response.setOnlineCount(asInteger(online.get("num")));
+        response.setOnlineCount(currentOnline(activityId));
         return response;
     }
 
     public OnlineTrendResponse onlineTrend(long activityId, String startTime, String endTime) {
         requirePositiveId(activityId);
-        if (startTime == null || startTime.isBlank()) {
-            throw new IllegalArgumentException("startTime 不能为空");
+        LocalDateTime start = parseApiTime(startTime, "startTime");
+        LocalDateTime end = parseApiTime(endTime, "endTime");
+        if (end.isBefore(start)) {
+            throw new IllegalArgumentException("endTime 不能早于 startTime");
         }
-        if (endTime == null || endTime.isBlank()) {
-            throw new IllegalArgumentException("endTime 不能为空");
+        if (Duration.between(start, end).compareTo(Duration.ofDays(1)) > 0) {
+            throw new IllegalArgumentException("查询跨度不能超过 1 天");
         }
+
+        // 对外仍是秒级；发给微吼裁到分钟（与创建活动相同）
+        String vhallStart = ActivityService.toVhallStartTime(start.format(API_TIME));
+        String vhallEnd = ActivityService.toVhallStartTime(end.format(API_TIME));
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("webinar_id", activityId);
-        params.put("start_time", startTime.trim());
-        params.put("end_time", endTime.trim());
+        params.put("start_time", vhallStart);
+        params.put("end_time", vhallEnd);
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = vhallClient.postForData(PATH_ONLINE_TREND, params, Map.class);
 
         OnlineTrendResponse response = new OnlineTrendResponse();
         response.setId(activityId);
-        response.setStartTime(startTime.trim());
-        response.setEndTime(endTime.trim());
+        response.setStartTime(start.format(API_TIME));
+        response.setEndTime(end.format(API_TIME));
 
         Object rawList = data.get("list");
         if (rawList instanceof List<?> list) {
@@ -79,6 +99,37 @@ public class StatsService {
             }
         }
         return response;
+    }
+
+    /**
+     * 同一活动约 60 秒内复用上次当前在线，避免轮询打爆微吼。
+     */
+    Integer currentOnline(long activityId) {
+        Instant now = clock.instant();
+        CachedOnline cached = onlineCache.get(activityId);
+        if (cached != null && Duration.between(cached.fetchedAt(), now).compareTo(ONLINE_CACHE_TTL) < 0) {
+            return cached.count();
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> online = vhallClient.postForData(
+                PATH_ONLINE_NOW, Map.of("webinar_id", activityId), Map.class);
+        Integer num = asInteger(online.get("num"));
+        if (num != null) {
+            onlineCache.put(activityId, new CachedOnline(num, now));
+        }
+        return num;
+    }
+
+    private static LocalDateTime parseApiTime(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " 不能为空");
+        }
+        try {
+            return LocalDateTime.parse(value.trim(), API_TIME);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(field + " 格式须为 yyyy-MM-dd HH:mm:ss");
+        }
     }
 
     private static void requirePositiveId(long activityId) {
@@ -103,5 +154,8 @@ public class StatsService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private record CachedOnline(int count, Instant fetchedAt) {
     }
 }

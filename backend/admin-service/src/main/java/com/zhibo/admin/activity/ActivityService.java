@@ -47,7 +47,7 @@ public class ActivityService {
     /**
      * 对外契约是 {@code yyyy-MM-dd HH:mm:ss}；微吼 create 只要 {@code Y-m-d H:i}（到分钟）。
      */
-    static String toVhallStartTime(String startTime) {
+    public static String toVhallStartTime(String startTime) {
         if (startTime == null || startTime.isBlank()) {
             throw new IllegalArgumentException("开始时间不能为空");
         }
@@ -135,7 +135,11 @@ public class ActivityService {
         detail.setShareLink(base.getShareLink());
         detail.setCreatedAt(base.getCreatedAt());
         detail.setIntroduction(asString(raw.get("introduction")));
-        detail.setEndTime(asString(raw.get("end_time")));
+        // 微吼未结束时 end_time 常为 0000-00-00…；约定不输出该字段（jackson non_null）
+        String endTime = asString(raw.get("end_time"));
+        if (endTime != null && !endTime.startsWith("0000")) {
+            detail.setEndTime(endTime);
+        }
         detail.setVerify(asInteger(raw.get("verify")));
         detail.setPv(asInteger(raw.get("pv")));
         detail.setFullEmbedShareLink(asString(raw.get("full_embed_share_link")));

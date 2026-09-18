@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -102,5 +103,35 @@ class ActivityServiceTest {
         assertEquals("简介", detail.getIntroduction());
         assertEquals(1, detail.getState());
         assertEquals(10, detail.getPv());
+    }
+
+    @Test
+    void detail_omitsPlaceholderEndTime() {
+        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "id", 88,
+                        "subject", "未结束",
+                        "end_time", "0000-00-00 00:00:00",
+                        "webinar_state", 1,
+                        "webinar_type", 2
+                ));
+
+        ActivityDetailResponse detail = activityService.detail(88);
+        assertNull(detail.getEndTime());
+    }
+
+    @Test
+    void detail_keepsRealEndTime() {
+        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "id", 88,
+                        "subject", "已结束",
+                        "end_time", "2026-09-17 21:00:00",
+                        "webinar_state", 3,
+                        "webinar_type", 2
+                ));
+
+        ActivityDetailResponse detail = activityService.detail(88);
+        assertEquals("2026-09-17 21:00:00", detail.getEndTime());
     }
 }

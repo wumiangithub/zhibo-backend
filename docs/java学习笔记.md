@@ -2,6 +2,8 @@
 
 | 日期 | 概念 | 前端类比 | 位置 |
 |------|------|----------|------|
+| 2026-09-18 | 注入 `Clock` + 内存短缓存 | 自己 mock `Date.now`；Map 当 TTL cache | `TimeConfig` / `StatsService` |
+| 2026-09-18 | `Duration.between` 校验跨度 | `dayjs(end).diff(start)` 超限抛错 | `StatsService#onlineTrend` |
 | 2026-09-17 | `EnvironmentPostProcessor` 读 `.env` | Vite 启动前加载 `.env` | `DotenvEnvironmentPostProcessor` |
 | 2026-09-17 | 独立 `StatsController` 子路径 | 前端 `/activities/:id/stats` 嵌套路由 | `StatsController` |
 | 2026-09-17 | `UriComponentsBuilder` 拼 query | `URLSearchParams` / `new URL().searchParams` | `WatchService` |
