@@ -6,14 +6,11 @@ import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.vhall.client.VhallClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * 观看鉴权：取微吼全屏嵌入地址，拼游客身份参数；首页列表复用 get-list。
@@ -24,9 +21,8 @@ public class WatchService {
 
     static final String PATH_INFO = "/v3/webinars/webinar/info";
     static final String PATH_LIST = "/v3/webinars/webinar/get-list";
-    static final String DEFAULT_NICKNAME = "观众";
-    static final int NICKNAME_MAX = 50;
-    private static final Pattern GUEST_ID_PATTERN = Pattern.compile("^[A-Za-z0-9]+$");
+    static final String DEFAULT_NICKNAME = WatchIdentity.DEFAULT_NICKNAME;
+    static final int NICKNAME_MAX = WatchIdentity.NICKNAME_MAX;
 
     private final VhallClient vhallClient;
 
@@ -60,8 +56,8 @@ public class WatchService {
             throw new IllegalArgumentException("活动 id 无效");
         }
 
-        String resolvedGuestId = resolveGuestId(guestId);
-        String resolvedNickname = resolveNickname(nickname);
+        String resolvedGuestId = WatchIdentity.resolveGuestId(guestId);
+        String resolvedNickname = WatchIdentity.resolveNickname(nickname);
 
         @SuppressWarnings("unchecked")
         Map<String, Object> info = vhallClient.postForData(
@@ -72,12 +68,7 @@ public class WatchService {
             throw new IllegalStateException("活动缺少全屏嵌入地址 full_embed_share_link");
         }
 
-        String embedUrl = UriComponentsBuilder.fromUriString(baseEmbed)
-                .replaceQueryParam("email", resolvedGuestId + "@zhibo.local")
-                .replaceQueryParam("nickname", resolvedNickname)
-                .encode()
-                .build()
-                .toUriString();
+        String embedUrl = WatchIdentity.buildEmbedUrl(baseEmbed, resolvedGuestId, resolvedNickname);
 
         WatchResponse response = new WatchResponse();
         response.setId(activityId);
@@ -120,28 +111,6 @@ public class WatchService {
             }
         }
         return null;
-    }
-
-    private static String resolveGuestId(String guestId) {
-        if (guestId == null || guestId.isBlank()) {
-            return UUID.randomUUID().toString().replace("-", "");
-        }
-        String trimmed = guestId.trim();
-        if (!GUEST_ID_PATTERN.matcher(trimmed).matches()) {
-            throw new IllegalArgumentException("guestId 只能包含字母和数字");
-        }
-        return trimmed;
-    }
-
-    private static String resolveNickname(String nickname) {
-        if (nickname == null || nickname.isBlank()) {
-            return DEFAULT_NICKNAME;
-        }
-        String trimmed = nickname.trim();
-        if (trimmed.length() > NICKNAME_MAX) {
-            throw new IllegalArgumentException("nickname 不能超过 " + NICKNAME_MAX + " 字");
-        }
-        return trimmed;
     }
 
     private static String asString(Object value) {
