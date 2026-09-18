@@ -134,6 +134,41 @@ class WatchSdkServiceTest {
     }
 
     @Test
+    void sdk_mapsStartTimeAndOmitsPlaceholderEndTime() {
+        when(vhallClient.postForData(eq(WatchSdkService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "subject", "预告课",
+                        "webinar_state", 2,
+                        "webinar_type", 2,
+                        "start_time", "2026-09-18 20:00:00",
+                        "end_time", "0000-00-00 00:00:00",
+                        "full_embed_share_link", "https://live.example/embed/55"
+                ));
+
+        WatchSdkResponse response = watchSdkService.sdk(55L, "guestABC", "小明");
+        assertEquals("2026-09-18 20:00:00", response.getStartTime());
+        assertNull(response.getEndTime());
+        assertEquals(2, response.getState());
+    }
+
+    @Test
+    void sdk_mapsRealEndTime() {
+        when(vhallClient.postForData(eq(WatchSdkService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "subject", "已结束",
+                        "webinar_state", 3,
+                        "start_time", "2026-09-18 20:00:00",
+                        "end_time", "2026-09-18 21:30:00",
+                        "full_embed_share_link", "https://live.example/embed/55"
+                ));
+
+        WatchSdkResponse response = watchSdkService.sdk(55L, "guestABC", null);
+        assertEquals("2026-09-18 20:00:00", response.getStartTime());
+        assertEquals("2026-09-18 21:30:00", response.getEndTime());
+        assertEquals(3, response.getState());
+    }
+
+    @Test
     void sdk_rejectsInvalidGuestId() {
         assertThrows(IllegalArgumentException.class,
                 () -> watchSdkService.sdk(1L, "bad-id", null));

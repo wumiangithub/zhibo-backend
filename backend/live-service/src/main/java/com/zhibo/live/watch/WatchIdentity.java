@@ -58,4 +58,19 @@ final class WatchIdentity {
                 .build()
                 .toUriString();
     }
+
+    /**
+     * 微吼未结束时 {@code end_time} 常为 {@code 0000-00-00…}；约定不输出该字段。
+     * 有效结束时间原样返回（jackson {@code non_null} 会省略 null）。
+     */
+    static String resolveEndTime(Object rawEndTime) {
+        if (rawEndTime == null) {
+            return null;
+        }
+        String endTime = rawEndTime.toString().trim();
+        if (endTime.isEmpty() || endTime.startsWith("0000")) {
+            return null;
+        }
+        return endTime;
+    }
 }

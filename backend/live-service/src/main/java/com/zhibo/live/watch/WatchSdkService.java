@@ -88,6 +88,8 @@ public class WatchSdkService {
         response.setType(asInteger(info.get("webinar_type")));
         response.setNickname(resolvedNickname);
         response.setGuestId(resolvedGuestId);
+        response.setStartTime(asString(info.get("start_time")));
+        response.setEndTime(WatchIdentity.resolveEndTime(info.get("end_time")));
         response.setSdk(sdk);
         response.setEmbedUrl(embedUrl);
         return response;

@@ -14,6 +14,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -91,6 +92,39 @@ class WatchServiceTest {
         assertTrue(response.getGuestId().matches("^[A-Za-z0-9]+$"));
         assertTrue(response.getEmbedUrl().contains("email=" + response.getGuestId()));
         assertTrue(response.getEmbedUrl().contains("zhibo.local"));
+    }
+
+    @Test
+    void watch_mapsStartTimeAndOmitsPlaceholderEndTime() {
+        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "subject", "预告课",
+                        "webinar_state", 2,
+                        "webinar_type", 2,
+                        "start_time", "2026-09-18 20:00:00",
+                        "end_time", "0000-00-00 00:00:00",
+                        "full_embed_share_link", "https://live.example/embed/55"
+                ));
+
+        WatchResponse response = watchService.watch(55L, "guestABC", "小明");
+        assertEquals("2026-09-18 20:00:00", response.getStartTime());
+        assertNull(response.getEndTime());
+    }
+
+    @Test
+    void watch_mapsRealEndTime() {
+        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "subject", "已结束",
+                        "webinar_state", 3,
+                        "start_time", "2026-09-18 20:00:00",
+                        "end_time", "2026-09-18 21:30:00",
+                        "full_embed_share_link", "https://live.example/embed/55"
+                ));
+
+        WatchResponse response = watchService.watch(55L, "guestABC", null);
+        assertEquals("2026-09-18 20:00:00", response.getStartTime());
+        assertEquals("2026-09-18 21:30:00", response.getEndTime());
     }
 
     @Test
