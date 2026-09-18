@@ -1,5 +1,6 @@
 package com.zhibo.live.watch;
 
+import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.live.web.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class WatchController {
 
     private final WatchService watchService;
+
+    /**
+     * 首页活动列表（精简字段）。须写在 {@code /{id}} 之前，避免把 activities 当 id。
+     */
+    @GetMapping("/activities")
+    public ApiResponse<WatchActivityListResponse> activities(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) Integer state) {
+        return ApiResponse.ok(watchService.listActivities(page, pageSize, state));
+    }
 
     /**
      * @param guestId  游客唯一 id（可选；不传则后端生成）

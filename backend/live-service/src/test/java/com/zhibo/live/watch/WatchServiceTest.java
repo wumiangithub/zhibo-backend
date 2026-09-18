@@ -1,5 +1,6 @@
 package com.zhibo.live.watch;
 
+import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.vhall.client.VhallClient;
 import org.junit.jupiter.api.Test;
@@ -8,6 +9,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +28,30 @@ class WatchServiceTest {
 
     @InjectMocks
     private WatchService watchService;
+
+    @Test
+    void listActivities_mapsSlimFields() {
+        when(vhallClient.postForData(eq(WatchService.PATH_LIST), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "total", 1,
+                        "list", List.of(Map.of(
+                                "webinar_id", 1001,
+                                "subject", "课",
+                                "webinar_state", 2,
+                                "start_time", "2026-09-18 10:00",
+                                "img_url", "https://cover"
+                        ))
+                ));
+
+        WatchActivityListResponse response = watchService.listActivities(0, 20, null);
+        assertEquals(1, response.getTotal());
+        assertEquals(1, response.getList().size());
+        assertEquals(1001L, response.getList().get(0).getId());
+        assertEquals("课", response.getList().get(0).getTitle());
+        assertEquals(2, response.getList().get(0).getState());
+        assertEquals("2026-09-18 10:00", response.getList().get(0).getStartTime());
+        assertEquals("https://cover", response.getList().get(0).getCoverUrl());
+    }
 
     @Test
     void watch_appendsIdentityToEmbedUrl() {
@@ -48,7 +74,6 @@ class WatchServiceTest {
         assertTrue(response.getEmbedUrl().contains("email=guestABC"));
         assertTrue(response.getEmbedUrl().contains("zhibo.local"));
         assertTrue(response.getEmbedUrl().contains("nickname="));
-        // 中文昵称应被 URL 编码，不能明文落在 query 里
         assertTrue(!response.getEmbedUrl().contains("小明"));
     }
 

@@ -4,6 +4,9 @@ import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
+import com.zhibo.admin.activity.dto.DeleteActivityResponse;
+import com.zhibo.admin.activity.dto.EndActivityResponse;
+import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.vhall.client.VhallClient;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -133,5 +137,60 @@ class ActivityServiceTest {
 
         ActivityDetailResponse detail = activityService.detail(88);
         assertEquals("2026-09-17 21:00:00", detail.getEndTime());
+    }
+
+    @Test
+    void update_mapsTitleAndStartTimeToEdit() {
+        UpdateActivityRequest request = new UpdateActivityRequest();
+        request.setTitle(" 新标题 ");
+        request.setStartTime("2026-09-20 15:30:00");
+
+        when(vhallClient.postForData(eq(ActivityService.PATH_EDIT), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", 1001L));
+
+        CreateActivityResponse response = activityService.update(1001L, request);
+        assertEquals(1001L, response.getId());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(ActivityService.PATH_EDIT), captor.capture(), eq(Map.class));
+        assertEquals(1001L, captor.getValue().get("webinar_id"));
+        assertEquals("新标题", captor.getValue().get("subject"));
+        assertEquals("2026-09-20 15:30", captor.getValue().get("start_time"));
+    }
+
+    @Test
+    void update_requiresAtLeastOneField() {
+        assertThrows(IllegalArgumentException.class,
+                () -> activityService.update(1L, new UpdateActivityRequest()));
+    }
+
+    @Test
+    void end_callsLiveEndThenReturnsStateFromInfo() {
+        when(vhallClient.postForData(eq(ActivityService.PATH_END), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of());
+        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_state", 3));
+
+        EndActivityResponse response = activityService.end(55L);
+        assertEquals(55L, response.getId());
+        assertEquals(3, response.getState());
+        verify(vhallClient, times(1))
+                .postForData(eq(ActivityService.PATH_END), anyMap(), eq(Map.class));
+    }
+
+    @Test
+    void delete_sendsWebinarIdsPlural() {
+        when(vhallClient.postForData(eq(ActivityService.PATH_DELETE), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of());
+
+        DeleteActivityResponse response = activityService.delete(77L);
+        assertEquals(77L, response.getId());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(ActivityService.PATH_DELETE), captor.capture(), eq(Map.class));
+        assertEquals("77", captor.getValue().get("webinar_ids"));
+        assertNull(captor.getValue().get("webinar_id"));
     }
 }

@@ -5,6 +5,9 @@ import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.ActivitySummary;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
+import com.zhibo.admin.activity.dto.DeleteActivityResponse;
+import com.zhibo.admin.activity.dto.EndActivityResponse;
+import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.vhall.client.VhallClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,12 @@ public class ActivityService {
     static final String PATH_CREATE = "/v3/webinars/webinar/create";
     static final String PATH_LIST = "/v3/webinars/webinar/get-list";
     static final String PATH_INFO = "/v3/webinars/webinar/info";
+    /** 已联调：改标题 / 开始时间 */
+    static final String PATH_EDIT = "/v3/webinars/webinar/edit";
+    /** 已联调：结束直播（预告也可调，状态变 3） */
+    static final String PATH_END = "/v3/webinars/live/end";
+    /** 已联调：参数名是 webinar_ids（复数），可传单个 id 字符串 */
+    static final String PATH_DELETE = "/v3/webinars/webinar/delete";
 
     private final VhallClient vhallClient;
 
@@ -88,13 +97,66 @@ public class ActivityService {
     }
 
     public ActivityDetailResponse detail(long id) {
-        if (id <= 0) {
-            throw new IllegalArgumentException("活动 id 无效");
-        }
+        requirePositiveId(id);
         Map<String, Object> params = Map.of("webinar_id", id);
         @SuppressWarnings("unchecked")
         Map<String, Object> data = vhallClient.postForData(PATH_INFO, params, Map.class);
         return mapDetail(data);
+    }
+
+    /**
+     * 改活动：只传要改的字段。微吼 {@code PATH_EDIT}，时间裁到分钟。
+     */
+    public CreateActivityResponse update(long id, UpdateActivityRequest request) {
+        requirePositiveId(id);
+        if (request == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        boolean hasTitle = request.getTitle() != null && !request.getTitle().isBlank();
+        boolean hasStart = request.getStartTime() != null && !request.getStartTime().isBlank();
+        if (!hasTitle && !hasStart) {
+            throw new IllegalArgumentException("title 与 startTime 至少填一个");
+        }
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("webinar_id", id);
+        if (hasTitle) {
+            params.put("subject", request.getTitle().trim());
+        }
+        if (hasStart) {
+            params.put("start_time", toVhallStartTime(request.getStartTime()));
+        }
+        vhallClient.postForData(PATH_EDIT, params, Map.class);
+        return new CreateActivityResponse(id);
+    }
+
+    /**
+     * 结束直播。微吼 {@code PATH_END} 后拉详情取最新 state。
+     */
+    public EndActivityResponse end(long id) {
+        requirePositiveId(id);
+        vhallClient.postForData(PATH_END, Map.of("webinar_id", id), Map.class);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> info = vhallClient.postForData(
+                PATH_INFO, Map.of("webinar_id", id), Map.class);
+        Integer state = asInteger(info.get("webinar_state"));
+        return new EndActivityResponse(id, state);
+    }
+
+    /**
+     * 删除活动。微吼要 {@code webinar_ids}（复数），这里传单个 id。
+     */
+    public DeleteActivityResponse delete(long id) {
+        requirePositiveId(id);
+        vhallClient.postForData(PATH_DELETE, Map.of("webinar_ids", String.valueOf(id)), Map.class);
+        return new DeleteActivityResponse(id);
+    }
+
+    private static void requirePositiveId(long id) {
+        if (id <= 0) {
+            throw new IllegalArgumentException("活动 id 无效");
+        }
     }
 
     private static List<ActivitySummary> mapList(Object rawList) {

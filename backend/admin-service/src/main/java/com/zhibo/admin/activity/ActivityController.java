@@ -6,12 +6,17 @@ import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
+import com.zhibo.admin.activity.dto.DeleteActivityResponse;
+import com.zhibo.admin.activity.dto.EndActivityResponse;
+import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.web.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,6 +57,26 @@ public class ActivityController {
     @GetMapping("/{id}")
     public ApiResponse<ActivityDetailResponse> detail(@PathVariable long id) {
         return ApiResponse.ok(activityService.detail(id));
+    }
+
+    /** 改标题 / 开始时间（type 不可改）。 */
+    @PutMapping("/{id}")
+    public ApiResponse<CreateActivityResponse> update(
+            @PathVariable long id,
+            @RequestBody UpdateActivityRequest request) {
+        return ApiResponse.ok(activityService.update(id, request));
+    }
+
+    /** 结束直播。 */
+    @PostMapping("/{id}/end")
+    public ApiResponse<EndActivityResponse> end(@PathVariable long id) {
+        return ApiResponse.ok(activityService.end(id));
+    }
+
+    /** 删除活动。 */
+    @DeleteMapping("/{id}")
+    public ApiResponse<DeleteActivityResponse> delete(@PathVariable long id) {
+        return ApiResponse.ok(activityService.delete(id));
     }
 
     /** 主持人开播链接（新窗口打开，不要 iframe）。 */

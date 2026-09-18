@@ -2,6 +2,8 @@
 
 | 日期 | 概念 | 前端类比 | 位置 |
 |------|------|----------|------|
+| 2026-09-18 | `@PutMapping` / `@DeleteMapping` | PUT/DELETE 路由 | `ActivityController` |
+| 2026-09-18 | 路径字面量优先于 `{id}` | `/api/watch/activities` 别被当成 id | `WatchController` |
 | 2026-09-18 | 注入 `Clock` + 内存短缓存 | 自己 mock `Date.now`；Map 当 TTL cache | `TimeConfig` / `StatsService` |
 | 2026-09-18 | `Duration.between` 校验跨度 | `dayjs(end).diff(start)` 超限抛错 | `StatsService#onlineTrend` |
 | 2026-09-17 | `EnvironmentPostProcessor` 读 `.env` | Vite 启动前加载 `.env` | `DotenvEnvironmentPostProcessor` |
