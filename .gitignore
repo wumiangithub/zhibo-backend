@@ -5,8 +5,10 @@ backend/**/target/
 *.log
 
 # Env / IDE / OS
-.env
+# 本仓库为本地测试项目，故意提交 .env（含微吼测试凭证），方便换机 clone 即用
+# .env
 .env.*
+!.env
 !.env.example
 .idea/
 *.iml
