@@ -26,7 +26,7 @@ set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot
 set PATH=%JAVA_HOME%\bin;%PATH%
 ```
 
-凭证：仓库根目录 `.env`（参考 `.env.example`，已 gitignore）。从 `backend/` 启动时会向上找到并加载。
+凭证：仓库根目录 `.env`（参考 `.env.example`）。本练习项目故意入库，clone 后一般已有。从 `backend/` 启动时会向上找到并加载。
 
 已经 `package` 过、只想快速再起，也可以用 jar（效果和上面一样）：
 
