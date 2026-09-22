@@ -99,7 +99,7 @@ class StatsServiceTest {
     }
 
     @Test
-    void onlineTrend_mapsPointsAndTruncatesToMinuteForVhall() {
+    void onlineTrend_mapsPointsAndKeepsSecondsForVhall() {
         when(vhallClient.postForData(eq(StatsService.PATH_ONLINE_TREND), anyMap(), eq(Map.class)))
                 .thenReturn(Map.of("list", List.of(
                         Map.of("time", "2026-09-17 10:00:00", "total", 3),
@@ -118,8 +118,8 @@ class StatsServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(vhallClient).postForData(eq(StatsService.PATH_ONLINE_TREND), captor.capture(), eq(Map.class));
-        assertEquals("2026-09-17 10:00", captor.getValue().get("start_time"));
-        assertEquals("2026-09-17 11:00", captor.getValue().get("end_time"));
+        assertEquals("2026-09-17 10:00:00", captor.getValue().get("start_time"));
+        assertEquals("2026-09-17 11:00:00", captor.getValue().get("end_time"));
     }
 
     @Test

@@ -1,6 +1,5 @@
 package com.zhibo.admin.stats;
 
-import com.zhibo.admin.activity.ActivityService;
 import com.zhibo.admin.stats.dto.ActivityStatsResponse;
 import com.zhibo.admin.stats.dto.OnlineTrendResponse;
 import com.zhibo.vhall.client.VhallClient;
@@ -69,9 +68,9 @@ public class StatsService {
             throw new IllegalArgumentException("查询跨度不能超过 1 天");
         }
 
-        // 对外仍是秒级；发给微吼裁到分钟（与创建活动相同）
-        String vhallStart = ActivityService.toVhallStartTime(start.format(API_TIME));
-        String vhallEnd = ActivityService.toVhallStartTime(end.format(API_TIME));
+        // 创建活动只要到分钟；趋势接口要 yyyy-MM-dd HH:mm:ss，裁掉秒会报「格式有误」
+        String vhallStart = start.format(API_TIME);
+        String vhallEnd = end.format(API_TIME);
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("webinar_id", activityId);
