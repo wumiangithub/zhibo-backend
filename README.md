@@ -7,12 +7,12 @@ Java 后端。公用架构文档：`../zhibo-shared`。前端：`../zhibo-fronte
 两条命令各开一个终端，都在 `zhibo-backend` 下执行。第一条会一直占着窗口，不要在同一个窗口接着敲第二条。
 
 ```bat
-cd D:\ai-project\qoder\zhibo\zhibo-backend\backend
+cd D:\ai-project\zhibo\zhibo-backend\backend
 mvnw.cmd spring-boot:run -pl admin-service -am
 ```
 
 ```bat
-cd D:\ai-project\qoder\zhibo\zhibo-backend\backend
+cd D:\ai-project\zhibo\zhibo-backend\backend
 mvnw.cmd spring-boot:run -pl live-service -am
 ```
 
@@ -31,7 +31,7 @@ set PATH=%JAVA_HOME%\bin;%PATH%
 已经 `package` 过、只想快速再起，也可以用 jar（效果和上面一样）：
 
 ```bat
-cd D:\ai-project\qoder\zhibo\zhibo-backend
+cd D:\ai-project\zhibo\zhibo-backend
 java -jar backend\admin-service\target\admin-service-1.0.0.jar
 java -jar backend\live-service\target\live-service-1.0.0.jar
 ```

@@ -39,10 +39,33 @@ public class ActivityService {
     private final VhallClient vhallClient;
 
     public CreateActivityResponse create(CreateActivityRequest request) {
+        String title = request.getTitle() == null ? "" : request.getTitle().trim();
+        if (title.isEmpty()) {
+            throw new IllegalArgumentException("标题不能为空");
+        }
+        if (title.length() > 64) {
+            throw new IllegalArgumentException("标题不能超过64个字");
+        }
+
+        String startTime = toVhallStartTime(request.getStartTime());
+        validateOptionalEndTime(request.getEndTime(), request.getStartTime());
+
+        String introduction = null;
+        if (request.getIntroduction() != null && !request.getIntroduction().isBlank()) {
+            introduction = request.getIntroduction().trim();
+            if (introduction.length() > 256) {
+                throw new IllegalArgumentException("简介不能超过256个字");
+            }
+        }
+
         Map<String, Object> params = new LinkedHashMap<>();
-        params.put("subject", request.getTitle().trim());
-        params.put("start_time", toVhallStartTime(request.getStartTime()));
+        params.put("subject", title);
+        params.put("start_time", startTime);
         params.put("webinar_type", request.getType());
+        if (introduction != null) {
+            params.put("introduction", introduction);
+        }
+        // endTime / img_url：本迭代不传微吼（create 无 end_time；封面无本站上传）
 
         @SuppressWarnings("unchecked")
         Map<String, Object> data = vhallClient.postForData(PATH_CREATE, params, Map.class);
@@ -51,6 +74,28 @@ public class ActivityService {
             throw new IllegalStateException("微吼未返回 webinar_id");
         }
         return new CreateActivityResponse(id);
+    }
+
+    /**
+     * 若传了 endTime，须能解析且严格晚于 startTime；不裁、不转发微吼。
+     */
+    static void validateOptionalEndTime(String endTime, String startTime) {
+        if (endTime == null || endTime.isBlank()) {
+            return;
+        }
+        String end = endTime.trim();
+        requireFullDateTime(end, "结束时间");
+        String start = startTime == null ? "" : startTime.trim();
+        requireFullDateTime(start, "开始时间");
+        if (end.compareTo(start) <= 0) {
+            throw new IllegalArgumentException("结束时间须晚于开始时间");
+        }
+    }
+
+    private static void requireFullDateTime(String value, String field) {
+        if (!value.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}")) {
+            throw new IllegalArgumentException(field + "格式须为 yyyy-MM-dd HH:mm:ss");
+        }
     }
 
     /**

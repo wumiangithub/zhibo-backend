@@ -60,6 +60,29 @@ class ActivityControllerTest {
     }
 
     @Test
+    void create_rejectsType4() throws Exception {
+        mockMvc.perform(post("/api/activities")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"录播","startTime":"2026-10-01 20:00:00","type":4}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
+    void create_rejectsTitleOver64() throws Exception {
+        String title = "a".repeat(65);
+        mockMvc.perform(post("/api/activities")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"%s","startTime":"2026-10-01 20:00:00","type":2}
+                                """.formatted(title)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
     void detail_returnsOk() throws Exception {
         when(activityService.detail(9L)).thenAnswer(inv -> {
             var detail = new com.zhibo.admin.activity.dto.ActivityDetailResponse();

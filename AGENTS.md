@@ -14,3 +14,7 @@
 - [docs/java学习笔记.md](docs/java学习笔记.md) — 教过的 Java 概念
 
 规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；密钥走仓库根 `.env`（勿提交）；包名 `com.zhibo.vhall`。
+
+## 代码评审
+
+另有一个**技术总监** agent 只做 code review，结论写在 `../zhibo-shared/docs/代码评审.md`，他不改你的代码。有派给「后端」的条目就修，修完把那条状态改成 `已修` 并留一句怎么改的；不认同可以填 `不修` + 原因，别默默跳过。

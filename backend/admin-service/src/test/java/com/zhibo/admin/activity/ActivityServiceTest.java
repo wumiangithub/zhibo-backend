@@ -41,6 +41,8 @@ class ActivityServiceTest {
         CreateActivityRequest request = new CreateActivityRequest();
         request.setTitle("  测试活动  ");
         request.setStartTime("2026-10-01 20:00:00");
+        request.setEndTime("2026-10-01 22:00:00");
+        request.setIntroduction("  一场简介  ");
         request.setType(2);
 
         when(vhallClient.postForData(eq(ActivityService.PATH_CREATE), anyMap(), eq(Map.class)))
@@ -55,6 +57,52 @@ class ActivityServiceTest {
         assertEquals("测试活动", captor.getValue().get("subject"));
         assertEquals("2026-10-01 20:00", captor.getValue().get("start_time"));
         assertEquals(2, captor.getValue().get("webinar_type"));
+        assertEquals("一场简介", captor.getValue().get("introduction"));
+        // endTime 只校验，不发给微吼
+        assertNull(captor.getValue().get("end_time"));
+        assertNull(captor.getValue().get("img_url"));
+    }
+
+    @Test
+    void create_rejectsEndTimeNotAfterStart() {
+        CreateActivityRequest request = new CreateActivityRequest();
+        request.setTitle("活动");
+        request.setStartTime("2026-10-01 20:00:00");
+        request.setEndTime("2026-10-01 20:00:00");
+        request.setType(1);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.create(request));
+        assertEquals("结束时间须晚于开始时间", ex.getMessage());
+    }
+
+    @Test
+    void create_rejectsTitleTooLong() {
+        CreateActivityRequest request = new CreateActivityRequest();
+        request.setTitle("a".repeat(65));
+        request.setStartTime("2026-10-01 20:00:00");
+        request.setType(2);
+
+        assertThrows(IllegalArgumentException.class, () -> activityService.create(request));
+    }
+
+    @Test
+    void create_omitsBlankIntroduction() {
+        CreateActivityRequest request = new CreateActivityRequest();
+        request.setTitle("活动");
+        request.setStartTime("2026-10-01 20:00:00");
+        request.setIntroduction("   ");
+        request.setType(1);
+
+        when(vhallClient.postForData(eq(ActivityService.PATH_CREATE), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", 1L));
+
+        activityService.create(request);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(ActivityService.PATH_CREATE), captor.capture(), eq(Map.class));
+        assertNull(captor.getValue().get("introduction"));
     }
 
     @Test
