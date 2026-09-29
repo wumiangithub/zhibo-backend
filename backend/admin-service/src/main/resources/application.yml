@@ -9,12 +9,26 @@ spring:
   application:
     name: admin-service
   profiles:
-    # 没指定 profile 时走 local：DEBUG + 允许空凭证启动
     default: local
   jackson:
     default-property-inclusion: non_null
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:zhibo}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Shanghai
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
-# 微吼默认值在 VhallProperties 里；这里只注入凭证，避免两份 yml 复制超时/platform
 vhall:
   app-key: ${VHALL_APP_KEY:}
   app-secret: ${VHALL_APP_SECRET:}

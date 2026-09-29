@@ -8,7 +8,7 @@ import lombok.Data;
 @Data
 public class WatchActivityItem {
 
-    private Long id;
+    private String id;
     private String title;
     private Integer state;
     private String startTime;

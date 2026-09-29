@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EndActivityResponse {
 
-    private Long id;
-    /** 结束后的状态（通常为 3 结束） */
+    private String id;
     private Integer state;
 }

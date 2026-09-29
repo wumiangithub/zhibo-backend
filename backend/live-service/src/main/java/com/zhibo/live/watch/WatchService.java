@@ -1,30 +1,27 @@
 package com.zhibo.live.watch;
 
+import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
-import com.zhibo.vhall.client.VhallClient;
+import com.zhibo.liveprovider.LiveProvider;
+import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
+import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 
-/**
- * 观看鉴权：取微吼全屏嵌入地址，拼游客身份参数；首页列表复用 get-list。
- */
 @Service
 @RequiredArgsConstructor
 public class WatchService {
 
-    static final String PATH_INFO = "/v3/webinars/webinar/info";
-    static final String PATH_LIST = "/v3/webinars/webinar/get-list";
-    static final String DEFAULT_NICKNAME = WatchIdentity.DEFAULT_NICKNAME;
-    static final int NICKNAME_MAX = WatchIdentity.NICKNAME_MAX;
-
-    private final VhallClient vhallClient;
+    private final ActivityRepository activityRepository;
+    private final LiveProviderRegistry providerRegistry;
 
     public WatchActivityListResponse listActivities(int page, int pageSize, Integer state) {
         if (page < 0) {
@@ -33,117 +30,65 @@ public class WatchService {
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize 需在 1~100");
         }
-
-        Map<String, Object> params = new LinkedHashMap<>();
-        params.put("pos", page);
-        params.put("limit", pageSize);
-        if (state != null) {
-            params.put("webinar_state", String.valueOf(state));
-        }
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> data = vhallClient.postForData(PATH_LIST, params, Map.class);
+        Integer stateFilter = (state != null && state == 0) ? null : state;
+        Page<ActivityEntity> result = activityRepository.search(
+                null, stateFilter, null, PageRequest.of(page, pageSize));
 
         WatchActivityListResponse response = new WatchActivityListResponse();
-        Long total = asLong(data.get("total"));
-        response.setTotal(total == null ? 0L : total);
-        response.setList(mapWatchList(data.get("list")));
+        response.setTotal(result.getTotalElements());
+        response.setList(result.getContent().stream().map(this::toItem).toList());
         return response;
     }
 
-    public WatchResponse watch(long activityId, String guestId, String nickname) {
-        if (activityId <= 0) {
-            throw new IllegalArgumentException("活动 id 无效");
-        }
+    public WatchResponse watch(String activityId, String guestId, String nickname) {
+        ActivityEntity entity = requireActivity(activityId);
+        LiveProvider provider = providerRegistry.require(entity.getProvider());
 
-        String resolvedGuestId = WatchIdentity.resolveGuestId(guestId);
-        String resolvedNickname = WatchIdentity.resolveNickname(nickname);
+        String resolvedGuestId = VhallLiveProvider.resolveGuestId(guestId);
+        String resolvedNickname = VhallLiveProvider.resolveNickname(nickname);
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> info = vhallClient.postForData(
-                PATH_INFO, Map.of("webinar_id", activityId), Map.class);
-
-        String baseEmbed = asString(info.get("full_embed_share_link"));
+        ProviderRoomSnapshot info = provider.fetchRoom(entity.getProviderRoomId());
+        String baseEmbed = info.fullEmbedShareLink();
         if (baseEmbed == null || baseEmbed.isBlank()) {
             throw new IllegalStateException("活动缺少全屏嵌入地址 full_embed_share_link");
         }
-
-        String embedUrl = WatchIdentity.buildEmbedUrl(baseEmbed, resolvedGuestId, resolvedNickname);
+        String embedUrl = VhallLiveProvider.buildEmbedUrl(baseEmbed, resolvedGuestId, resolvedNickname);
 
         WatchResponse response = new WatchResponse();
-        response.setId(activityId);
-        response.setTitle(asString(info.get("subject")));
-        response.setState(asInteger(info.get("webinar_state")));
-        response.setType(asInteger(info.get("webinar_type")));
+        response.setId(entity.getId());
+        response.setProvider(entity.getProvider());
+        response.setTitle(entity.getTitle());
+        response.setState(info.state() != null ? info.state() : entity.getState());
+        response.setType(entity.getType());
         response.setNickname(resolvedNickname);
         response.setGuestId(resolvedGuestId);
-        response.setStartTime(asString(info.get("start_time")));
-        response.setEndTime(WatchIdentity.resolveEndTime(info.get("end_time")));
+        response.setStartTime(entity.getStartTime() != null ? entity.getStartTime() : info.startTime());
+        response.setEndTime(entity.getEndTime() != null ? entity.getEndTime() : info.endTime());
         response.setEmbedUrl(embedUrl);
         return response;
     }
 
-    private static List<WatchActivityItem> mapWatchList(Object rawList) {
-        List<WatchActivityItem> result = new ArrayList<>();
-        if (!(rawList instanceof List<?> list)) {
-            return result;
+    ActivityEntity requireActivity(String id) {
+        if (id == null || id.isBlank()) {
+            throw new IllegalArgumentException("活动 id 无效");
         }
-        for (Object item : list) {
-            if (!(item instanceof Map<?, ?> map)) {
-                continue;
-            }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> raw = (Map<String, Object>) map;
-            WatchActivityItem row = new WatchActivityItem();
-            row.setId(firstLong(raw, "webinar_id", "id"));
-            row.setTitle(asString(raw.get("subject")));
-            row.setState(asInteger(raw.get("webinar_state")));
-            row.setStartTime(asString(raw.get("start_time")));
-            row.setCoverUrl(asString(raw.get("img_url")));
-            result.add(row);
-        }
-        return result;
-    }
-
-    private static Long firstLong(Map<String, Object> raw, String... keys) {
-        for (String key : keys) {
-            Long value = asLong(raw.get(key));
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private static String asString(Object value) {
-        return value == null ? null : value.toString();
-    }
-
-    private static Integer asInteger(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
+        String uuid;
         try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException e) {
-            return null;
+            uuid = UUID.fromString(id.trim()).toString();
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("活动 id 须为本站 UUID");
         }
+        return activityRepository.findById(uuid)
+                .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
     }
 
-    private static Long asLong(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            return Long.parseLong(value.toString());
-        } catch (NumberFormatException e) {
-            return null;
-        }
+    private WatchActivityItem toItem(ActivityEntity entity) {
+        WatchActivityItem item = new WatchActivityItem();
+        item.setId(entity.getId());
+        item.setTitle(entity.getTitle());
+        item.setState(entity.getState());
+        item.setStartTime(entity.getStartTime());
+        item.setCoverUrl(entity.getCoverUrl());
+        return item;
     }
 }

@@ -1,144 +1,63 @@
 package com.zhibo.live.watch;
 
-import com.zhibo.live.watch.dto.WatchActivityListResponse;
+import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchResponse;
-import com.zhibo.vhall.client.VhallClient;
+import com.zhibo.liveprovider.LiveProvider;
+import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class WatchServiceTest {
 
+    private static final String ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
     @Mock
-    private VhallClient vhallClient;
+    private ActivityRepository activityRepository;
+    @Mock
+    private LiveProviderRegistry providerRegistry;
+    @Mock
+    private LiveProvider liveProvider;
 
     @InjectMocks
     private WatchService watchService;
 
     @Test
-    void listActivities_mapsSlimFields() {
-        when(vhallClient.postForData(eq(WatchService.PATH_LIST), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "total", 1,
-                        "list", List.of(Map.of(
-                                "webinar_id", 1001,
-                                "subject", "课",
-                                "webinar_state", 2,
-                                "start_time", "2026-09-18 10:00",
-                                "img_url", "https://cover"
-                        ))
-                ));
+    void watch_buildsEmbedUrl() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setTitle("直播课");
+        entity.setType(2);
+        entity.setState(1);
+        entity.setStartTime("2026-09-18 20:00:00");
 
-        WatchActivityListResponse response = watchService.listActivities(0, 20, null);
-        assertEquals(1, response.getTotal());
-        assertEquals(1, response.getList().size());
-        assertEquals(1001L, response.getList().get(0).getId());
-        assertEquals("课", response.getList().get(0).getTitle());
-        assertEquals(2, response.getList().get(0).getState());
-        assertEquals("2026-09-18 10:00", response.getList().get(0).getStartTime());
-        assertEquals("https://cover", response.getList().get(0).getCoverUrl());
-    }
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
+                "直播课", 1, 2, null,
+                "https://live.example.com/watch/1001",
+                null, "2026-09-18 20:00:00", null, null, null, null));
 
-    @Test
-    void watch_appendsIdentityToEmbedUrl() {
-        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "subject", "直播课",
-                        "webinar_state", 1,
-                        "webinar_type", 2,
-                        "full_embed_share_link", "https://live.example/embed/55"
-                ));
-
-        WatchResponse response = watchService.watch(55L, "guestABC", "小明");
-        assertEquals(55L, response.getId());
+        WatchResponse response = watchService.watch(ID, "guest1", "小明");
+        assertEquals(ID, response.getId());
+        assertEquals("vhall", response.getProvider());
         assertEquals("直播课", response.getTitle());
-        assertEquals(1, response.getState());
-        assertEquals(2, response.getType());
-        assertEquals("guestABC", response.getGuestId());
+        assertTrue(response.getEmbedUrl().contains("email=guest1%40zhibo.local")
+                || response.getEmbedUrl().contains("email=guest1@zhibo.local"));
+        assertEquals("guest1", response.getGuestId());
         assertEquals("小明", response.getNickname());
-        assertTrue(response.getEmbedUrl().startsWith("https://live.example/embed/55?"));
-        assertTrue(response.getEmbedUrl().contains("email=guestABC"));
-        assertTrue(response.getEmbedUrl().contains("zhibo.local"));
-        assertTrue(response.getEmbedUrl().contains("nickname="));
-        assertTrue(!response.getEmbedUrl().contains("小明"));
-    }
-
-    @Test
-    void watch_generatesGuestIdAndDefaultNickname() {
-        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "subject", "课",
-                        "full_embed_share_link", "https://live.example/embed/1"
-                ));
-
-        WatchResponse response = watchService.watch(1L, null, null);
-        assertEquals(WatchService.DEFAULT_NICKNAME, response.getNickname());
-        assertNotNull(response.getGuestId());
-        assertTrue(response.getGuestId().matches("^[A-Za-z0-9]+$"));
-        assertTrue(response.getEmbedUrl().contains("email=" + response.getGuestId()));
-        assertTrue(response.getEmbedUrl().contains("zhibo.local"));
-    }
-
-    @Test
-    void watch_mapsStartTimeAndOmitsPlaceholderEndTime() {
-        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "subject", "预告课",
-                        "webinar_state", 2,
-                        "webinar_type", 2,
-                        "start_time", "2026-09-18 20:00:00",
-                        "end_time", "0000-00-00 00:00:00",
-                        "full_embed_share_link", "https://live.example/embed/55"
-                ));
-
-        WatchResponse response = watchService.watch(55L, "guestABC", "小明");
-        assertEquals("2026-09-18 20:00:00", response.getStartTime());
-        assertNull(response.getEndTime());
-    }
-
-    @Test
-    void watch_mapsRealEndTime() {
-        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "subject", "已结束",
-                        "webinar_state", 3,
-                        "start_time", "2026-09-18 20:00:00",
-                        "end_time", "2026-09-18 21:30:00",
-                        "full_embed_share_link", "https://live.example/embed/55"
-                ));
-
-        WatchResponse response = watchService.watch(55L, "guestABC", null);
-        assertEquals("2026-09-18 20:00:00", response.getStartTime());
-        assertEquals("2026-09-18 21:30:00", response.getEndTime());
-    }
-
-    @Test
-    void watch_rejectsInvalidGuestId() {
-        assertThrows(IllegalArgumentException.class,
-                () -> watchService.watch(1L, "bad-id", null));
-    }
-
-    @Test
-    void watch_requiresFullEmbedShareLink() {
-        when(vhallClient.postForData(eq(WatchService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of("subject", "无嵌入"));
-
-        assertThrows(IllegalStateException.class,
-                () -> watchService.watch(1L, "abc", null));
     }
 }

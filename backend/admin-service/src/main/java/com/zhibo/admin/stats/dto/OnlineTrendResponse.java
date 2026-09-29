@@ -11,7 +11,7 @@ import java.util.List;
 @Data
 public class OnlineTrendResponse {
 
-    private Long id;
+    private String id;
     private String startTime;
     private String endTime;
     private List<OnlinePoint> points = new ArrayList<>();

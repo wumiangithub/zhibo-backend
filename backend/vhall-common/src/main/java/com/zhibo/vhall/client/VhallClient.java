@@ -7,6 +7,7 @@ import com.zhibo.vhall.dto.VhallResponse;
 import com.zhibo.vhall.exception.VhallException;
 import com.zhibo.vhall.util.VhallSignUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
@@ -110,6 +111,65 @@ public class VhallClient {
 
     public <T> T getForData(String path, Map<String, ?> businessParams, Class<T> dataType) {
         return get(path, businessParams, dataType).requireData();
+    }
+
+    /**
+     * multipart POST。文件字段（如上传接口的 {@code resfile}）<strong>不参与签名</strong>，
+     * 只对文本业务参数 + 公共参数签名后再一并放入 form。
+     *
+     * @param path            如 {@code /v3/commons/upload/index}
+     * @param businessParams  文本业务参数（不要放公共参数 / sign / 文件）
+     * @param fileFieldName   微吼侧文件字段名，上传接口为 {@code resfile}
+     * @param fileResource    文件内容；须能提供 {@link Resource#getFilename()}
+     */
+    public <T> VhallResponse<T> postMultipart(
+            String path,
+            Map<String, ?> businessParams,
+            String fileFieldName,
+            Resource fileResource,
+            Class<T> dataType) {
+        if (fileFieldName == null || fileFieldName.isBlank()) {
+            throw new IllegalArgumentException("fileFieldName 不能为空");
+        }
+        if (fileResource == null) {
+            throw new IllegalArgumentException("fileResource 不能为空");
+        }
+
+        String requestId = newRequestId();
+        Map<String, Object> signed = buildSignedParams(businessParams);
+
+        MultiValueMap<String, Object> multipart = new LinkedMultiValueMap<>();
+        signed.forEach((key, value) -> {
+            if (value != null) {
+                multipart.add(key, String.valueOf(value).trim());
+            }
+        });
+        multipart.add(fileFieldName, fileResource);
+
+        log.debug("Vhall multipart POST {} request-id={}", path, requestId);
+        String body;
+        try {
+            body = restClient.post()
+                    .uri(path)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .header("platform", String.valueOf(properties.getPlatform()))
+                    .header("request-id", requestId)
+                    .body(multipart)
+                    .retrieve()
+                    .body(String.class);
+        } catch (RestClientException e) {
+            throw new VhallException("微吼 HTTP 调用失败: " + path, e);
+        }
+        return parseResponse(body, dataType);
+    }
+
+    public <T> T postMultipartForData(
+            String path,
+            Map<String, ?> businessParams,
+            String fileFieldName,
+            Resource fileResource,
+            Class<T> dataType) {
+        return postMultipart(path, businessParams, fileFieldName, fileResource, dataType).requireData();
     }
 
     private Map<String, Object> buildSignedParams(Map<String, ?> businessParams) {

@@ -1,13 +1,18 @@
 package com.zhibo.admin.activity;
 
-import com.zhibo.admin.activity.dto.ActivityDetailResponse;
-import com.zhibo.admin.activity.dto.ActivityListResponse;
+import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityRepository;
+import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
-import com.zhibo.admin.activity.dto.DeleteActivityResponse;
-import com.zhibo.admin.activity.dto.EndActivityResponse;
-import com.zhibo.admin.activity.dto.UpdateActivityRequest;
-import com.zhibo.vhall.client.VhallClient;
+import com.zhibo.liveprovider.LiveProvider;
+import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.ProviderNotAvailableException;
+import com.zhibo.liveprovider.dto.CreateRoomCommand;
+import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.liveprovider.dto.ProviderRecordItem;
+import com.zhibo.liveprovider.dto.ProviderRecordList;
+import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -16,14 +21,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,45 +34,91 @@ import static org.mockito.Mockito.when;
 class ActivityServiceTest {
 
     @Mock
-    private VhallClient vhallClient;
+    private ActivityRepository activityRepository;
+    @Mock
+    private LiveProviderRegistry providerRegistry;
+    @Mock
+    private LiveProvider liveProvider;
 
     @InjectMocks
     private ActivityService activityService;
 
     @Test
-    void create_mapsFieldsAndReturnsId() {
+    void create_persistsAndReturnsUuid() {
         CreateActivityRequest request = new CreateActivityRequest();
+        request.setProvider("vhall");
         request.setTitle("  测试活动  ");
         request.setStartTime("2026-10-01 20:00:00");
         request.setEndTime("2026-10-01 22:00:00");
         request.setIntroduction("  一场简介  ");
         request.setType(2);
+        request.setUltraLowLatency(true);
 
-        when(vhallClient.postForData(eq(ActivityService.PATH_CREATE), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of("webinar_id", 123456L));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.create(any(CreateRoomCommand.class)))
+                .thenReturn(new CreateRoomResult("123456"));
+        when(liveProvider.fetchRoom("123456")).thenReturn(new ProviderRoomSnapshot(
+                "测试活动", 2, 2, 0, null, "https://share", "2026-10-01 20:00:00",
+                null, "一场简介", 0, null));
+        when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateActivityResponse response = activityService.create(request);
-        assertEquals(123456L, response.getId());
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(vhallClient).postForData(eq(ActivityService.PATH_CREATE), captor.capture(), eq(Map.class));
-        assertEquals("测试活动", captor.getValue().get("subject"));
-        assertEquals("2026-10-01 20:00", captor.getValue().get("start_time"));
-        assertEquals(2, captor.getValue().get("webinar_type"));
-        assertEquals("一场简介", captor.getValue().get("introduction"));
-        // endTime 只校验，不发给微吼
-        assertNull(captor.getValue().get("end_time"));
-        assertNull(captor.getValue().get("img_url"));
+        ArgumentCaptor<CreateRoomCommand> cmd = ArgumentCaptor.forClass(CreateRoomCommand.class);
+        verify(liveProvider).create(cmd.capture());
+        assertEquals("测试活动", cmd.getValue().title());
+        assertEquals(2, cmd.getValue().type());
+        assertEquals("一场简介", cmd.getValue().introduction());
+        assertEquals(true, cmd.getValue().ultraLowLatency());
+
+        ArgumentCaptor<ActivityEntity> entity = ArgumentCaptor.forClass(ActivityEntity.class);
+        verify(activityRepository).save(entity.capture());
+        assertEquals(response.getId(), entity.getValue().getId());
+        assertEquals("vhall", entity.getValue().getProvider());
+        assertEquals("123456", entity.getValue().getProviderRoomId());
+        assertEquals("2026-10-01 22:00:00", entity.getValue().getEndTime());
+        assertEquals(true, entity.getValue().getUltraLowLatency());
+    }
+
+    @Test
+    void create_type4_requiresRecordId() {
+        CreateActivityRequest request = new CreateActivityRequest();
+        request.setProvider("vhall");
+        request.setTitle("录播");
+        request.setStartTime("2026-10-01 20:00:00");
+        request.setIntroduction("简介");
+        request.setType(4);
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.create(any(CreateRoomCommand.class)))
+                .thenThrow(new IllegalArgumentException("录播须填写 recordId"));
+
+        assertThrows(IllegalArgumentException.class, () -> activityService.create(request));
+    }
+
+    @Test
+    void create_rejectsUnknownProvider() {
+        CreateActivityRequest request = new CreateActivityRequest();
+        request.setProvider("aliyun");
+        request.setTitle("活动");
+        request.setStartTime("2026-10-01 20:00:00");
+        request.setType(2);
+
+        when(providerRegistry.require("aliyun")).thenThrow(new ProviderNotAvailableException());
+
+        assertThrows(ProviderNotAvailableException.class, () -> activityService.create(request));
     }
 
     @Test
     void create_rejectsEndTimeNotAfterStart() {
         CreateActivityRequest request = new CreateActivityRequest();
+        request.setProvider("vhall");
         request.setTitle("活动");
         request.setStartTime("2026-10-01 20:00:00");
         request.setEndTime("2026-10-01 20:00:00");
         request.setType(1);
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> activityService.create(request));
@@ -77,168 +126,26 @@ class ActivityServiceTest {
     }
 
     @Test
-    void create_rejectsTitleTooLong() {
-        CreateActivityRequest request = new CreateActivityRequest();
-        request.setTitle("a".repeat(65));
-        request.setStartTime("2026-10-01 20:00:00");
-        request.setType(2);
+    void listRecords_mapsProviderRecords() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
 
-        assertThrows(IllegalArgumentException.class, () -> activityService.create(request));
-    }
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        "799703", "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover"))
+        ));
 
-    @Test
-    void create_omitsBlankIntroduction() {
-        CreateActivityRequest request = new CreateActivityRequest();
-        request.setTitle("活动");
-        request.setStartTime("2026-10-01 20:00:00");
-        request.setIntroduction("   ");
-        request.setType(1);
-
-        when(vhallClient.postForData(eq(ActivityService.PATH_CREATE), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of("webinar_id", 1L));
-
-        activityService.create(request);
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(vhallClient).postForData(eq(ActivityService.PATH_CREATE), captor.capture(), eq(Map.class));
-        assertNull(captor.getValue().get("introduction"));
-    }
-
-    @Test
-    void list_mapsVhallListToActivitySummary() {
-        when(vhallClient.postForData(eq(ActivityService.PATH_LIST), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "total", 1,
-                        "list", List.of(Map.of(
-                                "webinar_id", 99,
-                                "subject", "标题",
-                                "start_time", "2026-01-01 10:00:00",
-                                "img_url", "https://cover",
-                                "webinar_state", 2,
-                                "webinar_type", 2,
-                                "share_link", "https://watch",
-                                "created_at", "2026-01-01 09:00:00"
-                        ))
-                ));
-
-        ActivityListResponse response = activityService.list(0, 20, null, null);
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
         assertEquals(1, response.getTotal());
         assertEquals(1, response.getList().size());
-        assertEquals(99L, response.getList().get(0).getId());
-        assertEquals("标题", response.getList().get(0).getTitle());
-        assertEquals(2, response.getList().get(0).getState());
-    }
-
-    @Test
-    void list_rejectsInvalidPageSize() {
-        assertThrows(IllegalArgumentException.class,
-                () -> activityService.list(0, 101, null, null));
-    }
-
-    @Test
-    void detail_mapsInfoResponse() {
-        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "id", 88,
-                        "subject", "详情标题",
-                        "start_time", "2026-02-01 12:00:00",
-                        "introduction", "简介",
-                        "webinar_state", 1,
-                        "webinar_type", 3,
-                        "pv", 10
-                ));
-
-        ActivityDetailResponse detail = activityService.detail(88);
-        assertEquals(88L, detail.getId());
-        assertEquals("详情标题", detail.getTitle());
-        assertEquals("简介", detail.getIntroduction());
-        assertEquals(1, detail.getState());
-        assertEquals(10, detail.getPv());
-    }
-
-    @Test
-    void detail_omitsPlaceholderEndTime() {
-        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "id", 88,
-                        "subject", "未结束",
-                        "end_time", "0000-00-00 00:00:00",
-                        "webinar_state", 1,
-                        "webinar_type", 2
-                ));
-
-        ActivityDetailResponse detail = activityService.detail(88);
-        assertNull(detail.getEndTime());
-    }
-
-    @Test
-    void detail_keepsRealEndTime() {
-        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of(
-                        "id", 88,
-                        "subject", "已结束",
-                        "end_time", "2026-09-17 21:00:00",
-                        "webinar_state", 3,
-                        "webinar_type", 2
-                ));
-
-        ActivityDetailResponse detail = activityService.detail(88);
-        assertEquals("2026-09-17 21:00:00", detail.getEndTime());
-    }
-
-    @Test
-    void update_mapsTitleAndStartTimeToEdit() {
-        UpdateActivityRequest request = new UpdateActivityRequest();
-        request.setTitle(" 新标题 ");
-        request.setStartTime("2026-09-20 15:30:00");
-
-        when(vhallClient.postForData(eq(ActivityService.PATH_EDIT), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of("webinar_id", 1001L));
-
-        CreateActivityResponse response = activityService.update(1001L, request);
-        assertEquals(1001L, response.getId());
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(vhallClient).postForData(eq(ActivityService.PATH_EDIT), captor.capture(), eq(Map.class));
-        assertEquals(1001L, captor.getValue().get("webinar_id"));
-        assertEquals("新标题", captor.getValue().get("subject"));
-        assertEquals("2026-09-20 15:30", captor.getValue().get("start_time"));
-    }
-
-    @Test
-    void update_requiresAtLeastOneField() {
-        assertThrows(IllegalArgumentException.class,
-                () -> activityService.update(1L, new UpdateActivityRequest()));
-    }
-
-    @Test
-    void end_callsLiveEndThenReturnsStateFromInfo() {
-        when(vhallClient.postForData(eq(ActivityService.PATH_END), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of());
-        when(vhallClient.postForData(eq(ActivityService.PATH_INFO), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of("webinar_state", 3));
-
-        EndActivityResponse response = activityService.end(55L);
-        assertEquals(55L, response.getId());
-        assertEquals(3, response.getState());
-        verify(vhallClient, times(1))
-                .postForData(eq(ActivityService.PATH_END), anyMap(), eq(Map.class));
-    }
-
-    @Test
-    void delete_sendsWebinarIdsPlural() {
-        when(vhallClient.postForData(eq(ActivityService.PATH_DELETE), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of());
-
-        DeleteActivityResponse response = activityService.delete(77L);
-        assertEquals(77L, response.getId());
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(vhallClient).postForData(eq(ActivityService.PATH_DELETE), captor.capture(), eq(Map.class));
-        assertEquals("77", captor.getValue().get("webinar_ids"));
-        assertNull(captor.getValue().get("webinar_id"));
+        assertEquals("799703", response.getList().get(0).getId());
+        assertEquals("回放A", response.getList().get(0).getTitle());
+        assertEquals("https://cover", response.getList().get(0).getCoverUrl());
     }
 }

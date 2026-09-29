@@ -6,6 +6,6 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class CreateActivityResponse {
-    /** 活动 ID（微吼 webinar_id） */
-    private Long id;
+    /** 本站活动 UUID */
+    private String id;
 }

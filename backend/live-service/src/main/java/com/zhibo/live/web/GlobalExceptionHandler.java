@@ -1,5 +1,6 @@
 package com.zhibo.live.web;
 
+import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -14,6 +15,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ProviderNotAvailableException.class)
+    public ApiResponse<Void> handleProviderNotAvailable(ProviderNotAvailableException ex) {
+        log.info("服务商未接入: {}", ex.getMessage());
+        return ApiResponse.fail(501, ex.getMessage());
+    }
 
     @ExceptionHandler(VhallException.class)
     public ApiResponse<Void> handleVhall(VhallException ex) {

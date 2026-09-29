@@ -1,0 +1,148 @@
+package com.zhibo.vhall.provider;
+
+import com.zhibo.liveprovider.dto.CreateRoomCommand;
+import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.vhall.client.VhallClient;
+import com.zhibo.vhall.config.VhallProperties;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class VhallLiveProviderTest {
+
+    @Mock
+    private VhallClient vhallClient;
+
+    private VhallLiveProvider provider;
+
+    @BeforeEach
+    void setUp() {
+        VhallProperties properties = new VhallProperties();
+        properties.setAppKey("key");
+        properties.setAppSecret("secret");
+        provider = new VhallLiveProvider(
+                vhallClient, properties, Clock.fixed(Instant.parse("2026-09-18T10:00:00Z"), ZoneOffset.UTC));
+    }
+
+    @Test
+    void create_liveMapsToCreatePath() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", 99L));
+
+        CreateRoomResult result = provider.create(new CreateRoomCommand(
+                "标题", "2026-10-01 20:00:00", 2, "简介", null, "https://cover", true));
+        assertEquals("99", result.providerRoomId());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_CREATE), captor.capture(), eq(Map.class));
+        assertEquals("标题", captor.getValue().get("subject"));
+        assertEquals("2026-10-01 20:00", captor.getValue().get("start_time"));
+        assertEquals(2, captor.getValue().get("webinar_type"));
+        assertEquals("https://cover", captor.getValue().get("img_url"));
+        assertEquals(1, captor.getValue().get("no_delay_webinar"));
+    }
+
+    @Test
+    void create_demandRequiresRecordId() {
+        assertThrows(IllegalArgumentException.class, () ->
+                provider.create(new CreateRoomCommand(
+                        "录播", "2026-10-01 20:00:00", 4, "简介", null, null, null)));
+    }
+
+    @Test
+    void create_demandMapsPath() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE_DEMAND), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", "88"));
+
+        CreateRoomResult result = provider.create(new CreateRoomCommand(
+                "录播", "2026-10-01 20:00:00", 4, "简介", "799703", null, false));
+        assertEquals("88", result.providerRoomId());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(
+                eq(VhallLiveProvider.PATH_CREATE_DEMAND), captor.capture(), eq(Map.class));
+        assertEquals("799703", captor.getValue().get("record_id"));
+        assertEquals(0, captor.getValue().get("webinar_curr_num"));
+        assertEquals(0, captor.getValue().get("no_delay_webinar"));
+    }
+
+    @Test
+    void create_omitsNoDelayWhenNull() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", 1L));
+
+        provider.create(new CreateRoomCommand(
+                "标题", "2026-10-01 20:00:00", 1, null, null, null, null));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_CREATE), captor.capture(), eq(Map.class));
+        assertEquals(null, captor.getValue().get("no_delay_webinar"));
+    }
+
+    @Test
+    void update_mapsCoverUrlToImgUrl() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_EDIT), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", 99L));
+
+        provider.update("99", new com.zhibo.liveprovider.dto.UpdateRoomCommand(
+                null, null, null, "https://cdn.example/cover.jpg"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_EDIT), captor.capture(), eq(Map.class));
+        assertEquals("99", captor.getValue().get("webinar_id"));
+        assertEquals("https://cdn.example/cover.jpg", captor.getValue().get("img_url"));
+    }
+
+    @Test
+    void listRecords_mapsVhallFields() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_RECORD_LIST), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "total", 1,
+                        "list", List.of(Map.of(
+                                "id", 799703,
+                                "name", "回放A",
+                                "duration", "01:02:03",
+                                "created_at", "2026-09-01 10:00:00",
+                                "img_url", "https://cover"
+                        ))
+                ));
+
+        var result = provider.listRecords("666781572");
+        assertEquals(1, result.total());
+        assertEquals(1, result.list().size());
+        assertEquals("799703", result.list().get(0).id());
+        assertEquals("回放A", result.list().get(0).title());
+        assertEquals("01:02:03", result.list().get(0).duration());
+        assertEquals("2026-09-01 10:00:00", result.list().get(0).createdAt());
+        assertEquals("https://cover", result.list().get(0).coverUrl());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_RECORD_LIST), captor.capture(), eq(Map.class));
+        assertEquals("666781572", captor.getValue().get("webinar_id"));
+        assertEquals(0, captor.getValue().get("pos"));
+        assertEquals(100, captor.getValue().get("limit"));
+        assertEquals(-1, captor.getValue().get("source"));
+    }
+}

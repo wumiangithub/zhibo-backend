@@ -1,5 +1,6 @@
 package com.zhibo.admin.config;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -12,6 +13,7 @@ import java.time.Clock;
 public class TimeConfig {
 
     @Bean
+    @ConditionalOnMissingBean(Clock.class)
     Clock clock() {
         return Clock.systemDefaultZone();
     }

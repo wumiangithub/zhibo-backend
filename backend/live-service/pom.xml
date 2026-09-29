@@ -17,6 +17,10 @@
     <dependencies>
         <dependency>
             <groupId>com.zhibo</groupId>
+            <artifactId>live-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.zhibo</groupId>
             <artifactId>vhall-common</artifactId>
         </dependency>
         <dependency>

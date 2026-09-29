@@ -19,6 +19,7 @@
     <description>直播项目后端（多模块）- 对接微吼(Vhall)开放平台</description>
 
     <modules>
+        <module>live-common</module>
         <module>vhall-common</module>
         <module>admin-service</module>
         <module>live-service</module>
@@ -36,6 +37,11 @@
     -->
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.zhibo</groupId>
+                <artifactId>live-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.zhibo</groupId>
                 <artifactId>vhall-common</artifactId>

@@ -1,16 +1,26 @@
 package com.zhibo.admin.activity.dto;
 
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
- * 改活动：只允许改标题、开始时间；类型创建后不可改。
+ * 改活动：type / provider 不可改。
  */
 @Data
 public class UpdateActivityRequest {
 
-    /** 活动标题 → 微吼 subject；不传则不改 */
     private String title;
-
-    /** 开始时间 yyyy-MM-dd HH:mm:ss → 微吼 start_time（裁到分钟）；不传则不改 */
     private String startTime;
+    @Size(max = 256, message = "简介不能超过256个字")
+    private String introduction;
+    private String endTime;
+    private String viewerStyle;
+    private Boolean ultraLowLatency;
+    private Boolean virtualAvatar;
+    private String coverUrl;
+    private String warmupType;
+    private String warmupUrl;
+    private String promoCoverUrl;
+    @Size(max = 100000, message = "详情过长")
+    private String detailHtml;
 }

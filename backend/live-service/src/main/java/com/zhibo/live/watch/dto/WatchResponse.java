@@ -8,7 +8,8 @@ import lombok.Data;
 @Data
 public class WatchResponse {
 
-    private Long id;
+    private String id;
+    private String provider;
     private String title;
     private Integer state;
     private Integer type;

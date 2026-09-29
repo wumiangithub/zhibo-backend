@@ -1,12 +1,15 @@
 package com.zhibo.admin.web;
 
+import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 /**
  * 把异常转成 {@link ApiResponse}，HTTP 仍返回 200，由业务 {@code code} 区分成败。
@@ -16,6 +19,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ProviderNotAvailableException.class)
+    public ApiResponse<Void> handleProviderNotAvailable(ProviderNotAvailableException ex) {
+        log.info("服务商未接入: {}", ex.getMessage());
+        return ApiResponse.fail(501, ex.getMessage());
+    }
 
     @ExceptionHandler(VhallException.class)
     public ApiResponse<Void> handleVhall(VhallException ex) {
@@ -29,7 +38,9 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException.class,
             BindException.class,
             HttpMessageNotReadableException.class,
-            IllegalArgumentException.class
+            IllegalArgumentException.class,
+            MissingServletRequestParameterException.class,
+            MissingServletRequestPartException.class
     })
     public ApiResponse<Void> handleBadRequest(Exception ex) {
         String msg = resolveValidationMessage(ex);
@@ -51,6 +62,10 @@ public class GlobalExceptionHandler {
         if (ex instanceof BindException be
                 && be.getBindingResult().getFieldError() != null) {
             return be.getBindingResult().getFieldError().getDefaultMessage();
+        }
+        if (ex instanceof MissingServletRequestPartException
+                || ex instanceof MissingServletRequestParameterException) {
+            return "请选择要上传的图片";
         }
         if (ex.getMessage() != null && !ex.getMessage().isBlank()) {
             return ex.getMessage();

@@ -117,4 +117,33 @@ class VhallClientTest {
         assertEquals("https://host", data.get("page_url"));
         server.verify();
     }
+
+    @Test
+    void postMultipart_sendsMultipartAndParsesDomainUrl() {
+        server.expect(requestTo("https://saas-open.vhall.com/v3/commons/upload/index"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("platform", "15"))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.MULTIPART_FORM_DATA))
+                .andRespond(withSuccess("""
+                        {"code":200,"msg":"","data":{"file_url":"a/b.jpg","domain_url":"https://cdn.example/a/b.jpg","lines":"0"},"request_id":"up1"}
+                        """, MediaType.APPLICATION_JSON));
+
+        org.springframework.core.io.ByteArrayResource file =
+                new org.springframework.core.io.ByteArrayResource("fake-image".getBytes()) {
+                    @Override
+                    public String getFilename() {
+                        return "cover.jpg";
+                    }
+                };
+
+        Map data = client.postMultipartForData(
+                "/v3/commons/upload/index",
+                Map.of("type", "image"),
+                "resfile",
+                file,
+                Map.class);
+
+        assertEquals("https://cdn.example/a/b.jpg", data.get("domain_url"));
+        server.verify();
+    }
 }

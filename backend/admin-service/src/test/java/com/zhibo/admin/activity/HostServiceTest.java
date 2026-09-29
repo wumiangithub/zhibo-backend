@@ -1,18 +1,16 @@
 package com.zhibo.admin.activity;
 
+import com.zhibo.activity.ActivityEntity;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
-import com.zhibo.vhall.client.VhallClient;
+import com.zhibo.liveprovider.LiveProvider;
+import com.zhibo.liveprovider.LiveProviderRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Map;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -20,25 +18,27 @@ import static org.mockito.Mockito.when;
 class HostServiceTest {
 
     @Mock
-    private VhallClient vhallClient;
+    private ActivityService activityService;
+    @Mock
+    private LiveProviderRegistry providerRegistry;
+    @Mock
+    private LiveProvider liveProvider;
 
     @InjectMocks
     private HostService hostService;
 
     @Test
     void host_returnsPageUrl() {
-        when(vhallClient.getForData(eq(HostService.PATH_ROLE_URL), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of("page_url", "https://host.example/page"));
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("100");
+        when(activityService.requireActivity(entity.getId())).thenReturn(entity);
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildHostUrl("100")).thenReturn("https://host.example/page");
 
-        ActivityHostResponse response = hostService.host(100L);
+        ActivityHostResponse response = hostService.host(entity.getId());
+        assertEquals("vhall", response.getProvider());
         assertEquals("https://host.example/page", response.getHostUrl());
-    }
-
-    @Test
-    void host_requiresPageUrl() {
-        when(vhallClient.getForData(eq(HostService.PATH_ROLE_URL), anyMap(), eq(Map.class)))
-                .thenReturn(Map.of());
-
-        assertThrows(IllegalStateException.class, () -> hostService.host(100L));
     }
 }

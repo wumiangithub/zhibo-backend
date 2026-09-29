@@ -2,11 +2,14 @@ package com.zhibo.vhall.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.vhall.client.VhallClient;
+import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+
+import java.time.Clock;
 
 /**
  * 共享库的“即插即用”入口。
@@ -41,5 +44,18 @@ public class VhallAutoConfiguration {
     @ConditionalOnMissingBean
     public VhallClient vhallClient(VhallProperties properties, ObjectMapper objectMapper) {
         return new VhallClient(properties, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(Clock.class)
+    public Clock clock() {
+        return Clock.systemDefaultZone();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public VhallLiveProvider vhallLiveProvider(
+            VhallClient vhallClient, VhallProperties properties, Clock clock) {
+        return new VhallLiveProvider(vhallClient, properties, clock);
     }
 }
