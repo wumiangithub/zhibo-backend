@@ -145,4 +145,28 @@ class VhallLiveProviderTest {
         assertEquals(100, captor.getValue().get("limit"));
         assertEquals(-1, captor.getValue().get("source"));
     }
+
+    @Test
+    void buildChatFilterUrl_defaultsEmailAndName() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CHAT_FILTER), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("page_url", "https://e.vhall.com/v3/lives/authchat/99?live_token=t"));
+
+        String pageUrl = provider.buildChatFilterUrl("99", null, null);
+        assertEquals("https://e.vhall.com/v3/lives/authchat/99?live_token=t", pageUrl);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_CHAT_FILTER), captor.capture(), eq(Map.class));
+        assertEquals("99", captor.getValue().get("webinar_id"));
+        assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_EMAIL, captor.getValue().get("email"));
+        assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_NAME, captor.getValue().get("name"));
+    }
+
+    @Test
+    void buildChatFilterUrl_rejectsLongName() {
+        // 31 字，超过微吼 name ≤30
+        String tooLong = "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一";
+        assertThrows(IllegalArgumentException.class, () ->
+                provider.buildChatFilterUrl("99", "a@b.c", tooLong));
+    }
 }

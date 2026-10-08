@@ -42,6 +42,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
     /** 某场活动的回放列表；{@code id} 即 create-demand 的 record_id */
     static final String PATH_RECORD_LIST = "/v3/webinars/record/get-list";
+    /** 聊天审核页（中控台 iframe） */
+    static final String PATH_CHAT_FILTER = "/v3/webinars/manage/chat-filter";
     static final String EMBED_BASE = "https://e.vhall.com/v3/embed/live/detail/";
     static final String SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
     static final int ROLE_HOST = 1;
@@ -50,6 +52,10 @@ public class VhallLiveProvider implements LiveProvider {
     private static final String EMAIL_DOMAIN = "@zhibo.local";
     private static final String DEFAULT_NICKNAME = "观众";
     private static final int NICKNAME_MAX = 50;
+    /** 中控台评论审核默认身份（与助理昵称一致） */
+    static final String DEFAULT_CHAT_FILTER_EMAIL = "assistant@zhibo.local";
+    static final String DEFAULT_CHAT_FILTER_NAME = "助理";
+    private static final int CHAT_FILTER_NAME_MAX = 30;
 
     private final VhallClient vhallClient;
     private final VhallProperties properties;
@@ -205,6 +211,26 @@ public class VhallLiveProvider implements LiveProvider {
         return num == null ? 0 : num;
     }
 
+    /**
+     * 微吼批量用户在线：真实开放接口尚未对接。
+     * 当前 mock——传入的每个 userId 都返回 {@code true}，不打 HTTP。
+     */
+    @Override
+    public Map<String, Boolean> batchUserOnline(String providerRoomId, List<String> userIds) {
+        requireRoomId(providerRoomId);
+        Map<String, Boolean> result = new LinkedHashMap<>();
+        if (userIds == null || userIds.isEmpty()) {
+            return result;
+        }
+        for (String raw : userIds) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            result.put(raw.trim(), Boolean.TRUE);
+        }
+        return result;
+    }
+
     @Override
     public List<OnlinePoint> onlineTrend(String providerRoomId, String startTime, String endTime) {
         requireRoomId(providerRoomId);
@@ -314,6 +340,44 @@ public class VhallLiveProvider implements LiveProvider {
             total = list.size();
         }
         return new ProviderRecordList(total, list);
+    }
+
+    @Override
+    public String buildChatFilterUrl(String providerRoomId, String email, String name) {
+        requireRoomId(providerRoomId);
+        String resolvedEmail = resolveChatFilterEmail(email);
+        String resolvedName = resolveChatFilterName(name);
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("webinar_id", providerRoomId);
+        params.put("email", resolvedEmail);
+        params.put("name", resolvedName);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.postForData(PATH_CHAT_FILTER, params, Map.class);
+        String pageUrl = asString(data == null ? null : data.get("page_url"));
+        if (pageUrl == null || pageUrl.isBlank()) {
+            throw new IllegalStateException("微吼未返回聊天审核页 page_url");
+        }
+        return pageUrl;
+    }
+
+    static String resolveChatFilterEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return DEFAULT_CHAT_FILTER_EMAIL;
+        }
+        return email.trim();
+    }
+
+    static String resolveChatFilterName(String name) {
+        if (name == null || name.isBlank()) {
+            return DEFAULT_CHAT_FILTER_NAME;
+        }
+        String trimmed = name.trim();
+        if (trimmed.length() > CHAT_FILTER_NAME_MAX) {
+            throw new IllegalArgumentException("name 不能超过 " + CHAT_FILTER_NAME_MAX + " 字");
+        }
+        return trimmed;
     }
 
     private static List<ProviderRecordItem> mapRecordList(Object rawList) {

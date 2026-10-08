@@ -32,3 +32,4 @@ spring:
 vhall:
   app-key: ${VHALL_APP_KEY:}
   app-secret: ${VHALL_APP_SECRET:}
+  callback-secret: ${VHALL_CALLBACK_SECRET:}

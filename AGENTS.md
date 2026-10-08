@@ -15,6 +15,12 @@
 
 规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；密钥走仓库根 `.env`（勿提交）；包名 `com.zhibo.vhall`。
 
+## 依赖版本（D36，强制）
+
+- `pom.xml`：**禁止**版本区间、`LATEST`、`RELEASE`；Spring Boot parent 与显式依赖都写死具体版本（含补丁号）。
+- 由 Boot BOM 管理的 starter 可不写 `<version>`，但**升级 Boot parent 必须显式改版本并说明**，禁止顺手升。
+- 新增第三方库必须在 pom 里钉死版本；升级单独提交，写进 `docs/进度.md`。
+
 ## 代码评审
 
 另有一个**技术总监** agent 只做 code review，结论写在 `../zhibo-shared/docs/代码评审.md`，他不改你的代码。有派给「后端」的条目就修，修完把那条状态改成 `已修` 并留一句怎么改的；不认同可以填 `不修` + 原因，别默默跳过。

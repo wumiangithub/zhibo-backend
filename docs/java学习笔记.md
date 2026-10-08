@@ -34,3 +34,6 @@
 | 2026-09-17 | `@ConfigurationProperties` | 把 env/yml 绑到 typed 对象 | `VhallProperties` |
 | 2026-09-17 | AutoConfiguration | 装了依赖就生效的插件 | `VhallAutoConfiguration` |
 | 2026-09-17 | `application-local.yml` | `.env.development` | 两个 service |
+| 2026-09-30 | 唯一键先查再插 | 同 key 的 POST 当幂等：已有就返回旧 id，不改那一行 | `AttendanceService#enter` |
+| 2026-09-30 | 批量先校验再逐条写 | 整包字段不合法直接 400；缺的那几条计入 missing，别让一条拖垮整包 | `AttendanceService#leave` |
+| 2026-09-30 | 读接口只改返回值 | 结束后名单 `online=false`，库里的空离开时间保持空 | `AttendeeService#list` |

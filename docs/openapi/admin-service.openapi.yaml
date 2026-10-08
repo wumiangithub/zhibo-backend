@@ -1,0 +1,803 @@
+openapi: 3.0.3
+info:
+  title: zhibo admin-service
+  description: |
+    钱坤直播管理端 API（admin-service :8081）。
+
+    **通则**
+    - 成功：`code === 0`（HTTP 仍多为 200）
+    - 失败：业务 `code` 区分 —— `400` 参数错误，`500` 服务器错误，`501` 服务商未接入，云侧失败透传或 `502`
+    - 活动路径 `{id}` 均为本站 **UUID**（不是微吼 webinar id）
+    - 时间格式：`yyyy-MM-dd HH:mm:ss`
+    - JSON 不输出 `null` 字段
+  version: 1.0.0
+  contact:
+    name: zhibo-backend
+
+servers:
+  - url: http://127.0.0.1:8081
+    description: 本地 admin-service
+
+tags:
+  - name: 活动管理
+  - name: 图片上传
+  - name: 统计
+  - name: 中控台
+
+paths:
+  /api/uploads/image:
+    post:
+      tags: [图片上传]
+      summary: 图片上传（代理微吼）
+      description: |
+        `multipart/form-data`，字段名 `file`。
+        本站不落盘；代理微吼 `/v3/commons/upload/index`；返回可落库的 CDN URL。
+      operationId: uploadImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 图片文件（bmp/gif/jpg/jpeg/png/psd，≤5MB）
+      responses:
+        '200':
+          description: 业务结果（看 body.code）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUploadImage'
+              examples:
+                ok:
+                  value:
+                    code: 0
+                    msg: ok
+                    data:
+                      url: https://cnstatic01.e.vhall.com/upload/xxx.jpg
+
+  /api/activities:
+    post:
+      tags: [活动管理]
+      summary: 创建活动
+      operationId: createActivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActivityRequest'
+            examples:
+              video:
+                summary: 视频直播
+                value:
+                  provider: vhall
+                  title: 开发者大会
+                  startTime: '2026-10-01 20:00:00'
+                  endTime: '2026-10-01 22:00:00'
+                  type: 2
+                  introduction: 简介
+                  coverUrl: https://cnstatic01.e.vhall.com/upload/xxx.jpg
+                  ultraLowLatency: false
+              vod:
+                summary: 录播（需 recordId）
+                value:
+                  provider: vhall
+                  title: 录播场
+                  startTime: '2026-10-01 20:00:00'
+                  type: 4
+                  recordId: '799703'
+                  introduction: 必须有简介
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseId'
+              examples:
+                ok:
+                  value:
+                    code: 0
+                    msg: ok
+                    data:
+                      id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                notAvailable:
+                  value:
+                    code: 501
+                    msg: 该直播服务商尚未接入
+                    data: null
+
+    get:
+      tags: [活动管理]
+      summary: 活动列表
+      operationId: listActivities
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: 从 0 起
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 标题或本站活动 UUID
+        - name: state
+          in: query
+          schema:
+            $ref: '#/components/schemas/ActivityState'
+          description: 不传则不过滤；0=全部（实现上等同不过滤）
+        - name: provider
+          in: query
+          schema:
+            $ref: '#/components/schemas/Provider'
+          description: 精确筛选（录播「选择直播」固定传 vhall）
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseActivityList'
+
+  /api/activities/{id}:
+    get:
+      tags: [活动管理]
+      summary: 活动详情
+      operationId: getActivity
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseActivityDetail'
+
+    put:
+      tags: [活动管理]
+      summary: 改活动
+      description: |
+        至少填一个字段。`type` / `provider` / `ultraLowLatency` 不可改。
+        `coverUrl` 会同步微吼 `img_url`。
+      operationId: updateActivity
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActivityRequest'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseId'
+
+    delete:
+      tags: [活动管理]
+      summary: 删除活动
+      operationId: deleteActivity
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseId'
+
+  /api/activities/{id}/attendees:
+    get:
+      tags: [中控台]
+      summary: 中控台进出名单
+      description: |
+        每个用户只留进入时间最新的一条（相同则入库更晚的那条），再算 `online`。
+        活动 `state` 为 3 结束、4 点播、5 回放时全部 `online=false`，不改库里的空离开时间。
+        直播中（1）和预告（2）：最新一条没有离开时间则为在线。
+        打开页面、换 Tab、搜索、点「加载更多」时调用。不要轮询。
+      operationId: listActivityAttendees
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+        - name: tab
+          in: query
+          schema:
+            type: string
+            enum: [all, online, offline]
+            default: all
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 昵称包含
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAttendeeList'
+
+  /api/activities/{id}/records:
+    get:
+      tags: [活动管理]
+      summary: 某场活动的回放列表
+      description: |
+        用于录播创建前选资源。`list[].id` = 微吼 create-demand 的 `record_id`。
+        无回放时 `total=0`、`list=[]`。
+      operationId: listActivityRecords
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseRecordList'
+
+  /api/activities/{id}/end:
+    post:
+      tags: [活动管理]
+      summary: 结束直播
+      operationId: endActivity
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseEndActivity'
+
+  /api/activities/{id}/host:
+    get:
+      tags: [活动管理]
+      summary: 主持人开播链接
+      description: 管理端拿到 hostUrl 后新窗口打开，不要 iframe。
+      operationId: getActivityHost
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHost'
+
+  /api/activities/{id}/embed:
+    get:
+      tags: [活动管理]
+      summary: 管理后台嵌入页
+      description: iframe 该地址；此页不能开播。仅 provider=vhall 有意义。
+      operationId: getActivityEmbed
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseEmbed'
+
+  /api/activities/{id}/stats:
+    get:
+      tags: [统计]
+      summary: 观看概览
+      operationId: getActivityStats
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseStats'
+
+  /api/activities/{id}/stats/online:
+    get:
+      tags: [统计]
+      summary: 在线趋势（分钟级）
+      description: startTime 与 endTime 跨度必须 ≤1 天。
+      operationId: getActivityOnlineTrend
+      parameters:
+        - $ref: '#/components/parameters/ActivityId'
+        - name: startTime
+          in: query
+          required: true
+          schema:
+            type: string
+            example: '2026-09-17 00:00:00'
+          description: yyyy-MM-dd HH:mm:ss
+        - name: endTime
+          in: query
+          required: true
+          schema:
+            type: string
+            example: '2026-09-17 23:59:59'
+          description: yyyy-MM-dd HH:mm:ss；须 ≥ startTime；跨度 ≤1 天
+      responses:
+        '200':
+          description: 业务结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOnlineTrend'
+
+components:
+  parameters:
+    ActivityId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+      description: 本站活动 UUID
+
+  schemas:
+    Provider:
+      type: string
+      enum: [vhall, aliyun, tencent]
+      description: 直播服务商；创建后不可改
+
+    ActivityType:
+      type: integer
+      enum: [1, 2, 3, 4]
+      description: 1音频 / 2视频 / 3互动 / 4录播
+
+    ActivityState:
+      type: integer
+      enum: [0, 1, 2, 3, 4, 5]
+      description: 0全部(列表筛) / 1直播 / 2预告 / 3结束 / 4点播 / 5回放
+
+    ViewerStyle:
+      type: string
+      enum: [traditional, immersive]
+
+    WarmupType:
+      type: string
+      enum: [image, video]
+
+    ApiResponseBase:
+      type: object
+      required: [code, msg]
+      properties:
+        code:
+          type: integer
+          description: 0 成功；400/500/501/502…
+          example: 0
+        msg:
+          type: string
+          example: ok
+
+    CreateActivityRequest:
+      type: object
+      required: [provider, title, startTime, type]
+      properties:
+        provider:
+          $ref: '#/components/schemas/Provider'
+        title:
+          type: string
+          maxLength: 64
+        startTime:
+          type: string
+          description: yyyy-MM-dd HH:mm:ss
+          example: '2026-10-01 20:00:00'
+        endTime:
+          type: string
+          description: 须晚于 startTime；只落本站库
+        type:
+          $ref: '#/components/schemas/ActivityType'
+        recordId:
+          type: string
+          description: type=4 且 provider=vhall 时必填（回放列表 id）
+        introduction:
+          type: string
+          maxLength: 256
+        viewerStyle:
+          $ref: '#/components/schemas/ViewerStyle'
+        ultraLowLatency:
+          type: boolean
+          description: 创建时同步微吼 no_delay_webinar；创建后不可改
+        virtualAvatar:
+          type: boolean
+        coverUrl:
+          type: string
+          description: 上传接口返回的 url → 微吼 img_url
+        warmupType:
+          $ref: '#/components/schemas/WarmupType'
+        warmupUrl:
+          type: string
+        promoCoverUrl:
+          type: string
+        detailHtml:
+          type: string
+          maxLength: 100000
+
+    UpdateActivityRequest:
+      type: object
+      description: 至少填一个字段
+      properties:
+        title:
+          type: string
+          maxLength: 64
+        startTime:
+          type: string
+        introduction:
+          type: string
+          maxLength: 256
+        endTime:
+          type: string
+        viewerStyle:
+          $ref: '#/components/schemas/ViewerStyle'
+        virtualAvatar:
+          type: boolean
+        coverUrl:
+          type: string
+          description: 同步微吼 img_url
+        warmupType:
+          $ref: '#/components/schemas/WarmupType'
+        warmupUrl:
+          type: string
+        promoCoverUrl:
+          type: string
+        detailHtml:
+          type: string
+          maxLength: 100000
+
+    IdData:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    EndActivityData:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: integer
+          description: 结束后状态，多为 3
+          example: 3
+
+    HostData:
+      type: object
+      required: [provider, hostUrl]
+      properties:
+        provider:
+          $ref: '#/components/schemas/Provider'
+        hostUrl:
+          type: string
+          format: uri
+
+    EmbedData:
+      type: object
+      required: [embedUrl]
+      properties:
+        embedUrl:
+          type: string
+          format: uri
+
+    UploadImageData:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: 微吼 domain_url
+
+    ActivitySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          $ref: '#/components/schemas/Provider'
+        title:
+          type: string
+        startTime:
+          type: string
+        coverUrl:
+          type: string
+        state:
+          $ref: '#/components/schemas/ActivityState'
+        type:
+          $ref: '#/components/schemas/ActivityType'
+        viewerStyle:
+          $ref: '#/components/schemas/ViewerStyle'
+        shareLink:
+          type: string
+        createdAt:
+          type: string
+
+    ActivityDetail:
+      allOf:
+        - $ref: '#/components/schemas/ActivitySummary'
+        - type: object
+          properties:
+            providerRoomId:
+              type: string
+              description: 云侧房间号（微吼即 webinar id）
+            vhallWebinarId:
+              type: string
+              description: 兼容字段；仅 vhall 时等于 providerRoomId
+            introduction:
+              type: string
+            endTime:
+              type: string
+            verify:
+              type: integer
+            pv:
+              type: integer
+            fullEmbedShareLink:
+              type: string
+            ultraLowLatency:
+              type: boolean
+            virtualAvatar:
+              type: boolean
+            warmupType:
+              $ref: '#/components/schemas/WarmupType'
+            warmupUrl:
+              type: string
+            promoCoverUrl:
+              type: string
+            detailHtml:
+              type: string
+
+    ActivityListData:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivitySummary'
+
+    ActivityRecordItem:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: create-demand 的 record_id
+          example: '799703'
+        title:
+          type: string
+        duration:
+          type: string
+          example: '01:02:03'
+        createdAt:
+          type: string
+        coverUrl:
+          type: string
+
+    ActivityRecordListData:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        list:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityRecordItem'
+
+    ActivityStats:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          type: integer
+        type:
+          type: integer
+        pv:
+          type: integer
+          description: 热度
+        onlineCount:
+          type: integer
+          description: 当前在线（约 60s 缓存）
+
+    OnlinePoint:
+      type: object
+      properties:
+        time:
+          type: string
+        count:
+          type: integer
+
+    OnlineTrend:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+        endTime:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/OnlinePoint'
+
+    ApiResponseId:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/IdData'
+
+    ApiResponseUploadImage:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/UploadImageData'
+
+    ApiResponseActivityList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ActivityListData'
+
+    ApiResponseActivityDetail:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ActivityDetail'
+
+    ApiResponseRecordList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ActivityRecordListData'
+
+    ApiResponseEndActivity:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EndActivityData'
+
+    ApiResponseHost:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/HostData'
+
+    ApiResponseEmbed:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/EmbedData'
+
+    ApiResponseStats:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ActivityStats'
+
+    AttendeeItem:
+      type: object
+      required: [userId, enterTime, online]
+      properties:
+        userId:
+          type: string
+        nickname:
+          type: string
+          description: 空则不输出
+        avatarUrl:
+          type: string
+          description: 空则不输出
+        enterTime:
+          type: string
+          example: '2026-09-30 10:00:00'
+        leaveTime:
+          type: string
+          description: 空则不输出
+          example: '2026-09-30 10:20:00'
+        online:
+          type: boolean
+
+    AttendeeListData:
+      type: object
+      required: [activityState, total, page, pageSize, list]
+      properties:
+        activityState:
+          type: integer
+          description: 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放
+        total:
+          type: integer
+          format: int64
+          description: 去重并套上 Tab、搜索之后的人数
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        list:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttendeeItem'
+
+    ApiResponseAttendeeList:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/AttendeeListData'
+
+    ApiResponseOnlineTrend:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/OnlineTrend'

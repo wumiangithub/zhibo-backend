@@ -6,12 +6,12 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /**
- * 活动表 JPA + {@code LiveProviderRegistry} 扫描。
+ * 活动表 JPA、{@code LiveProviderRegistry}、进出名单 / 流水走势扫描。
  * 经 AutoConfiguration.imports 加载，不依赖业务包扫 {@code com.zhibo}。
  */
 @AutoConfiguration
-@EntityScan("com.zhibo.activity")
-@EnableJpaRepositories("com.zhibo.activity")
-@ComponentScan("com.zhibo.liveprovider")
+@EntityScan({"com.zhibo.activity", "com.zhibo.presence"})
+@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence"})
+@ComponentScan({"com.zhibo.liveprovider", "com.zhibo.attendance", "com.zhibo.presence"})
 public class ActivityJpaConfig {
 }

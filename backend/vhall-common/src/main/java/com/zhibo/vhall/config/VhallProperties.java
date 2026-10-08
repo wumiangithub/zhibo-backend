@@ -21,8 +21,22 @@ public class VhallProperties {
 
     private String appSecret = "";
 
+    /**
+     * 回调校签私钥（微吼「设置回调事件」里的 secret_key）。
+     * 未配置时回退 {@link #appSecret}。
+     */
+    private String callbackSecret = "";
+
     /** 0=MD5（默认），1=RSA，2=SHA256，3=SM3。本阶段只用 MD5。 */
     private int signType = 0;
+
+    /** 回调校签用密钥：优先 callbackSecret，否则 appSecret。 */
+    public String resolveCallbackSecret() {
+        if (callbackSecret != null && !callbackSecret.isBlank()) {
+            return callbackSecret;
+        }
+        return appSecret;
+    }
 
     /** 微吼要求的 platform 请求头，固定 15。 */
     private int platform = 15;

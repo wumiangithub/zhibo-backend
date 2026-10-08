@@ -10,6 +10,7 @@ import com.zhibo.liveprovider.dto.WatchSdkBundle;
 import com.zhibo.liveprovider.dto.WatchSdkCommand;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 直播服务商 SPI：各平台（微吼等）实现此接口并注册为 Spring Bean。
@@ -36,6 +37,13 @@ public interface LiveProvider {
 
     List<OnlinePoint> onlineTrend(String providerRoomId, String startTime, String endTime);
 
+    /**
+     * 批量查询指定用户当前是否在直播间在线。
+     * 返回 map 的 key 为请求里的 userId；未出现的 id 视为未知，调用方勿当成在线。
+     * 微吼真实接口未就绪时实现可先 mock（例如一律返回在线）。
+     */
+    Map<String, Boolean> batchUserOnline(String providerRoomId, List<String> userIds);
+
     String buildAdminEmbedUrl(String providerRoomId);
 
     WatchSdkBundle buildWatchSdk(WatchSdkCommand command);
@@ -44,4 +52,13 @@ public interface LiveProvider {
      * 某场直播下的回放/录制列表；{@code list[].id} 即 create-demand 的 {@code record_id}。
      */
     ProviderRecordList listRecords(String providerRoomId);
+
+    /**
+     * 聊天审核页 URL（供中控台 iframe）。
+     *
+     * @param email 审核人标识；空则由实现填默认
+     * @param name  审核人昵称；空则由实现填默认
+     * @return 可嵌入的审核页地址
+     */
+    String buildChatFilterUrl(String providerRoomId, String email, String name);
 }

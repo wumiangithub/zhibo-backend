@@ -43,6 +43,7 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
             Map<String, Object> values = new LinkedHashMap<>(loaded);
             copyIfPresent(values, "VHALL_APP_KEY", "vhall.app-key");
             copyIfPresent(values, "VHALL_APP_SECRET", "vhall.app-secret");
+            copyIfPresent(values, "VHALL_CALLBACK_SECRET", "vhall.callback-secret");
             MapPropertySource source = new MapPropertySource(PROPERTY_SOURCE_NAME, values);
             if (environment.getPropertySources().contains(
                     StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME)) {
