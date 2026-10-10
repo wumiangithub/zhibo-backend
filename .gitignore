@@ -16,3 +16,7 @@ backend/**/target/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# 临时排查导出（用完可删；需要时也不入库）
+**/tmp-*.txt
+**/tmp*.txt
