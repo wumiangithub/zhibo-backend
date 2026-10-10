@@ -24,15 +24,15 @@ public class WatchService {
     private final LiveProviderRegistry providerRegistry;
 
     public WatchActivityListResponse listActivities(int page, int pageSize, Integer state) {
-        if (page < 0) {
-            throw new IllegalArgumentException("page 不能小于 0");
+        if (page < 1) {
+            throw new IllegalArgumentException("page 不能小于 1");
         }
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize 需在 1~100");
         }
         Integer stateFilter = (state != null && state == 0) ? null : state;
         Page<ActivityEntity> result = activityRepository.search(
-                null, stateFilter, null, PageRequest.of(page, pageSize));
+                null, stateFilter, null, PageRequest.of(page - 1, pageSize));
 
         WatchActivityListResponse response = new WatchActivityListResponse();
         response.setTotal(result.getTotalElements());

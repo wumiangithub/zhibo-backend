@@ -37,8 +37,8 @@ public class AttendeeRoster {
 
     @Transactional(readOnly = true)
     public AttendeePage list(String activityId, String tab, int page, int pageSize, String keyword) {
-        if (page < 0) {
-            throw new IllegalArgumentException("page 不能小于 0");
+        if (page < 1) {
+            throw new IllegalArgumentException("page 不能小于 1");
         }
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize 需在 1~100");
@@ -78,7 +78,7 @@ public class AttendeeRoster {
         }
         matched.sort(Comparator.comparing(RoomAttendanceEntity::getEnterTime).reversed());
 
-        int from = (int) Math.min((long) page * pageSize, matched.size());
+        int from = (int) Math.min((long) (page - 1) * pageSize, matched.size());
         int to = (int) Math.min(from + (long) pageSize, matched.size());
         List<AttendeeRow> pageItems = new ArrayList<>();
         for (RoomAttendanceEntity row : matched.subList(from, to)) {

@@ -26,6 +26,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -76,17 +77,18 @@ class AttendeeRosterTest {
                 "b", "user-b", "观众B", "2026-09-30 10:30:00", null, "2026-09-30 10:30:01");
         when(attendanceRepository.findByRoomId(ROOM_ID)).thenReturn(List.of(left, open));
 
-        AttendeePage all = roster.list(ROOM_ID, "all", 0, 20, null);
+        AttendeePage all = roster.list(ROOM_ID, "all", 1, 20, null);
 
         assertEquals(1, all.activityState());
         assertEquals(2, all.total());
+        assertEquals(1, all.page());
         assertEquals(List.of("user-a", "user-b"), all.list().stream().map(AttendeeRow::userId).toList());
         assertFalse(all.list().get(0).online());
         assertEquals("2026-09-30 11:30:00", all.list().get(0).leaveTime());
         assertTrue(all.list().get(1).online());
         assertNull(all.list().get(1).leaveTime());
 
-        AttendeePage online = roster.list(ROOM_ID, "online", 0, 20, null);
+        AttendeePage online = roster.list(ROOM_ID, "online", 1, 20, null);
         assertEquals(1, online.total());
         assertEquals("user-b", online.list().get(0).userId());
 
@@ -105,7 +107,7 @@ class AttendeeRosterTest {
         when(liveProvider.batchUserOnline(eq(PROVIDER_ROOM), anyList()))
                 .thenReturn(Map.of("user-a", false, "user-b", true));
 
-        AttendeePage all = roster.list(ROOM_ID, "all", 0, 20, null);
+        AttendeePage all = roster.list(ROOM_ID, "all", 1, 20, null);
 
         assertEquals(List.of("user-b", "user-a"), all.list().stream().map(AttendeeRow::userId).toList());
         assertTrue(all.list().get(0).online());
@@ -125,7 +127,7 @@ class AttendeeRosterTest {
                 "left", "user-a", "观众A", "2026-09-30 10:00:00", "2026-09-30 10:20:00", "2026-09-30 10:00:01");
         when(attendanceRepository.findByRoomId(ROOM_ID)).thenReturn(List.of(left));
 
-        AttendeePage all = roster.list(ROOM_ID, "all", 0, 20, null);
+        AttendeePage all = roster.list(ROOM_ID, "all", 1, 20, null);
 
         assertEquals(1, all.total());
         assertFalse(all.list().get(0).online());
@@ -142,9 +144,9 @@ class AttendeeRosterTest {
                 "left", "user-b", "观众B", "2026-09-30 10:30:00", "2026-09-30 11:00:00", "2026-09-30 10:30:01");
         when(attendanceRepository.findByRoomId(ROOM_ID)).thenReturn(List.of(stillOpen, alreadyLeft));
 
-        AttendeePage all = roster.list(ROOM_ID, "all", 0, 20, null);
-        AttendeePage online = roster.list(ROOM_ID, "online", 0, 20, null);
-        AttendeePage offline = roster.list(ROOM_ID, "offline", 0, 20, null);
+        AttendeePage all = roster.list(ROOM_ID, "all", 1, 20, null);
+        AttendeePage online = roster.list(ROOM_ID, "online", 1, 20, null);
+        AttendeePage offline = roster.list(ROOM_ID, "offline", 1, 20, null);
 
         assertEquals(state, all.activityState());
         assertEquals(2, all.total());
@@ -156,6 +158,34 @@ class AttendeeRosterTest {
         verify(liveProvider, never()).batchUserOnline(any(), anyList());
     }
 
+
+    @Test
+    void list_rejectsPageBelowOne() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> roster.list(ROOM_ID, "all", 0, 20, null));
+        assertEquals("page 不能小于 1", ex.getMessage());
+    }
+
+    @Test
+    void list_pageIsOneBased() {
+        RoomAttendanceEntity a = row(
+                "a", "user-a", "观众A", "2026-09-30 11:00:00", null, "2026-09-30 11:00:01");
+        RoomAttendanceEntity b = row(
+                "b", "user-b", "观众B", "2026-09-30 10:00:00", null, "2026-09-30 10:00:01");
+        RoomAttendanceEntity c = row(
+                "c", "user-c", "观众C", "2026-09-30 09:00:00", null, "2026-09-30 09:00:01");
+        when(attendanceRepository.findByRoomId(ROOM_ID)).thenReturn(List.of(a, b, c));
+
+        AttendeePage page1 = roster.list(ROOM_ID, "all", 1, 2, null);
+        AttendeePage page2 = roster.list(ROOM_ID, "all", 2, 2, null);
+
+        assertEquals(3, page1.total());
+        assertEquals(1, page1.page());
+        assertEquals(2, page1.pageSize());
+        assertEquals(List.of("user-a", "user-b"), page1.list().stream().map(AttendeeRow::userId).toList());
+        assertEquals(2, page2.page());
+        assertEquals(List.of("user-c"), page2.list().stream().map(AttendeeRow::userId).toList());
+    }
     private static ActivityEntity activity(int state) {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ROOM_ID);

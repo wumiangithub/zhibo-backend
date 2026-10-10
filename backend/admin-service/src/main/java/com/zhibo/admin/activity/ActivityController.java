@@ -39,7 +39,7 @@ public class ActivityController {
 
     @GetMapping
     public ApiResponse<ActivityListResponse> list(
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer state,

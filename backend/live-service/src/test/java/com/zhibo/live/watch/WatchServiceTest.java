@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -59,5 +60,12 @@ class WatchServiceTest {
                 || response.getEmbedUrl().contains("email=guest1@zhibo.local"));
         assertEquals("guest1", response.getGuestId());
         assertEquals("小明", response.getNickname());
+    }
+
+    @Test
+    void listActivities_rejectsPageBelowOne() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> watchService.listActivities(0, 20, null));
+        assertEquals("page 不能小于 1", ex.getMessage());
     }
 }

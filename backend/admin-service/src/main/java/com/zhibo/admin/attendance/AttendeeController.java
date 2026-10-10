@@ -20,7 +20,7 @@ public class AttendeeController {
     public ApiResponse<AttendeeListResponse> list(
             @PathVariable String id,
             @RequestParam(defaultValue = "all") String tab,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
         return ApiResponse.ok(attendeeService.list(id, tab, page, pageSize, keyword));

@@ -121,9 +121,9 @@ paths:
           in: query
           schema:
             type: integer
-            default: 0
-            minimum: 0
-          description: 从 0 起
+            default: 1
+            minimum: 1
+          description: 从 1 起（D37）
         - name: pageSize
           in: query
           schema:
@@ -228,8 +228,9 @@ paths:
           in: query
           schema:
             type: integer
-            minimum: 0
-            default: 0
+            minimum: 1
+            default: 1
+          description: 从 1 起（D37）
         - name: pageSize
           in: query
           schema:

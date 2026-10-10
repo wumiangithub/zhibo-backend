@@ -21,7 +21,7 @@ public class WatchController {
 
     @GetMapping("/activities")
     public ApiResponse<WatchActivityListResponse> activities(
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) Integer state) {
         return ApiResponse.ok(watchService.listActivities(page, pageSize, state));

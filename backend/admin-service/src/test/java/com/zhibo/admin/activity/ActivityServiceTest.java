@@ -148,4 +148,11 @@ class ActivityServiceTest {
         assertEquals("回放A", response.getList().get(0).getTitle());
         assertEquals("https://cover", response.getList().get(0).getCoverUrl());
     }
+
+    @Test
+    void list_rejectsPageBelowOne() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.list(0, 20, null, null, null));
+        assertEquals("page 不能小于 1", ex.getMessage());
+    }
 }

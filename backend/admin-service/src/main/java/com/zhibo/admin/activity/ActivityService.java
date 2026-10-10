@@ -119,8 +119,8 @@ public class ActivityService {
     }
 
     public ActivityListResponse list(int page, int pageSize, String keyword, Integer state, String provider) {
-        if (page < 0) {
-            throw new IllegalArgumentException("page 不能小于 0");
+        if (page < 1) {
+            throw new IllegalArgumentException("page 不能小于 1");
         }
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize 需在 1~100");
@@ -130,7 +130,7 @@ public class ActivityService {
         String keywordFilter = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
 
         Page<ActivityEntity> result = activityRepository.search(
-                providerFilter, stateFilter, keywordFilter, PageRequest.of(page, pageSize));
+                providerFilter, stateFilter, keywordFilter, PageRequest.of(page - 1, pageSize));
 
         ActivityListResponse response = new ActivityListResponse();
         response.setTotal(result.getTotalElements());
