@@ -11,14 +11,14 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
 /**
- * 启动最早阶段把 {@code .env} 灌进 Spring Environment。
+ * 启动最早阶段把 {@code .env} / {@code .env.local} 灌进 Spring Environment。
  * <p>
  * 不能只塞 {@code VHALL_APP_KEY} 再指望 yml 的 {@code ${VHALL_APP_KEY:}}：
  * 占位符在加载 application.yml 时就会求值，来晚了会变成空字符串。
- * 所以这里同时写入 {@code vhall.app-key} / {@code vhall.app-secret}，
- * 并把 PropertySource 插到系统环境变量之后、application.yml 之前。
+ * 所以这里同时写入 {@code vhall.*} / {@code volc.*} 属性。
  * <p>
- * 优先级：系统环境变量 / JVM -D 仍可覆盖 .env（便于 CI）；没设时用 .env。
+ * 优先级：系统环境变量 / JVM -D &gt; {@code .env.local} &gt; {@code .env}。
+ * {@code .env} 可进 git；{@code .env.local} 仅本机、不进 git。
  */
 public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
@@ -29,21 +29,28 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
         if (environment.getPropertySources().contains(PROPERTY_SOURCE_NAME)) {
             return;
         }
-        Path envFile = DotenvLoader.findEnvFile();
-        if (envFile == null) {
+        Path envDir = DotenvLoader.findEnvDir();
+        if (envDir == null) {
             System.out.println("[dotenv] .env not found from user.dir=" + System.getProperty("user.dir"));
             return;
         }
         try {
-            Map<String, Object> loaded = DotenvLoader.load(envFile);
+            Map<String, Object> loaded = DotenvLoader.loadMerged(envDir);
             if (loaded.isEmpty()) {
-                System.out.println("[dotenv] empty file: " + envFile);
+                System.out.println("[dotenv] empty: " + envDir.resolve(".env"));
                 return;
             }
             Map<String, Object> values = new LinkedHashMap<>(loaded);
             copyIfPresent(values, "VHALL_APP_KEY", "vhall.app-key");
             copyIfPresent(values, "VHALL_APP_SECRET", "vhall.app-secret");
             copyIfPresent(values, "VHALL_CALLBACK_SECRET", "vhall.callback-secret");
+            copyIfPresent(values, "VOLC_ACCESS_KEY", "volc.access-key");
+            copyIfPresent(values, "VOLC_SECRET_KEY", "volc.secret-key");
+            copyIfPresent(values, "VOLC_STS_ROLE_TRN", "volc.sts-role-trn");
+            copyIfPresent(values, "VOLC_TOS_REGION", "volc.tos-region");
+            copyIfPresent(values, "VOLC_TOS_ENDPOINT", "volc.tos-endpoint");
+            copyIfPresent(values, "VOLC_TOS_BUCKET", "volc.tos-bucket");
+            copyIfPresent(values, "VOLC_STS_DURATION_SECONDS", "volc.sts-duration-seconds");
             MapPropertySource source = new MapPropertySource(PROPERTY_SOURCE_NAME, values);
             if (environment.getPropertySources().contains(
                     StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME)) {
@@ -52,9 +59,11 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
             } else {
                 environment.getPropertySources().addFirst(source);
             }
-            System.out.println("[dotenv] loaded " + envFile);
+            Path local = envDir.resolve(".env.local");
+            System.out.println("[dotenv] loaded " + envDir.resolve(".env")
+                    + (java.nio.file.Files.isRegularFile(local) ? " + .env.local" : ""));
         } catch (Exception ex) {
-            throw new IllegalStateException("读取 .env 失败: " + envFile, ex);
+            throw new IllegalStateException("读取 .env 失败: " + envDir, ex);
         }
     }
 

@@ -4,7 +4,8 @@ Java 后端。公用架构文档：`../zhibo-shared`。前端：`../zhibo-fronte
 
 ## 运行（需 JDK 17 + MySQL）
 
-凭证与库：仓库根 `.env`（参考 `.env.example`），需 `VHALL_*` 与 `MYSQL_*`。从 `backend/` 启动会向上加载 `.env`。
+凭证与库：仓库根 `.env`（可进 git；参考 `.env.example`），需 `VHALL_*`、`MYSQL_*`、TOS 非密钥项 `VOLC_*`。火山 AK/SK 放 `.env.local`（不进 git）。从 `backend/` 启动会向上加载 `.env` 再叠 `.env.local`。
+
 
 首次启动时 **Flyway** 在库 `zhibo` 建 `activity` 表（迁移在 `live-common`）。
 

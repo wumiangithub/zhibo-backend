@@ -53,4 +53,21 @@ class DotenvLoaderTest {
             System.setProperty("user.dir", previous);
         }
     }
+
+    @Test
+    void loadMergedLocalOverridesEnv() throws Exception {
+        Files.writeString(tempDir.resolve(".env"), """
+                VOLC_ACCESS_KEY=from-env
+                VOLC_TOS_BUCKET=qky-live-sucai-test
+                """);
+        Files.writeString(tempDir.resolve(".env.local"), """
+                VOLC_ACCESS_KEY=from-local
+                """);
+
+        Map<String, Object> map = DotenvLoader.loadMerged(tempDir);
+
+        assertEquals("from-local", map.get("VOLC_ACCESS_KEY"));
+        assertEquals("qky-live-sucai-test", map.get("VOLC_TOS_BUCKET"));
+    }
 }
+
