@@ -1,0 +1,134 @@
+package com.zhibo.admin.material;
+
+import com.zhibo.admin.material.dto.MaterialGroupResponse;
+import com.zhibo.admin.material.dto.MaterialItemResponse;
+import com.zhibo.admin.material.dto.MaterialListResponse;
+import com.zhibo.admin.material.dto.RegisterMaterialsResponse;
+import com.zhibo.admin.web.GlobalExceptionHandler;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+class MaterialControllerTest {
+
+    private MockMvc mockMvc;
+    private MaterialService materialService;
+
+    @BeforeEach
+    void setUp() {
+        materialService = mock(MaterialService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new MaterialController(materialService))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+    }
+
+    @Test
+    void listGroups_ok() throws Exception {
+        when(materialService.listGroups("image"))
+                .thenReturn(List.of(new MaterialGroupResponse("g1", "默认分组", 2, true)));
+
+        mockMvc.perform(get("/api/materials/groups").param("type", "image"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].id").value("g1"))
+                .andExpect(jsonPath("$.data[0].isDefault").value(true))
+                .andExpect(jsonPath("$.data[0].count").value(2));
+    }
+
+    @Test
+    void list_ok() throws Exception {
+        MaterialListResponse resp = new MaterialListResponse();
+        resp.setTotal(1);
+        resp.setPage(1);
+        resp.setPageSize(20);
+        MaterialItemResponse item = new MaterialItemResponse();
+        item.setId("m1");
+        item.setName("a.jpg");
+        item.setType("image");
+        resp.setList(List.of(item));
+        when(materialService.list(eq("image"), isNull(), isNull(), eq(1), eq(20))).thenReturn(resp);
+
+        mockMvc.perform(get("/api/materials").param("type", "image"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.list[0].id").value("m1"));
+    }
+
+    @Test
+    void register_ok() throws Exception {
+        MaterialItemResponse item = new MaterialItemResponse();
+        item.setId("m1");
+        item.setName("a.jpg");
+        when(materialService.register(any())).thenReturn(new RegisterMaterialsResponse(List.of(item)));
+
+        mockMvc.perform(post("/api/materials")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "type":"image",
+                                  "groupId":"g1",
+                                  "items":[{"name":"a.jpg","url":"https://x","objectKey":"material/image/1_a.jpg"}]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.list[0].id").value("m1"));
+    }
+
+    @Test
+    void list_validationFailure_returns400() throws Exception {
+        when(materialService.list(eq("image"), isNull(), isNull(), anyInt(), anyInt()))
+                .thenThrow(new IllegalArgumentException("page 不能小于 1"));
+
+        mockMvc.perform(get("/api/materials").param("type", "image").param("page", "0"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.msg").value("page 不能小于 1"));
+    }
+
+    @Test
+    void rename_ok() throws Exception {
+        MaterialItemResponse item = new MaterialItemResponse();
+        item.setId("m1");
+        item.setName("新封面.jpg");
+        item.setObjectKey("material/image/1_a.jpg");
+        when(materialService.rename(eq("m1"), any())).thenReturn(item);
+
+        mockMvc.perform(put("/api/materials/m1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"新封面.jpg\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.name").value("新封面.jpg"))
+                .andExpect(jsonPath("$.data.objectKey").value("material/image/1_a.jpg"));
+    }
+
+    @Test
+    void softDelete_ok() throws Exception {
+        when(materialService.softDelete("m1"))
+                .thenReturn(new com.zhibo.admin.material.dto.DeleteIdResponse("m1"));
+
+        mockMvc.perform(delete("/api/materials/m1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.id").value("m1"));
+    }
+}

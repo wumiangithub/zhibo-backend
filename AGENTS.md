@@ -15,6 +15,14 @@
 
 规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；共享配置走 `.env`（可提交）；`VOLC_ACCESS_KEY`/`SECRET` 等敏感项放 `.env.local`（不进 git；GitHub 会拦）；包名 `com.zhibo.vhall`。
 
+## 本地进程（强制）
+
+发现 `admin-service` / `live-service` 等进程退出、端口不通、或 shell 任务异常结束时：**只向用户汇报**，**禁止擅自重新拉起**。
+
+原因：用户或总控 / 其他 agent 可能正在重启、换 jar、或故意关掉；你这边再自动起，容易和对方抢端口、互相杀进程，形成死循环。
+
+需要再开服务时，等用户明确说「启动 / 重启」再动手。
+
 ## 依赖版本（D36，强制）
 
 - `pom.xml`：**禁止**版本区间、`LATEST`、`RELEASE`；Spring Boot parent 与显式依赖都写死具体版本（含补丁号）。

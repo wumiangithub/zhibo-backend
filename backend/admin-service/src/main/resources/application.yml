@@ -32,3 +32,13 @@ spring:
 vhall:
   app-key: ${VHALL_APP_KEY:}
   app-secret: ${VHALL_APP_SECRET:}
+
+# 火山 TOS / STS（密钥优先 .env.local；缺省不拒启动，调接口时再 400）
+volc:
+  access-key: ${VOLC_ACCESS_KEY:}
+  secret-key: ${VOLC_SECRET_KEY:}
+  sts-role-trn: ${VOLC_STS_ROLE_TRN:trn:iam::2116729154:role/sts}
+  tos-region: ${VOLC_TOS_REGION:cn-shanghai}
+  tos-endpoint: ${VOLC_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
+  tos-bucket: ${VOLC_TOS_BUCKET:qky-live-sucai-test}
+  sts-duration-seconds: ${VOLC_STS_DURATION_SECONDS:3600}

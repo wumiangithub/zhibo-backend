@@ -1,5 +1,6 @@
 package com.zhibo.admin.web;
 
+import com.zhibo.admin.volc.VolcStsException;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,12 @@ public class GlobalExceptionHandler {
                 ex.getCode(), ex.getRequestId(), ex.getMessage());
         int code = ex.getCode() != null ? ex.getCode() : 502;
         return ApiResponse.fail(code, ex.getMessage());
+    }
+
+    @ExceptionHandler(VolcStsException.class)
+    public ApiResponse<Void> handleVolcSts(VolcStsException ex) {
+        log.warn("火山 STS 失败 code={} msg={}", ex.getCode(), ex.getMessage());
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
     }
 
     @ExceptionHandler({

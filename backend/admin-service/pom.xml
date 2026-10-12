@@ -23,6 +23,12 @@
             <groupId>com.zhibo</groupId>
             <artifactId>vhall-common</artifactId>
         </dependency>
+        <!-- 火山 STS AssumeRole；版本钉死（D36 / T18.1） -->
+        <dependency>
+            <groupId>com.volcengine</groupId>
+            <artifactId>volc-sdk-java</artifactId>
+            <version>1.0.288</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
