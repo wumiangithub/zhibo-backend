@@ -42,3 +42,15 @@ volc:
   tos-endpoint: ${VOLC_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
   tos-bucket: ${VOLC_TOS_BUCKET:qky-live-sucai-test}
   sts-duration-seconds: ${VOLC_STS_DURATION_SECONDS:3600}
+
+# 管理端登录（D41；Secret/AES/JWT 优先 .env.local）
+auth:
+  password-aes-key-base64: ${AUTH_PASSWORD_AES_KEY_BASE64:}
+  jwt-secret: ${AUTH_JWT_SECRET:}
+  jwt-expire-seconds: ${AUTH_JWT_EXPIRE_SECONDS:86400}
+  wechat:
+    open-app-id: ${WECHAT_OPEN_APP_ID:}
+    open-app-secret: ${WECHAT_OPEN_APP_SECRET:}
+    open-redirect-uri: ${WECHAT_OPEN_REDIRECT_URI:}
+    # 本地可开：未绑定账号扫码写库绑定；默认 false（正式行为）
+    allow-self-bind: ${AUTH_WECHAT_ALLOW_SELF_BIND:false}

@@ -1,0 +1,57 @@
+package com.zhibo.admin.auth;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+/**
+ * 管理端登录配置（D41）。
+ * <p>
+ * 绑定 {@code auth.*} / {@code wechat.*}（.env 的 {@code AUTH_*} / {@code WECHAT_*} 经 dotenv 注入）。
+ * 缺密钥不拒启动；调登录接口时再校验。
+ */
+@Data
+@ConfigurationProperties(prefix = "auth")
+public class AuthProperties {
+
+    /** AES-256 密钥的 Base64（32 字节）。 */
+    private String passwordAesKeyBase64 = "";
+
+    /** JWT HMAC 密钥。 */
+    private String jwtSecret = "";
+
+    /** JWT 有效秒数，默认 24h。 */
+    private long jwtExpireSeconds = 86400;
+
+    private Wechat wechat = new Wechat();
+
+    @Data
+    public static class Wechat {
+        private String openAppId = "";
+        private String openAppSecret = "";
+        private String openRedirectUri = "";
+
+        /**
+         * 本地开发临时开关：未绑定账号扫码后写库绑定 openid/unionid。
+         * 默认 false（正式：未绑定仍提示联系管理员）。勿在生产开启。
+         */
+        private boolean allowSelfBind = false;
+    }
+
+    public boolean passwordAesKeyMissing() {
+        return isBlank(passwordAesKeyBase64);
+    }
+
+    public boolean jwtSecretMissing() {
+        return isBlank(jwtSecret);
+    }
+
+    public boolean wechatCredentialsMissing() {
+        return isBlank(wechat.openAppId)
+                || isBlank(wechat.openAppSecret)
+                || isBlank(wechat.openRedirectUri);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+}

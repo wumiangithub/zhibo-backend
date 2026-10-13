@@ -1,5 +1,6 @@
 package com.zhibo.admin;
 
+import com.zhibo.admin.auth.AuthProperties;
 import com.zhibo.admin.volc.VolcProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -13,7 +14,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * 共享库 Bean 不再靠扫 {@code com.zhibo}，而由 {@code vhall-common} 的 AutoConfiguration 注册。
  */
 @SpringBootApplication
-@EnableConfigurationProperties(VolcProperties.class)
+@EnableConfigurationProperties({VolcProperties.class, AuthProperties.class})
 public class AdminServiceApplication {
 
     public static void main(String[] args) {

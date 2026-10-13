@@ -1,5 +1,6 @@
 package com.zhibo.admin.web;
 
+import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.volc.VolcStsException;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
@@ -20,6 +21,12 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AuthException.class)
+    public ApiResponse<Void> handleAuth(AuthException ex) {
+        log.info("鉴权/账号状态 code={} msg={}", ex.getCode(), ex.getMessage());
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
 
     @ExceptionHandler(ProviderNotAvailableException.class)
     public ApiResponse<Void> handleProviderNotAvailable(ProviderNotAvailableException ex) {

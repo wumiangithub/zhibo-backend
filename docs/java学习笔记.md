@@ -2,6 +2,10 @@
 
 | 日期 | 概念 | 前端类比 | 位置 |
 |------|------|----------|------|
+| 2026-10-13 | `HandlerInterceptor` + 白名单 | axios 请求拦截器：无 token 拦业务 API | `AuthInterceptor` |
+| 2026-10-13 | JWT（jjwt 签发/校验） | 登录后发的短期 ticket；放 `Authorization: Bearer` | `JwtTokenService` |
+| 2026-10-13 | AES-GCM + BCrypt 两层口令 | 传输密加密防抓包；库内哈希比对 | `PasswordCryptoService` / `AuthService` |
+| 2026-10-13 | 内存 Map + TTL 当会话 | 前端 Map 缓存；重启丢失（本迭代可接受） | `LoginStateStore` / `CaptchaService` |
 | 2026-09-18 | `@PutMapping` / `@DeleteMapping` | PUT/DELETE 路由 | `ActivityController` |
 | 2026-09-18 | 路径字面量优先于 `{id}` | `/api/watch/activities` 别被当成 id | `WatchController` |
 | 2026-09-18 | 注入 `Clock` + 内存短缓存 | 自己 mock `Date.now`；Map 当 TTL cache | `TimeConfig` / `StatsService` |
