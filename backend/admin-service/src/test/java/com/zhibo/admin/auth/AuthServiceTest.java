@@ -48,8 +48,10 @@ class AuthServiceTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-13T04:00:00Z"), ZoneOffset.UTC);
         properties = new AuthProperties();
         properties.setPasswordAesKeyBase64(aesKey());
-        properties.setJwtSecret("test-jwt-secret-key-at-least-32-bytes-long!!");
-        properties.setJwtExpireSeconds(3600);
+        properties.setJwtSecret("ae0536f9-1234-5678-8e13-5a19ed505da0");
+        properties.setJwtExpireSeconds(7200);
+        properties.setJwtIssuer("base-admin-api");
+        properties.setJwtAudience("base");
 
         passwordCrypto = new PasswordCryptoService(properties, new ObjectMapper());
         authService = new AuthService(

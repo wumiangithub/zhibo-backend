@@ -19,8 +19,14 @@ public class AuthProperties {
     /** JWT HMAC 密钥。 */
     private String jwtSecret = "";
 
-    /** JWT 有效秒数，默认 24h。 */
-    private long jwtExpireSeconds = 86400;
+    /** JWT 有效秒数；默认对齐旧 base-admin AccessExpire=7200。 */
+    private long jwtExpireSeconds = 7200;
+
+    /** JWT iss；默认对齐旧 base-admin Issuer。 */
+    private String jwtIssuer = "base-admin-api";
+
+    /** JWT aud；默认对齐旧 base-admin Audience。 */
+    private String jwtAudience = "base";
 
     private Wechat wechat = new Wechat();
 

@@ -44,10 +44,13 @@ volc:
   sts-duration-seconds: ${VOLC_STS_DURATION_SECONDS:3600}
 
 # 管理端登录（D41；Secret/AES/JWT 优先 .env.local）
+# jwt-issuer / jwt-audience 默认对齐旧 base-admin；可经 AUTH_JWT_ISSUER / AUTH_JWT_AUDIENCE 覆盖
 auth:
   password-aes-key-base64: ${AUTH_PASSWORD_AES_KEY_BASE64:}
   jwt-secret: ${AUTH_JWT_SECRET:}
-  jwt-expire-seconds: ${AUTH_JWT_EXPIRE_SECONDS:86400}
+  jwt-expire-seconds: ${AUTH_JWT_EXPIRE_SECONDS:7200}
+  jwt-issuer: ${AUTH_JWT_ISSUER:base-admin-api}
+  jwt-audience: ${AUTH_JWT_AUDIENCE:base}
   wechat:
     open-app-id: ${WECHAT_OPEN_APP_ID:}
     open-app-secret: ${WECHAT_OPEN_APP_SECRET:}

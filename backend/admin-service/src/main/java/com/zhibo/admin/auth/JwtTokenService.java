@@ -28,6 +28,8 @@ public class JwtTokenService {
         Instant now = clock.instant();
         Instant exp = now.plusSeconds(properties.getJwtExpireSeconds());
         return Jwts.builder()
+                .issuer(properties.getJwtIssuer())
+                .audience().add(properties.getJwtAudience()).and()
                 .subject(String.valueOf(userId))
                 .claim("userAccount", userAccount)
                 .issuedAt(Date.from(now))
@@ -47,6 +49,8 @@ public class JwtTokenService {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(signingKey())
+                    .requireIssuer(properties.getJwtIssuer())
+                    .requireAudience(properties.getJwtAudience())
                     .clock(() -> Date.from(clock.instant()))
                     .build()
                     .parseSignedClaims(token)
@@ -62,7 +66,7 @@ public class JwtTokenService {
     public int expireSeconds() {
         long v = properties.getJwtExpireSeconds();
         if (v <= 0) {
-            return 86400;
+            return 7200;
         }
         return (int) Math.min(v, Integer.MAX_VALUE);
     }

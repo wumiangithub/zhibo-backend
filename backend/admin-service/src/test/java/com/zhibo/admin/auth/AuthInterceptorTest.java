@@ -21,8 +21,10 @@ class AuthInterceptorTest {
     @BeforeEach
     void setUp() {
         AuthProperties properties = new AuthProperties();
-        properties.setJwtSecret("test-jwt-secret-key-at-least-32-bytes-long!!");
-        properties.setJwtExpireSeconds(3600);
+        properties.setJwtSecret("ae0536f9-1234-5678-8e13-5a19ed505da0");
+        properties.setJwtExpireSeconds(7200);
+        properties.setJwtIssuer("base-admin-api");
+        properties.setJwtAudience("base");
         Clock clock = Clock.fixed(Instant.parse("2026-10-13T04:00:00Z"), ZoneOffset.UTC);
         jwtTokenService = new JwtTokenService(properties, clock);
         interceptor = new AuthInterceptor(jwtTokenService, new ObjectMapper());
