@@ -51,6 +51,38 @@ class JwtTokenServiceTest {
         assertEquals("base-admin-api", claims.getIssuer());
         assertTrue(claims.getAudience().contains("base"));
         assertEquals(7200, service.expireSeconds());
+        assertEquals(604800, service.refreshExpireSeconds());
+    }
+
+    @Test
+    void issueRefresh_usesRefreshAudience() {
+        String token = service.issueRefresh(42L, "admin");
+        Claims claims = Jwts.parser()
+                .verifyWith(signingKey(SECRET))
+                .requireIssuer("base-admin-api")
+                .requireAudience("base-refresh")
+                .clock(() -> Date.from(clock.instant()))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        assertEquals("42", claims.getSubject());
+        assertTrue(claims.getAudience().contains("base-refresh"));
+        AuthException ex = assertThrows(AuthException.class, () -> service.parseUserId(token));
+        assertEquals(401, ex.getCode());
+    }
+
+    @Test
+    void parseAccessAllowExpired_acceptsExpiredAccess() {
+        String token = Jwts.builder()
+                .issuer("base-admin-api")
+                .audience().add("base").and()
+                .subject("42")
+                .issuedAt(Date.from(clock.instant().minusSeconds(8000)))
+                .expiration(Date.from(clock.instant().minusSeconds(60)))
+                .signWith(signingKey(SECRET))
+                .compact();
+        assertEquals(42L, service.parseAccessAllowExpired(token));
+        assertThrows(AuthException.class, () -> service.parseUserId(token));
     }
 
     @Test

@@ -9,5 +9,7 @@ public class LoginQueryResponse {
     private String errorMsg;
     private String accessToken;
     private Integer expiresIn;
+    private String refreshToken;
+    private Integer refreshExpiresIn;
     private AuthUserResponse user;
 }

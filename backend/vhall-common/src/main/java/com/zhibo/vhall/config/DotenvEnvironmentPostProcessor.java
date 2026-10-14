@@ -54,8 +54,10 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
             copyIfPresent(values, "AUTH_PASSWORD_AES_KEY_BASE64", "auth.password-aes-key-base64");
             copyIfPresent(values, "AUTH_JWT_SECRET", "auth.jwt-secret");
             copyIfPresent(values, "AUTH_JWT_EXPIRE_SECONDS", "auth.jwt-expire-seconds");
+            copyIfPresent(values, "AUTH_JWT_REFRESH_EXPIRE_SECONDS", "auth.jwt-refresh-expire-seconds");
             copyIfPresent(values, "AUTH_JWT_ISSUER", "auth.jwt-issuer");
             copyIfPresent(values, "AUTH_JWT_AUDIENCE", "auth.jwt-audience");
+            copyIfPresent(values, "AUTH_JWT_REFRESH_AUDIENCE", "auth.jwt-refresh-audience");
             copyIfPresent(values, "WECHAT_OPEN_APP_ID", "auth.wechat.open-app-id");
             copyIfPresent(values, "WECHAT_OPEN_APP_SECRET", "auth.wechat.open-app-secret");
             copyIfPresent(values, "WECHAT_OPEN_REDIRECT_URI", "auth.wechat.open-redirect-uri");

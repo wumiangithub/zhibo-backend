@@ -11,12 +11,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,5 +72,31 @@ class WatchServiceTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> watchService.listActivities(0, 20, null));
         assertEquals("page 不能小于 1", ex.getMessage());
+    }
+
+    @Test
+    void watch_softDeleted_isMissing() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setDeletedAt(LocalDateTime.now());
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> watchService.watch(ID, "guest1", "小明"));
+        assertEquals("活动不存在", ex.getMessage());
+        verifyNoInteractions(providerRegistry, liveProvider);
+    }
+
+    @Test
+    void listActivities_hidesSoftDeleted() {
+        ActivityEntity dead = new ActivityEntity();
+        dead.setId(ID);
+        dead.setTitle("已删");
+        dead.setDeletedAt(LocalDateTime.now());
+        when(activityRepository.search(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(dead)));
+
+        var response = watchService.listActivities(1, 20, null);
+        assertEquals(0, response.getList().size());
     }
 }

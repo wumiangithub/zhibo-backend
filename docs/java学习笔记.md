@@ -2,6 +2,9 @@
 
 | 日期 | 概念 | 前端类比 | 位置 |
 |------|------|----------|------|
+| 2026-10-14 | access / refresh 两张 JWT | access 像短期票，每次请求带上；refresh 只用来换新票 | `JwtTokenService` / `POST /api/auth/refresh` |
+| 2026-10-14 | 软删 `deleted_at` | 列表 `filter` 掉带标记的项，行还在 | `ActivityRepository.search` / `DELETE /api/activities/{id}` |
+| 2026-10-14 | 一对多从表 | 主表一条，归属人/商品另存数组表 | `activity_owner` / `activity_product` |
 | 2026-10-13 | `HandlerInterceptor` + 白名单 | axios 请求拦截器：无 token 拦业务 API | `AuthInterceptor` |
 | 2026-10-13 | JWT（jjwt 签发/校验） | 登录后发的短期 ticket；放 `Authorization: Bearer` | `JwtTokenService` |
 | 2026-10-13 | AES-GCM + BCrypt 两层口令 | 传输密加密防抓包；库内哈希比对 | `PasswordCryptoService` / `AuthService` |

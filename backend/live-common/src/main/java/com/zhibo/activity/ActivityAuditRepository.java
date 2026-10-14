@@ -1,0 +1,10 @@
+package com.zhibo.activity;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface ActivityAuditRepository extends JpaRepository<ActivityAuditEntity, String> {
+
+    List<ActivityAuditEntity> findByActivityIdOrderByCreatedAtDesc(String activityId);
+}

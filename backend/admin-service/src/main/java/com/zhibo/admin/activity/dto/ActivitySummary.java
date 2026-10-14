@@ -2,6 +2,9 @@ package com.zhibo.admin.activity.dto;
 
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Data
 public class ActivitySummary {
 
@@ -17,4 +20,11 @@ public class ActivitySummary {
     private String viewerStyle;
     private String shareLink;
     private String createdAt;
+    private String shelfStatus;
+    private String riskStatus;
+    private String sellType;
+    private String validityLabel;
+    private Boolean canBroadcast;
+    private List<ActivityPerson> owners = new ArrayList<>();
+    private List<ActivityProductView> products = new ArrayList<>();
 }

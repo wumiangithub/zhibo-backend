@@ -4,6 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.auth.dto.LoginPendingResponse;
 import com.zhibo.admin.auth.dto.LoginQueryResponse;
 import com.zhibo.admin.auth.dto.LoginRequest;
+import com.zhibo.admin.auth.dto.RefreshRequest;
+import com.zhibo.admin.auth.dto.RefreshResponse;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+import javax.crypto.SecretKey;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -24,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,10 +50,12 @@ class AuthServiceTest {
     private PasswordCryptoService passwordCrypto;
     private AuthProperties properties;
     private AuthService authService;
+    private JwtTokenService jwtTokenService;
+    private Clock clock;
 
     @BeforeEach
     void setUp() {
-        Clock clock = Clock.fixed(Instant.parse("2026-10-13T04:00:00Z"), ZoneOffset.UTC);
+        clock = Clock.fixed(Instant.parse("2026-10-13T04:00:00Z"), ZoneOffset.UTC);
         properties = new AuthProperties();
         properties.setPasswordAesKeyBase64(aesKey());
         properties.setJwtSecret("ae0536f9-1234-5678-8e13-5a19ed505da0");
@@ -54,17 +64,18 @@ class AuthServiceTest {
         properties.setJwtAudience("base");
 
         passwordCrypto = new PasswordCryptoService(properties, new ObjectMapper());
+        jwtTokenService = new JwtTokenService(properties, clock);
         authService = new AuthService(
                 captchaService,
                 passwordCrypto,
                 new ReplayGuard(clock),
                 userRepository,
                 new LoginStateStore(clock),
-                new JwtTokenService(properties, clock),
+                jwtTokenService,
                 wechatOAuthClient,
                 properties);
 
-        doNothing().when(captchaService).verifyAndConsume(anyString(), anyString());
+        lenient().doNothing().when(captchaService).verifyAndConsume(anyString(), anyString());
     }
 
     @Test
@@ -184,10 +195,94 @@ class AuthServiceTest {
         LoginQueryResponse query = authService.query(pending.getState());
         assertEquals(1, query.getStatus());
         assertNotNull(query.getAccessToken());
+        assertNotNull(query.getRefreshToken());
+        assertEquals(7200, query.getExpiresIn());
+        assertEquals(604800, query.getRefreshExpiresIn());
         assertEquals(1L, query.getUser().getId());
 
         LoginQueryResponse again = authService.query(pending.getState());
         assertEquals(3, again.getStatus());
+    }
+
+    @Test
+    void refresh_expiredAccess_reissuesFromDatabase() {
+        SysUserAccountEntity user = activeUser(1L, "admin-renamed", "pass123", "oid-1", "uid-1");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        RefreshRequest request = new RefreshRequest();
+        request.setAccessToken(expiredAccess(1L, "admin"));
+        request.setRefreshToken(jwtTokenService.issueRefresh(1L, "admin"));
+
+        RefreshResponse response = authService.refresh(request);
+        assertEquals(7200, response.getExpiresIn());
+        assertEquals(604800, response.getRefreshExpiresIn());
+        assertEquals(1L, jwtTokenService.parseUserId(response.getAccessToken()));
+        Claims claims = Jwts.parser()
+                .verifyWith(signingKey())
+                .clock(() -> Date.from(clock.instant()))
+                .build()
+                .parseSignedClaims(response.getAccessToken())
+                .getPayload();
+        assertEquals("admin-renamed", claims.get("userAccount", String.class));
+    }
+
+    @Test
+    void refresh_mismatch_throws401() {
+        RefreshRequest request = new RefreshRequest();
+        request.setAccessToken(jwtTokenService.issue(1L, "admin"));
+        request.setRefreshToken(jwtTokenService.issueRefresh(2L, "other"));
+
+        AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
+        assertEquals(401, ex.getCode());
+    }
+
+    @Test
+    void refresh_expiredRefresh_throws401() {
+        RefreshRequest request = new RefreshRequest();
+        request.setAccessToken(jwtTokenService.issue(1L, "admin"));
+        request.setRefreshToken(expiredRefresh(1L));
+
+        AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
+        assertEquals(401, ex.getCode());
+    }
+
+    @Test
+    void refresh_disabled_throws403() {
+        SysUserAccountEntity user = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        user.setRsStatus(0);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        RefreshRequest request = new RefreshRequest();
+        request.setAccessToken(jwtTokenService.issue(1L, "admin"));
+        request.setRefreshToken(jwtTokenService.issueRefresh(1L, "admin"));
+
+        AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
+        assertEquals(403, ex.getCode());
+    }
+
+    private String expiredAccess(long userId, String account) {
+        return signedToken(userId, account, "base", clock.instant().minusSeconds(60));
+    }
+
+    private String expiredRefresh(long userId) {
+        return signedToken(userId, "admin", "base-refresh", clock.instant().minusSeconds(60));
+    }
+
+    private String signedToken(long userId, String account, String audience, Instant expiration) {
+        return Jwts.builder()
+                .issuer("base-admin-api")
+                .audience().add(audience).and()
+                .subject(String.valueOf(userId))
+                .claim("userAccount", account)
+                .issuedAt(Date.from(expiration.minusSeconds(7200)))
+                .expiration(Date.from(expiration))
+                .signWith(signingKey())
+                .compact();
+    }
+
+    private SecretKey signingKey() {
+        byte[] bytes = properties.getJwtSecret().getBytes(StandardCharsets.UTF_8);
+        return Keys.hmacShaKeyFor(bytes);
     }
 
     private LoginRequest buildLogin(String account, String password) {

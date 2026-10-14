@@ -5,6 +5,8 @@ import com.zhibo.admin.auth.dto.CaptchaResponse;
 import com.zhibo.admin.auth.dto.LoginPendingResponse;
 import com.zhibo.admin.auth.dto.LoginQueryResponse;
 import com.zhibo.admin.auth.dto.LoginRequest;
+import com.zhibo.admin.auth.dto.RefreshRequest;
+import com.zhibo.admin.auth.dto.RefreshResponse;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -164,8 +166,15 @@ public class AuthService {
 
     private void markSuccess(String state, SysUserAccountEntity user) {
         AuthUserResponse profile = toUserResponse(user);
-        String token = jwtTokenService.issue(user.getId(), user.getUserAccount());
-        loginStateStore.markSuccess(state, token, jwtTokenService.expireSeconds(), profile);
+        String accessToken = jwtTokenService.issue(user.getId(), user.getUserAccount());
+        String refreshToken = jwtTokenService.issueRefresh(user.getId(), user.getUserAccount());
+        loginStateStore.markSuccess(
+                state,
+                accessToken,
+                jwtTokenService.expireSeconds(),
+                refreshToken,
+                jwtTokenService.refreshExpireSeconds(),
+                profile);
     }
 
     public LoginQueryResponse query(String state) {
@@ -189,6 +198,8 @@ public class AuthService {
                 if (consumed != null) {
                     resp.setAccessToken(consumed.getAccessToken());
                     resp.setExpiresIn(consumed.getExpiresIn());
+                    resp.setRefreshToken(consumed.getRefreshToken());
+                    resp.setRefreshExpiresIn(consumed.getRefreshExpiresIn());
                     resp.setUser(consumed.getUser());
                 }
                 yield resp;
@@ -203,6 +214,24 @@ public class AuthService {
                 yield resp;
             }
         };
+    }
+
+    public RefreshResponse refresh(RefreshRequest request) {
+        long refreshUserId = jwtTokenService.parseRefreshUserId(request.getRefreshToken());
+        long accessUserId = jwtTokenService.parseAccessAllowExpired(request.getAccessToken());
+        if (accessUserId != refreshUserId) {
+            throw new AuthException(401, "刷新凭证与登录凭证不匹配");
+        }
+        SysUserAccountEntity user = userRepository.findById(refreshUserId)
+                .orElseThrow(() -> new AuthException(403, "账号不存在或已停用"));
+        if (user.getRsStatus() == null || user.getRsStatus() != 1) {
+            throw new AuthException(403, "账号不存在或已停用");
+        }
+        return new RefreshResponse(
+                jwtTokenService.issue(user.getId(), user.getUserAccount()),
+                jwtTokenService.expireSeconds(),
+                jwtTokenService.issueRefresh(user.getId(), user.getUserAccount()),
+                jwtTokenService.refreshExpireSeconds());
     }
 
     public AuthUserResponse me(long userId) {

@@ -32,11 +32,14 @@ public class WatchService {
         }
         Integer stateFilter = (state != null && state == 0) ? null : state;
         Page<ActivityEntity> result = activityRepository.search(
-                null, stateFilter, null, PageRequest.of(page - 1, pageSize));
+                null, stateFilter, null, null, null, null, PageRequest.of(page - 1, pageSize));
 
         WatchActivityListResponse response = new WatchActivityListResponse();
         response.setTotal(result.getTotalElements());
-        response.setList(result.getContent().stream().map(this::toItem).toList());
+        response.setList(result.getContent().stream()
+                .filter(activity -> activity.getDeletedAt() == null)
+                .map(this::toItem)
+                .toList());
         return response;
     }
 
@@ -79,6 +82,7 @@ public class WatchService {
             throw new IllegalArgumentException("活动 id 须为本站 UUID");
         }
         return activityRepository.findById(uuid)
+                .filter(activity -> activity.getDeletedAt() == null)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
     }
 

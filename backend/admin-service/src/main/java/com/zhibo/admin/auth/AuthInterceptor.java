@@ -54,7 +54,8 @@ public class AuthInterceptor implements HandlerInterceptor {
         return path.equals("/api/auth/captcha")
                 || path.equals("/api/auth/login")
                 || path.equals("/api/auth/wechat/callback")
-                || path.equals("/api/auth/login/query");
+                || path.equals("/api/auth/login/query")
+                || path.equals("/api/auth/refresh");
     }
 
     private static String extractBearer(String header) {

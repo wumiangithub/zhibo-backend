@@ -49,8 +49,10 @@ auth:
   password-aes-key-base64: ${AUTH_PASSWORD_AES_KEY_BASE64:}
   jwt-secret: ${AUTH_JWT_SECRET:}
   jwt-expire-seconds: ${AUTH_JWT_EXPIRE_SECONDS:7200}
+  jwt-refresh-expire-seconds: ${AUTH_JWT_REFRESH_EXPIRE_SECONDS:604800}
   jwt-issuer: ${AUTH_JWT_ISSUER:base-admin-api}
   jwt-audience: ${AUTH_JWT_AUDIENCE:base}
+  jwt-refresh-audience: ${AUTH_JWT_REFRESH_AUDIENCE:base-refresh}
   wechat:
     open-app-id: ${WECHAT_OPEN_APP_ID:}
     open-app-secret: ${WECHAT_OPEN_APP_SECRET:}

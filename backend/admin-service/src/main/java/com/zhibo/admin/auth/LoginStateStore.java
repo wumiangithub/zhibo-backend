@@ -30,6 +30,8 @@ public class LoginStateStore {
         private volatile String errorMsg;
         private volatile String accessToken;
         private volatile Integer expiresIn;
+        private volatile String refreshToken;
+        private volatile Integer refreshExpiresIn;
         private volatile AuthUserResponse user;
 
         State(Status status, long userId, Instant expiresAt) {
@@ -60,6 +62,14 @@ public class LoginStateStore {
 
         public Integer getExpiresIn() {
             return expiresIn;
+        }
+
+        public String getRefreshToken() {
+            return refreshToken;
+        }
+
+        public Integer getRefreshExpiresIn() {
+            return refreshExpiresIn;
         }
 
         public AuthUserResponse getUser() {
@@ -98,13 +108,21 @@ public class LoginStateStore {
         return s;
     }
 
-    public void markSuccess(String state, String accessToken, int expiresIn, AuthUserResponse user) {
+    public void markSuccess(
+            String state,
+            String accessToken,
+            int expiresIn,
+            String refreshToken,
+            int refreshExpiresIn,
+            AuthUserResponse user) {
         State s = get(state);
         if (s == null || s.status != Status.PENDING) {
             return;
         }
         s.accessToken = accessToken;
         s.expiresIn = expiresIn;
+        s.refreshToken = refreshToken;
+        s.refreshExpiresIn = refreshExpiresIn;
         s.user = user;
         s.status = Status.SUCCESS;
     }

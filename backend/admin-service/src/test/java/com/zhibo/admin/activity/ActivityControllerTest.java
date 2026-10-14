@@ -44,7 +44,7 @@ class ActivityControllerTest {
         mockMvc.perform(post("/api/activities")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"provider":"vhall","title":"活动A","startTime":"2026-10-01 20:00:00","type":2}
+                                {"provider":"vhall","title":"活动A","startTime":"2026-10-01 20:00:00","type":2,"listed":true,"sellType":"free"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))

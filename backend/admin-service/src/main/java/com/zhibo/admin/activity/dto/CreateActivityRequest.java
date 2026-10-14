@@ -4,8 +4,11 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * 创建活动请求（本站落库 + 按 provider 调云侧）。
@@ -51,4 +54,25 @@ public class CreateActivityRequest {
 
     @Size(max = 100000, message = "详情过长")
     private String detailHtml;
+
+    /** true 立即上架；false 待上架（暂不上架、定时上架都传 false）。 */
+    @NotNull(message = "listed 不能为空")
+    private Boolean listed;
+
+    /** free / paid / encrypted / specified。有效期固定「长期有效」。 */
+    @NotBlank(message = "sellType 不能为空")
+    @Pattern(regexp = "free|paid|encrypted|specified", message = "sellType 无效")
+    private String sellType;
+
+    /** 员工 rs_mainkey_id 的十进制字符串。 */
+    private List<String> ownerIds;
+
+    /** 关联商品快照。 */
+    private List<ProductBinding> products;
+
+    @Data
+    public static class ProductBinding {
+        private String spuId;
+        private String productName;
+    }
 }

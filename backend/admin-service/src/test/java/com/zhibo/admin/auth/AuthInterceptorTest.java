@@ -60,5 +60,16 @@ class AuthInterceptorTest {
     void me_notWhitelisted() {
         assertFalse(AuthInterceptor.isWhitelisted("/api/auth/me"));
         assertTrue(AuthInterceptor.isWhitelisted("/api/auth/login"));
+        assertTrue(AuthInterceptor.isWhitelisted("/api/auth/refresh"));
+    }
+
+    @Test
+    void businessApi_rejectsRefreshToken() throws Exception {
+        String refresh = jwtTokenService.issueRefresh(1L, "admin");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/activities");
+        request.addHeader("Authorization", "Bearer " + refresh);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertFalse(interceptor.preHandle(request, response, new Object()));
+        assertTrue(response.getContentAsString().contains("\"code\":401"));
     }
 }

@@ -19,14 +19,20 @@ public class AuthProperties {
     /** JWT HMAC 密钥。 */
     private String jwtSecret = "";
 
-    /** JWT 有效秒数；默认对齐旧 base-admin AccessExpire=7200。 */
+    /** access 有效秒数；默认对齐旧 base-admin AccessExpire=7200。 */
     private long jwtExpireSeconds = 7200;
+
+    /** refresh 有效秒数；默认 7 天。 */
+    private long jwtRefreshExpireSeconds = 604800;
 
     /** JWT iss；默认对齐旧 base-admin Issuer。 */
     private String jwtIssuer = "base-admin-api";
 
-    /** JWT aud；默认对齐旧 base-admin Audience。 */
+    /** access 的 aud；默认对齐旧 base-admin Audience。 */
     private String jwtAudience = "base";
+
+    /** refresh 的 aud。放进业务 Authorization 时必须被拒绝。 */
+    private String jwtRefreshAudience = "base-refresh";
 
     private Wechat wechat = new Wechat();
 

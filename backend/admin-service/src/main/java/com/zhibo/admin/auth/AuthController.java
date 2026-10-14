@@ -5,6 +5,8 @@ import com.zhibo.admin.auth.dto.CaptchaResponse;
 import com.zhibo.admin.auth.dto.LoginPendingResponse;
 import com.zhibo.admin.auth.dto.LoginQueryResponse;
 import com.zhibo.admin.auth.dto.LoginRequest;
+import com.zhibo.admin.auth.dto.RefreshRequest;
+import com.zhibo.admin.auth.dto.RefreshResponse;
 import com.zhibo.admin.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -72,6 +74,11 @@ public class AuthController {
     @GetMapping("/login/query")
     public ApiResponse<LoginQueryResponse> query(@RequestParam String state) {
         return ApiResponse.ok(authService.query(state));
+    }
+
+    @PostMapping("/refresh")
+    public ApiResponse<RefreshResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        return ApiResponse.ok(authService.refresh(request));
     }
 
     @GetMapping("/me")

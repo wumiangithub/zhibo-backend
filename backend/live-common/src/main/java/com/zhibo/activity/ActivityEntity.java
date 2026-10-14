@@ -93,6 +93,26 @@ public class ActivityEntity {
     @Column(name = "share_link", length = 1024)
     private String shareLink;
 
+    /** pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁。 */
+    @Column(name = "shelf_status", nullable = false, length = 16)
+    private String shelfStatus;
+
+    /** pending 待审核 / passed 已通过 / rejected 已驳回。 */
+    @Column(name = "risk_status", nullable = false, length = 16)
+    private String riskStatus;
+
+    /** free / paid / encrypted / specified。 */
+    @Column(name = "sell_type", nullable = false, length = 16)
+    private String sellType;
+
+    /** 有效期文案；本版固定「长期有效」。 */
+    @Column(name = "validity_label", nullable = false, length = 32)
+    private String validityLabel;
+
+    /** 软删时间；非空则对外视为不存在。 */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
