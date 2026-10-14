@@ -48,7 +48,7 @@ class AuthInterceptorTest {
 
     @Test
     void businessApi_withValidToken_ok() throws Exception {
-        String token = jwtTokenService.issue(1L, "admin");
+        String token = jwtTokenService.issue(1L, "admin", "管理员", 0, "admin", "1");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/materials");
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -65,7 +65,7 @@ class AuthInterceptorTest {
 
     @Test
     void businessApi_rejectsRefreshToken() throws Exception {
-        String refresh = jwtTokenService.issueRefresh(1L, "admin");
+        String refresh = jwtTokenService.issueRefresh(1L, "admin", "管理员", 0, "admin", "1");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/activities");
         request.addHeader("Authorization", "Bearer " + refresh);
         MockHttpServletResponse response = new MockHttpServletResponse();

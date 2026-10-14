@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,8 +37,8 @@ class JwtTokenServiceTest {
     }
 
     @Test
-    void issue_includesIssuerAndAudience() {
-        String token = service.issue(42L, "admin");
+    void issue_matchesGoBaseAdminClaims() {
+        String token = service.issue(42L, "admin", "管理员", 1, "NCRM_abc", "8801");
         Claims claims = Jwts.parser()
                 .verifyWith(signingKey(SECRET))
                 .requireIssuer("base-admin-api")
@@ -47,16 +48,25 @@ class JwtTokenServiceTest {
                 .parseSignedClaims(token)
                 .getPayload();
         assertEquals("42", claims.getSubject());
-        assertEquals("admin", claims.get("userAccount", String.class));
+        assertEquals(42L, claims.get("user_id", Long.class));
+        assertEquals("admin", claims.get("user_account", String.class));
+        assertEquals("管理员", claims.get("user_name", String.class));
+        assertEquals(1, claims.get("user_flag", Integer.class));
+        assertEquals(JwtTokenService.TOKEN_TYPE_ACCESS, claims.get("token_type", String.class));
+        assertEquals("NCRM_abc", claims.get("identifier", String.class));
+        assertEquals("8801", claims.get("yhid", String.class));
+        assertEquals("管理员", claims.get("yg_name", String.class));
         assertEquals("base-admin-api", claims.getIssuer());
         assertTrue(claims.getAudience().contains("base"));
+        assertNotNull(claims.getId());
+        assertNotNull(claims.getNotBefore());
         assertEquals(7200, service.expireSeconds());
         assertEquals(604800, service.refreshExpireSeconds());
     }
 
     @Test
-    void issueRefresh_usesRefreshAudience() {
-        String token = service.issueRefresh(42L, "admin");
+    void issueRefresh_usesRefreshAudienceAndTokenType() {
+        String token = service.issueRefresh(42L, "admin", "管理员", 0, "admin", "0");
         Claims claims = Jwts.parser()
                 .verifyWith(signingKey(SECRET))
                 .requireIssuer("base-admin-api")
@@ -67,6 +77,7 @@ class JwtTokenServiceTest {
                 .getPayload();
         assertEquals("42", claims.getSubject());
         assertTrue(claims.getAudience().contains("base-refresh"));
+        assertEquals(JwtTokenService.TOKEN_TYPE_REFRESH, claims.get("token_type", String.class));
         AuthException ex = assertThrows(AuthException.class, () -> service.parseUserId(token));
         assertEquals(401, ex.getCode());
     }
@@ -77,6 +88,8 @@ class JwtTokenServiceTest {
                 .issuer("base-admin-api")
                 .audience().add("base").and()
                 .subject("42")
+                .claim("user_id", 42L)
+                .claim("token_type", JwtTokenService.TOKEN_TYPE_ACCESS)
                 .issuedAt(Date.from(clock.instant().minusSeconds(8000)))
                 .expiration(Date.from(clock.instant().minusSeconds(60)))
                 .signWith(signingKey(SECRET))
@@ -115,7 +128,7 @@ class JwtTokenServiceTest {
 
     @Test
     void parseUserId_roundTrip() {
-        String token = service.issue(7L, "ops");
+        String token = service.issue(7L, "ops", "运营", 0, "ops", "7");
         assertEquals(7L, service.parseUserId(token));
     }
 

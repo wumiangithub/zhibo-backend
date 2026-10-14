@@ -46,4 +46,16 @@ public class SysUserAccountEntity {
 
     @Column(name = "user_avatar", length = 500)
     private String userAvatar;
+
+    /** 对齐旧 JWT {@code user_flag}；表列 {@code user_flg}。 */
+    @Column(name = "user_flg")
+    private Integer userFlg;
+
+    /** 员工 ID（CRM）；订单中心 saler JWT 的 {@code yhid}。 */
+    @Column(name = "yhid")
+    private Long yhid;
+
+    /** CRM 档案码；有则作为 saler JWT 的 {@code identifier}。 */
+    @Column(length = 50)
+    private String code;
 }

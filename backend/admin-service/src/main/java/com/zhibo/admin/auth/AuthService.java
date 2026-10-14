@@ -166,8 +166,8 @@ public class AuthService {
 
     private void markSuccess(String state, SysUserAccountEntity user) {
         AuthUserResponse profile = toUserResponse(user);
-        String accessToken = jwtTokenService.issue(user.getId(), user.getUserAccount());
-        String refreshToken = jwtTokenService.issueRefresh(user.getId(), user.getUserAccount());
+        String accessToken = issueAccess(user);
+        String refreshToken = issueRefresh(user);
         loginStateStore.markSuccess(
                 state,
                 accessToken,
@@ -228,10 +228,47 @@ public class AuthService {
             throw new AuthException(403, "账号不存在或已停用");
         }
         return new RefreshResponse(
-                jwtTokenService.issue(user.getId(), user.getUserAccount()),
+                issueAccess(user),
                 jwtTokenService.expireSeconds(),
-                jwtTokenService.issueRefresh(user.getId(), user.getUserAccount()),
+                issueRefresh(user),
                 jwtTokenService.refreshExpireSeconds());
+    }
+
+    private String issueAccess(SysUserAccountEntity user) {
+        return jwtTokenService.issue(
+                user.getId(),
+                user.getUserAccount(),
+                user.getUserName(),
+                userFlag(user),
+                salerIdentifier(user),
+                salerYhid(user));
+    }
+
+    private String issueRefresh(SysUserAccountEntity user) {
+        return jwtTokenService.issueRefresh(
+                user.getId(),
+                user.getUserAccount(),
+                user.getUserName(),
+                userFlag(user),
+                salerIdentifier(user),
+                salerYhid(user));
+    }
+
+    private static int userFlag(SysUserAccountEntity user) {
+        return user.getUserFlg() == null ? 0 : user.getUserFlg();
+    }
+
+    /** oms-go：有 CRM {@code code} 用 code，否则用登录账号。 */
+    private static String salerIdentifier(SysUserAccountEntity user) {
+        if (user.getCode() != null && !user.getCode().isBlank()) {
+            return user.getCode().trim();
+        }
+        return user.getUserAccount() == null ? "" : user.getUserAccount().trim();
+    }
+
+    private static String salerYhid(SysUserAccountEntity user) {
+        long yhid = user.getYhid() == null ? 0L : user.getYhid();
+        return String.valueOf(yhid);
     }
 
     public AuthUserResponse me(long userId) {

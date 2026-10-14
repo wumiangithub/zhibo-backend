@@ -5,29 +5,71 @@ import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HexFormat;
 import javax.crypto.SecretKey;
 import org.springframework.stereotype.Service;
 
+/**
+ * JWT 签发/校验。
+ * <p>本站鉴权用 iss/aud/sub + base-admin 字段；同时写入 oms-go 业务员头所需的
+ * {@code identifier}/{@code yhid}/{@code yg_name}（见对方「例子.go」），
+ * 否则订单中心会报「登录态异常，请重新登录」。
+ */
 @Service
 public class JwtTokenService {
 
+    static final String TOKEN_TYPE_ACCESS = "access";
+    static final String TOKEN_TYPE_REFRESH = "refresh";
+
     private final AuthProperties properties;
     private final Clock clock;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public JwtTokenService(AuthProperties properties, Clock clock) {
         this.properties = properties;
         this.clock = clock;
     }
 
-    public String issue(long userId, String userAccount) {
-        return issue(userId, userAccount, accessAudience(), expireSeconds());
+    public String issue(
+            long userId,
+            String userAccount,
+            String userName,
+            int userFlag,
+            String identifier,
+            String yhid) {
+        return issue(
+                userId,
+                userAccount,
+                userName,
+                userFlag,
+                identifier,
+                yhid,
+                accessAudience(),
+                expireSeconds(),
+                TOKEN_TYPE_ACCESS);
     }
 
-    public String issueRefresh(long userId, String userAccount) {
-        return issue(userId, userAccount, refreshAudience(), refreshExpireSeconds());
+    public String issueRefresh(
+            long userId,
+            String userAccount,
+            String userName,
+            int userFlag,
+            String identifier,
+            String yhid) {
+        return issue(
+                userId,
+                userAccount,
+                userName,
+                userFlag,
+                identifier,
+                yhid,
+                refreshAudience(),
+                refreshExpireSeconds(),
+                TOKEN_TYPE_REFRESH);
     }
 
     /** 业务接口用：必须是未过期的 access。refresh 或过期 access 都是 401。 */
@@ -53,18 +95,41 @@ public class JwtTokenService {
         return positiveSeconds(properties.getJwtRefreshExpireSeconds(), 604800);
     }
 
-    private String issue(long userId, String userAccount, String audience, int expireSeconds) {
+    private String issue(
+            long userId,
+            String userAccount,
+            String userName,
+            int userFlag,
+            String identifier,
+            String yhid,
+            String audience,
+            int expireSeconds,
+            String tokenType) {
         if (properties.jwtSecretMissing()) {
             throw new IllegalStateException("未配置 JWT 密钥");
         }
         Instant now = clock.instant();
         Instant exp = now.plusSeconds(expireSeconds);
+        String account = userAccount == null ? "" : userAccount;
+        String name = userName == null || userName.isBlank() ? account : userName;
+        String idClaim = identifier == null || identifier.isBlank() ? account : identifier.trim();
+        String yhidClaim = yhid == null ? "0" : yhid.trim();
         return Jwts.builder()
                 .issuer(properties.getJwtIssuer())
                 .audience().add(audience).and()
                 .subject(String.valueOf(userId))
-                .claim("userAccount", userAccount)
+                .id(randomJti())
+                .claim("user_id", userId)
+                .claim("user_account", account)
+                .claim("user_name", name)
+                .claim("user_flag", userFlag)
+                .claim("token_type", tokenType)
+                // oms-go Authorization-Live-Saler（例子.go SignSalerToken）
+                .claim("identifier", idClaim)
+                .claim("yhid", yhidClaim)
+                .claim("yg_name", name)
                 .issuedAt(Date.from(now))
+                .notBefore(Date.from(now))
                 .expiration(Date.from(exp))
                 .signWith(signingKey())
                 .compact();
@@ -125,6 +190,12 @@ public class JwtTokenService {
             return fallback;
         }
         return (int) Math.min(value, Integer.MAX_VALUE);
+    }
+
+    private String randomJti() {
+        byte[] value = new byte[16];
+        secureRandom.nextBytes(value);
+        return HexFormat.of().formatHex(value);
     }
 
     private SecretKey signingKey() {

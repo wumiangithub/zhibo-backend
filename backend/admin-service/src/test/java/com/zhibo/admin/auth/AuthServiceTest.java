@@ -211,7 +211,7 @@ class AuthServiceTest {
 
         RefreshRequest request = new RefreshRequest();
         request.setAccessToken(expiredAccess(1L, "admin"));
-        request.setRefreshToken(jwtTokenService.issueRefresh(1L, "admin"));
+        request.setRefreshToken(jwtTokenService.issueRefresh(1L, "admin", "测试用户", 0, "admin", "1"));
 
         RefreshResponse response = authService.refresh(request);
         assertEquals(7200, response.getExpiresIn());
@@ -223,14 +223,18 @@ class AuthServiceTest {
                 .build()
                 .parseSignedClaims(response.getAccessToken())
                 .getPayload();
-        assertEquals("admin-renamed", claims.get("userAccount", String.class));
+        assertEquals("admin-renamed", claims.get("user_account", String.class));
+        assertEquals(JwtTokenService.TOKEN_TYPE_ACCESS, claims.get("token_type", String.class));
+        assertEquals("admin-renamed", claims.get("identifier", String.class));
+        assertEquals("1", claims.get("yhid", String.class));
+        assertEquals("测试用户", claims.get("yg_name", String.class));
     }
 
     @Test
     void refresh_mismatch_throws401() {
         RefreshRequest request = new RefreshRequest();
-        request.setAccessToken(jwtTokenService.issue(1L, "admin"));
-        request.setRefreshToken(jwtTokenService.issueRefresh(2L, "other"));
+        request.setAccessToken(jwtTokenService.issue(1L, "admin", "测试用户", 0, "admin", "1"));
+        request.setRefreshToken(jwtTokenService.issueRefresh(2L, "other", "其他", 0, "other", "2"));
 
         AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
         assertEquals(401, ex.getCode());
@@ -239,7 +243,7 @@ class AuthServiceTest {
     @Test
     void refresh_expiredRefresh_throws401() {
         RefreshRequest request = new RefreshRequest();
-        request.setAccessToken(jwtTokenService.issue(1L, "admin"));
+        request.setAccessToken(jwtTokenService.issue(1L, "admin", "测试用户", 0, "admin", "1"));
         request.setRefreshToken(expiredRefresh(1L));
 
         AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
@@ -253,27 +257,32 @@ class AuthServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         RefreshRequest request = new RefreshRequest();
-        request.setAccessToken(jwtTokenService.issue(1L, "admin"));
-        request.setRefreshToken(jwtTokenService.issueRefresh(1L, "admin"));
+        request.setAccessToken(jwtTokenService.issue(1L, "admin", "测试用户", 0, "admin", "1"));
+        request.setRefreshToken(jwtTokenService.issueRefresh(1L, "admin", "测试用户", 0, "admin", "1"));
 
         AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
         assertEquals(403, ex.getCode());
     }
 
     private String expiredAccess(long userId, String account) {
-        return signedToken(userId, account, "base", clock.instant().minusSeconds(60));
+        return signedToken(userId, account, "base", JwtTokenService.TOKEN_TYPE_ACCESS, clock.instant().minusSeconds(60));
     }
 
     private String expiredRefresh(long userId) {
-        return signedToken(userId, "admin", "base-refresh", clock.instant().minusSeconds(60));
+        return signedToken(userId, "admin", "base-refresh", JwtTokenService.TOKEN_TYPE_REFRESH, clock.instant().minusSeconds(60));
     }
 
-    private String signedToken(long userId, String account, String audience, Instant expiration) {
+    private String signedToken(
+            long userId, String account, String audience, String tokenType, Instant expiration) {
         return Jwts.builder()
                 .issuer("base-admin-api")
                 .audience().add(audience).and()
                 .subject(String.valueOf(userId))
-                .claim("userAccount", account)
+                .claim("user_id", userId)
+                .claim("user_account", account)
+                .claim("user_name", "测试用户")
+                .claim("user_flag", 0)
+                .claim("token_type", tokenType)
                 .issuedAt(Date.from(expiration.minusSeconds(7200)))
                 .expiration(Date.from(expiration))
                 .signWith(signingKey())
@@ -301,6 +310,7 @@ class AuthServiceTest {
         user.setUserAccount(account);
         user.setUserName("测试用户");
         user.setRsStatus(1);
+        user.setYhid(id);
         user.setPassword(new BCryptPasswordEncoder().encode(rawPassword));
         user.setOpenid(openid);
         user.setUnionid(unionid);
