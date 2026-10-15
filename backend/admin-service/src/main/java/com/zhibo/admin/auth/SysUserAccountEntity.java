@@ -47,6 +47,13 @@ public class SysUserAccountEntity {
     @Column(name = "user_avatar", length = 500)
     private String userAvatar;
 
+    /**
+     * 企微部门 JSON，形如
+     * {@code [{"department_id":10,"department_name":"技术部","is_leader":false}]}。
+     */
+    @Column(name = "qw_bmxx", columnDefinition = "json")
+    private String qwBmxx;
+
     /** 对齐旧 JWT {@code user_flag}；表列 {@code user_flg}。 */
     @Column(name = "user_flg")
     private Integer userFlg;

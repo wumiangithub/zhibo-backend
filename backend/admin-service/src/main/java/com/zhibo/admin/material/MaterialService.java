@@ -9,6 +9,10 @@ import com.zhibo.admin.material.dto.RegisterMaterialsRequest;
 import com.zhibo.admin.material.dto.RegisterMaterialsResponse;
 import com.zhibo.admin.material.dto.RenameMaterialGroupRequest;
 import com.zhibo.admin.material.dto.RenameMaterialRequest;
+import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
+import com.zhibo.admin.auth.AuthService;
+import com.zhibo.admin.auth.SysUserAccountEntity;
+import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
@@ -32,12 +36,14 @@ import java.util.Set;
 public class MaterialService {
 
     private static final Set<String> TYPES = Set.of("image", "video", "document");
+    private static final Set<String> AUDIT_WRITE_STATUSES = Set.of("passed", "rejected");
     private static final DateTimeFormatter UPLOADED_AT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int MAX_BATCH = 100;
 
     private final MaterialGroupRepository groupRepository;
     private final MaterialRepository materialRepository;
+    private final SysUserAccountRepository userRepository;
 
     public List<MaterialGroupResponse> listGroups(String type) {
         String t = requireType(type);
@@ -96,8 +102,17 @@ public class MaterialService {
         return new DeleteIdResponse(entity.getId());
     }
 
+    /**
+     * @param selectableOnly true：仅返回 AI、风控两审都为 passed 的素材（封面/课件选择弹窗）；
+     *                       false：素材中心主列表，不按审核过滤。total/list 均按过滤后分页。
+     */
     public MaterialListResponse list(
-            String type, String groupId, String keyword, int page, int pageSize) {
+            String type,
+            String groupId,
+            String keyword,
+            boolean selectableOnly,
+            int page,
+            int pageSize) {
         String t = requireType(type);
         if (page < 1) {
             throw new IllegalArgumentException("page 不能小于 1");
@@ -115,7 +130,7 @@ public class MaterialService {
         String keywordFilter = blankToNull(keyword);
 
         Page<MaterialEntity> result = materialRepository.search(
-                t, groupFilter, keywordFilter, PageRequest.of(page - 1, pageSize));
+                t, groupFilter, keywordFilter, selectableOnly, PageRequest.of(page - 1, pageSize));
 
         MaterialListResponse response = new MaterialListResponse();
         response.setTotal(result.getTotalElements());
@@ -126,10 +141,15 @@ public class MaterialService {
     }
 
     @Transactional
-    public RegisterMaterialsResponse register(RegisterMaterialsRequest request) {
+    public RegisterMaterialsResponse register(RegisterMaterialsRequest request, long uploaderId) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
+        SysUserAccountEntity uploader = userRepository.findById(uploaderId)
+                .orElseThrow(() -> new IllegalArgumentException("当前员工不存在"));
+        String uploaderName = blankToNull(uploader.getUserName());
+        String departmentName = AuthService.resolveDepartmentName(uploader);
+
         String type = requireType(request.getType());
         String groupId = blankToNull(request.getGroupId());
         if (groupId == null) {
@@ -180,6 +200,11 @@ public class MaterialService {
             entity.setMimeType(mimeType);
             entity.setMeta(meta);
             entity.setStatus("available");
+            entity.setAiAuditStatus("pending");
+            entity.setRiskAuditStatus("pending");
+            entity.setUploaderId(uploader.getId());
+            entity.setUploaderName(uploaderName);
+            entity.setDepartmentName(departmentName);
             entities.add(entity);
         }
 
@@ -196,6 +221,22 @@ public class MaterialService {
         }
         // 只改展示名；不碰 objectKey / url（TOS 对象不变）
         entity.setName(requireTrimmed(request.getName(), "name", 256));
+        materialRepository.save(entity);
+        return toItemResponse(entity);
+    }
+
+    @Transactional
+    public MaterialItemResponse updateAiAudit(String id, UpdateMaterialAuditRequest request) {
+        MaterialEntity entity = requireActiveMaterial(id);
+        entity.setAiAuditStatus(requireAuditWriteStatus(request));
+        materialRepository.save(entity);
+        return toItemResponse(entity);
+    }
+
+    @Transactional
+    public MaterialItemResponse updateRiskAudit(String id, UpdateMaterialAuditRequest request) {
+        MaterialEntity entity = requireActiveMaterial(id);
+        entity.setRiskAuditStatus(requireAuditWriteStatus(request));
         materialRepository.save(entity);
         return toItemResponse(entity);
     }
@@ -240,10 +281,36 @@ public class MaterialService {
         item.setMeta(entity.getMeta());
         item.setFileSize(entity.getFileSize());
         item.setStatus(entity.getStatus());
+        item.setAiAuditStatus(
+                entity.getAiAuditStatus() == null || entity.getAiAuditStatus().isBlank()
+                        ? "pending"
+                        : entity.getAiAuditStatus());
+        item.setRiskAuditStatus(
+                entity.getRiskAuditStatus() == null || entity.getRiskAuditStatus().isBlank()
+                        ? "pending"
+                        : entity.getRiskAuditStatus());
+        if (entity.getUploaderId() != null) {
+            item.setUploaderId(String.valueOf(entity.getUploaderId()));
+        }
+        item.setUploaderName(blankToNull(entity.getUploaderName()));
+        item.setDepartmentName(blankToNull(entity.getDepartmentName()));
         if (entity.getCreatedAt() != null) {
             item.setUploadedAt(entity.getCreatedAt().format(UPLOADED_AT));
         }
         return item;
+    }
+
+    private static String requireAuditWriteStatus(UpdateMaterialAuditRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        String status = request.getStatus() == null
+                ? ""
+                : request.getStatus().trim().toLowerCase(Locale.ROOT);
+        if (!AUDIT_WRITE_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("status 须为 passed / rejected");
+        }
+        return status;
     }
 
     private MaterialGroupEntity requireGroup(String id) {

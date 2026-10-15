@@ -53,6 +53,26 @@ public class MaterialEntity {
     @Column(nullable = false, length = 16)
     private String status = "available";
 
+    /** pending / passed / rejected */
+    @Column(name = "ai_audit_status", nullable = false, length = 16)
+    private String aiAuditStatus = "pending";
+
+    /** pending / passed / rejected */
+    @Column(name = "risk_audit_status", nullable = false, length = 16)
+    private String riskAuditStatus = "pending";
+
+    /** 上传人 sys_useraccount.rs_mainkey_id；旧行可空 */
+    @Column(name = "uploader_id")
+    private Long uploaderId;
+
+    /** 上传人姓名快照 */
+    @Column(name = "uploader_name", length = 50)
+    private String uploaderName;
+
+    /** 所在部门展示名快照（多部门顿号） */
+    @Column(name = "department_name", length = 256)
+    private String departmentName;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
@@ -71,6 +91,12 @@ public class MaterialEntity {
         }
         if (status == null || status.isBlank()) {
             status = "available";
+        }
+        if (aiAuditStatus == null || aiAuditStatus.isBlank()) {
+            aiAuditStatus = "pending";
+        }
+        if (riskAuditStatus == null || riskAuditStatus.isBlank()) {
+            riskAuditStatus = "pending";
         }
     }
 }

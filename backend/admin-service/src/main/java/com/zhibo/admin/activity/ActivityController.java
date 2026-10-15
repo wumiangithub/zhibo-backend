@@ -12,6 +12,9 @@ import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
 import com.zhibo.admin.activity.dto.DeleteActivityResponse;
 import com.zhibo.admin.activity.dto.EndActivityResponse;
+import com.zhibo.admin.activity.dto.PlaybackUpdateRequest;
+import com.zhibo.admin.activity.dto.SalesUpdateRequest;
+import com.zhibo.admin.activity.dto.SalesUpdateResponse;
 import com.zhibo.admin.activity.dto.ShelfRequest;
 import com.zhibo.admin.activity.dto.ShelfResponse;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
@@ -75,6 +78,20 @@ public class ActivityController {
             @PathVariable String id,
             @RequestBody UpdateActivityRequest request) {
         return ApiResponse.ok(activityService.update(id, request));
+    }
+
+    @PutMapping("/{id}/playback")
+    public ApiResponse<CreateActivityResponse> updatePlayback(
+            @PathVariable String id,
+            @Valid @RequestBody PlaybackUpdateRequest request) {
+        return ApiResponse.ok(activityService.updatePlayback(id, request));
+    }
+
+    @PutMapping("/{id}/sales")
+    public ApiResponse<SalesUpdateResponse> updateSales(
+            @PathVariable String id,
+            @Valid @RequestBody SalesUpdateRequest request) {
+        return ApiResponse.ok(activityService.updateSales(id, request));
     }
 
     @PostMapping("/{id}/end")

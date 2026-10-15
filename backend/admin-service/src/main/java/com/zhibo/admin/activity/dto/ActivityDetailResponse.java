@@ -1,5 +1,7 @@
 package com.zhibo.admin.activity.dto;
 
+import java.math.BigDecimal;
+import java.util.List;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -21,4 +23,22 @@ public class ActivityDetailResponse extends ActivitySummary {
     private String warmupUrl;
     private String promoCoverUrl;
     private String detailHtml;
+
+    private Boolean autoList;
+    private List<ActivityPerson> hosts;
+    private List<ActivityCoursewareView> coursewares;
+
+    private Boolean sellAlone;
+    private BigDecimal price;
+    private BigDecimal linePrice;
+    private String accessValidityType;
+    private Integer accessValidityDays;
+    /** 仅 encrypted 时回显解密明文 */
+    private String password;
+
+    private Boolean playbackEnabled;
+    private String playbackValidityType;
+    private Integer playbackValidityDays;
+    private Boolean playbackSpeedAllow;
+    private Boolean playbackFastForwardAllow;
 }

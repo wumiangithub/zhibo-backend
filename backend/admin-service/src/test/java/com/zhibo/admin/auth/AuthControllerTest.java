@@ -168,7 +168,7 @@ class AuthControllerTest {
     @Test
     void me_ok() throws Exception {
         when(authService.me(eq(1L)))
-                .thenReturn(new AuthUserResponse(1L, "admin", "张三", null));
+                .thenReturn(new AuthUserResponse(1L, "admin", "张三", null, null));
 
         mockMvc.perform(get("/api/auth/me").requestAttr(AuthInterceptor.ATTR_USER_ID, 1L))
                 .andExpect(status().isOk())

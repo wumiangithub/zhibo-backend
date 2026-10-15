@@ -1,5 +1,7 @@
 package com.zhibo.admin.auth;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.auth.dto.AuthUserResponse;
 import com.zhibo.admin.auth.dto.CaptchaResponse;
 import com.zhibo.admin.auth.dto.LoginPendingResponse;
@@ -7,6 +9,8 @@ import com.zhibo.admin.auth.dto.LoginQueryResponse;
 import com.zhibo.admin.auth.dto.LoginRequest;
 import com.zhibo.admin.auth.dto.RefreshRequest;
 import com.zhibo.admin.auth.dto.RefreshResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -280,11 +284,52 @@ public class AuthService {
         return toUserResponse(user);
     }
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     public static AuthUserResponse toUserResponse(SysUserAccountEntity user) {
-        String avatar = !isBlank(user.getHeadimgurl())
-                ? user.getHeadimgurl()
-                : user.getUserAvatar();
-        return new AuthUserResponse(user.getId(), user.getUserAccount(), user.getUserName(), avatar);
+        return new AuthUserResponse(
+                user.getId(),
+                user.getUserAccount(),
+                user.getUserName(),
+                resolveAvatar(user),
+                resolveDepartmentName(user));
+    }
+
+    /** 优先微信头像 headimgurl，其次 user_avatar；都空则 null（Jackson 不输出）。 */
+    public static String resolveAvatar(SysUserAccountEntity user) {
+        if (!isBlank(user.getHeadimgurl())) {
+            return user.getHeadimgurl().trim();
+        }
+        if (!isBlank(user.getUserAvatar())) {
+            return user.getUserAvatar().trim();
+        }
+        return null;
+    }
+
+    /**
+     * 从 {@code qw_bmxx} 拼部门展示名；多部门用顿号连接；空/脏数据则 null。
+     */
+    public static String resolveDepartmentName(SysUserAccountEntity user) {
+        String raw = user.getQwBmxx();
+        if (isBlank(raw) || "null".equalsIgnoreCase(raw.trim()) || "[]".equals(raw.trim())) {
+            return null;
+        }
+        try {
+            JsonNode arr = JSON.readTree(raw.trim());
+            if (!arr.isArray() || arr.isEmpty()) {
+                return null;
+            }
+            List<String> names = new ArrayList<>();
+            for (JsonNode node : arr) {
+                JsonNode nameNode = node.get("department_name");
+                if (nameNode != null && !isBlank(nameNode.asText())) {
+                    names.add(nameNode.asText().trim());
+                }
+            }
+            return names.isEmpty() ? null : String.join("、", names);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private static boolean isBlank(String value) {

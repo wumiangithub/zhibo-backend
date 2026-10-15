@@ -11,4 +11,6 @@ public interface ActivityOwnerRepository extends JpaRepository<ActivityOwnerEnti
 
     @Query("SELECT o FROM ActivityOwnerEntity o WHERE o.id.activityId IN :ids ORDER BY o.id.activityId ASC, o.sortOrder ASC")
     List<ActivityOwnerEntity> findByActivityIds(@Param("ids") Collection<String> ids);
+
+    void deleteByIdActivityId(String activityId);
 }

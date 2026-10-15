@@ -11,4 +11,6 @@ public interface ActivityProductRepository extends JpaRepository<ActivityProduct
 
     @Query("SELECT p FROM ActivityProductEntity p WHERE p.id.activityId IN :ids ORDER BY p.id.activityId ASC, p.sortOrder ASC")
     List<ActivityProductEntity> findByActivityIds(@Param("ids") Collection<String> ids);
+
+    void deleteByIdActivityId(String activityId);
 }

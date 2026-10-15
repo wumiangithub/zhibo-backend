@@ -8,6 +8,9 @@ import com.zhibo.admin.material.dto.RegisterMaterialsRequest;
 import com.zhibo.admin.material.dto.RegisterMaterialsResponse;
 import com.zhibo.admin.material.dto.RenameMaterialGroupRequest;
 import com.zhibo.admin.material.dto.RenameMaterialRequest;
+import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
+import com.zhibo.admin.auth.SysUserAccountEntity;
+import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
@@ -45,6 +48,8 @@ class MaterialServiceTest {
     private MaterialGroupRepository groupRepository;
     @Mock
     private MaterialRepository materialRepository;
+    @Mock
+    private SysUserAccountRepository userRepository;
 
     @InjectMocks
     private MaterialService materialService;
@@ -114,7 +119,7 @@ class MaterialServiceTest {
     @Test
     void list_rejectsPageZero() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.list("image", null, null, 0, 20));
+                () -> materialService.list("image", null, null, false, 0, 20));
         assertEquals("page 不能小于 1", ex.getMessage());
     }
 
@@ -122,10 +127,11 @@ class MaterialServiceTest {
     void list_mapsThumbUrlForImage() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
         m.setCreatedAt(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
-        when(materialRepository.search(eq("image"), isNull(), isNull(), eq(PageRequest.of(0, 20))))
+        when(materialRepository.search(
+                        eq("image"), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(m), PageRequest.of(0, 20), 1));
 
-        MaterialListResponse resp = materialService.list("image", null, null, 1, 20);
+        MaterialListResponse resp = materialService.list("image", null, null, false, 1, 20);
         assertEquals(1, resp.getTotal());
         assertEquals(1, resp.getPage());
         assertEquals("https://cdn/a.jpg", resp.getList().get(0).getThumbUrl());
@@ -138,6 +144,9 @@ class MaterialServiceTest {
         when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
         when(materialRepository.existsByObjectKeyAndDeletedAtIsNull(any())).thenReturn(false);
         when(materialRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        SysUserAccountEntity user = uploader(10001L, "张三",
+                "[{\"department_id\":10,\"department_name\":\"技术部\"}]");
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(user));
 
         RegisterMaterialsRequest req = new RegisterMaterialsRequest();
         req.setType("image");
@@ -151,15 +160,66 @@ class MaterialServiceTest {
         item.setMeta("100*100");
         req.setItems(List.of(item));
 
-        RegisterMaterialsResponse resp = materialService.register(req);
+        RegisterMaterialsResponse resp = materialService.register(req, 10001L);
         assertEquals(1, resp.getList().size());
         assertEquals("封面.jpg", resp.getList().get(0).getName());
+        assertEquals("10001", resp.getList().get(0).getUploaderId());
+        assertEquals("张三", resp.getList().get(0).getUploaderName());
+        assertEquals("技术部", resp.getList().get(0).getDepartmentName());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<MaterialEntity>> captor = ArgumentCaptor.forClass(List.class);
         verify(materialRepository).saveAll(captor.capture());
         assertEquals("material/image/1_封面.jpg", captor.getValue().get(0).getObjectKey());
         assertEquals("available", captor.getValue().get(0).getStatus());
+        assertEquals("pending", captor.getValue().get(0).getAiAuditStatus());
+        assertEquals("pending", captor.getValue().get(0).getRiskAuditStatus());
+        assertEquals(10001L, captor.getValue().get(0).getUploaderId());
+        assertEquals("张三", captor.getValue().get(0).getUploaderName());
+        assertEquals("技术部", captor.getValue().get(0).getDepartmentName());
+        assertEquals("pending", resp.getList().get(0).getAiAuditStatus());
+        assertEquals("pending", resp.getList().get(0).getRiskAuditStatus());
+    }
+
+    @Test
+    void updateAiAudit_setsPassed() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        m.setAiAuditStatus("pending");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+
+        UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
+        req.setStatus("passed");
+        MaterialItemResponse resp = materialService.updateAiAudit("m1", req);
+
+        assertEquals("passed", resp.getAiAuditStatus());
+        assertEquals("passed", m.getAiAuditStatus());
+        verify(materialRepository).save(m);
+    }
+
+    @Test
+    void updateRiskAudit_setsRejected() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        m.setRiskAuditStatus("passed");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+
+        UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
+        req.setStatus("rejected");
+        MaterialItemResponse resp = materialService.updateRiskAudit("m1", req);
+
+        assertEquals("rejected", resp.getRiskAuditStatus());
+        assertEquals("rejected", m.getRiskAuditStatus());
+    }
+
+    @Test
+    void updateAiAudit_rejectsPending() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+
+        UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
+        req.setStatus("pending");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.updateAiAudit("m1", req));
+        assertEquals("status 须为 passed / rejected", ex.getMessage());
     }
 
     @Test
@@ -168,6 +228,7 @@ class MaterialServiceTest {
         when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
         when(materialRepository.existsByObjectKeyAndDeletedAtIsNull("material/image/1.jpg"))
                 .thenReturn(true);
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         RegisterMaterialsRequest req = new RegisterMaterialsRequest();
         req.setType("image");
@@ -180,8 +241,22 @@ class MaterialServiceTest {
         req.setItems(List.of(item));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.register(req));
+                () -> materialService.register(req, 10001L));
         assertTrue(ex.getMessage().contains("objectKey 已存在"));
+    }
+
+    @Test
+    void register_rejectsMissingUploader() {
+        when(userRepository.findById(9L)).thenReturn(Optional.empty());
+
+        RegisterMaterialsRequest req = new RegisterMaterialsRequest();
+        req.setType("image");
+        req.setGroupId("g1");
+        req.setItems(List.of());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.register(req, 9L));
+        assertEquals("当前员工不存在", ex.getMessage());
     }
 
     @Test
@@ -250,12 +325,25 @@ class MaterialServiceTest {
     void toItem_documentOmitsThumb() {
         MaterialEntity m = material("m1", "document", "g1", "a.pdf");
         m.setCreatedAt(LocalDateTime.now());
-        when(materialRepository.search(eq("document"), isNull(), isNull(), eq(PageRequest.of(0, 20))))
+        when(materialRepository.search(
+                        eq("document"), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(m), PageRequest.of(0, 20), 1));
 
-        MaterialListResponse resp = materialService.list("document", null, null, 1, 20);
+        MaterialListResponse resp = materialService.list("document", null, null, false, 1, 20);
         assertNull(resp.getList().get(0).getThumbUrl());
         assertFalse(resp.getList().get(0).getUrl().isBlank());
+    }
+
+    @Test
+    void list_selectableOnly_passesFlagToRepository() {
+        when(materialRepository.search(
+                        eq("image"), isNull(), isNull(), eq(true), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        MaterialListResponse resp = materialService.list("image", null, null, true, 1, 20);
+        assertEquals(0, resp.getTotal());
+        verify(materialRepository).search(
+                eq("image"), isNull(), isNull(), eq(true), eq(PageRequest.of(0, 20)));
     }
 
     private static MaterialGroupEntity group(String id, String type, String name, boolean def) {
@@ -277,6 +365,19 @@ class MaterialServiceTest {
         m.setUrl("https://cdn/" + name);
         m.setObjectKey("material/" + type + "/1_" + name);
         m.setStatus("available");
+        m.setAiAuditStatus("pending");
+        m.setRiskAuditStatus("pending");
         return m;
+    }
+
+    private static SysUserAccountEntity uploader(long id, String name, String qwBmxx) {
+        SysUserAccountEntity user = new SysUserAccountEntity();
+        user.setId(id);
+        user.setUserName(name);
+        user.setUserAccount("acc" + id);
+        user.setRsStatus(1);
+        user.setPassword("x");
+        user.setQwBmxx(qwBmxx);
+        return user;
     }
 }

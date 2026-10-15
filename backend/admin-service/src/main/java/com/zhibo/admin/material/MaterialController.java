@@ -9,7 +9,11 @@ import com.zhibo.admin.material.dto.RegisterMaterialsRequest;
 import com.zhibo.admin.material.dto.RegisterMaterialsResponse;
 import com.zhibo.admin.material.dto.RenameMaterialGroupRequest;
 import com.zhibo.admin.material.dto.RenameMaterialRequest;
+import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
+import com.zhibo.admin.auth.AuthException;
+import com.zhibo.admin.auth.AuthInterceptor;
 import com.zhibo.admin.web.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -61,15 +65,26 @@ public class MaterialController {
             @RequestParam String type,
             @RequestParam(required = false) String groupId,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "false") boolean selectableOnly,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.ok(materialService.list(type, groupId, keyword, page, pageSize));
+        return ApiResponse.ok(
+                materialService.list(type, groupId, keyword, selectableOnly, page, pageSize));
     }
 
     @PostMapping
     public ApiResponse<RegisterMaterialsResponse> register(
-            @RequestBody RegisterMaterialsRequest request) {
-        return ApiResponse.ok(materialService.register(request));
+            @RequestBody RegisterMaterialsRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(materialService.register(request, currentUserId(httpRequest)));
+    }
+
+    private static long currentUserId(HttpServletRequest request) {
+        Object raw = request.getAttribute(AuthInterceptor.ATTR_USER_ID);
+        if (raw instanceof Number number) {
+            return number.longValue();
+        }
+        throw new AuthException(401, "未登录");
     }
 
     /** 只改展示名；不改 TOS objectKey/url。 */
@@ -78,6 +93,22 @@ public class MaterialController {
             @PathVariable String id,
             @RequestBody RenameMaterialRequest request) {
         return ApiResponse.ok(materialService.rename(id, request));
+    }
+
+    /** AI 审核：仅 passed / rejected。 */
+    @PutMapping("/{id}/ai-audit")
+    public ApiResponse<MaterialItemResponse> updateAiAudit(
+            @PathVariable String id,
+            @RequestBody UpdateMaterialAuditRequest request) {
+        return ApiResponse.ok(materialService.updateAiAudit(id, request));
+    }
+
+    /** 风控合规：仅 passed / rejected。 */
+    @PutMapping("/{id}/risk-audit")
+    public ApiResponse<MaterialItemResponse> updateRiskAudit(
+            @PathVariable String id,
+            @RequestBody UpdateMaterialAuditRequest request) {
+        return ApiResponse.ok(materialService.updateRiskAudit(id, request));
     }
 
     @DeleteMapping("/{id}")

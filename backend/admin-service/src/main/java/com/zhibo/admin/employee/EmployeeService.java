@@ -1,5 +1,6 @@
 package com.zhibo.admin.employee;
 
+import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.employee.dto.EmployeeItem;
@@ -31,6 +32,8 @@ public class EmployeeService {
         EmployeeItem item = new EmployeeItem();
         item.setId(Long.toString(user.getId()));
         item.setUserName(user.getUserName());
+        item.setAvatar(AuthService.resolveAvatar(user));
+        item.setDepartmentName(AuthService.resolveDepartmentName(user));
         return item;
     }
 }

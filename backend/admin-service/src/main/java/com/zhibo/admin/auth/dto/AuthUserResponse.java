@@ -12,4 +12,6 @@ public class AuthUserResponse {
     private String userAccount;
     private String userName;
     private String avatar;
+    /** 所在部门展示名（多部门顿号连接）；无则不输出。 */
+    private String departmentName;
 }

@@ -4,7 +4,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -12,6 +11,8 @@ import java.util.List;
 
 /**
  * 创建活动请求（本站落库 + 按 provider 调云侧）。
+ * <p>
+ * 第十一迭代：{@code autoList} 替代 {@code listed}；必选主播；可选课件；不要求 sellType。
  */
 @Data
 public class CreateActivityRequest {
@@ -55,20 +56,31 @@ public class CreateActivityRequest {
     @Size(max = 100000, message = "详情过长")
     private String detailHtml;
 
-    /** true 立即上架；false 待上架（暂不上架、定时上架都传 false）。 */
-    @NotNull(message = "listed 不能为空")
+    /**
+     * 是否自动上架；创建时 shelfStatus 一律 pending。
+     * 旧字段 {@code listed} 若传入则业务 400。
+     */
+    @NotNull(message = "autoList 不能为空")
+    private Boolean autoList;
+
+    /**
+     * 兼容探测：旧客户端若仍传 listed，服务端拒绝并提示改用 autoList。
+     * 无校验注解，由 Service 显式拒绝。
+     */
     private Boolean listed;
 
-    /** free / paid / encrypted / specified。有效期固定「长期有效」。 */
-    @NotBlank(message = "sellType 不能为空")
-    @Pattern(regexp = "free|paid|encrypted|specified", message = "sellType 无效")
-    private String sellType;
+    /** 主播员工 id（十进制字符串）；去重后 1～20。 */
+    @NotNull(message = "hostIds 不能为空")
+    private List<String> hostIds;
 
-    /** 员工 rs_mainkey_id 的十进制字符串。 */
+    /** 归属人员工 id。 */
     private List<String> ownerIds;
 
     /** 关联商品快照。 */
     private List<ProductBinding> products;
+
+    /** 课件素材 UUID 有序数组；最多 100。 */
+    private List<String> coursewareMaterialIds;
 
     @Data
     public static class ProductBinding {
