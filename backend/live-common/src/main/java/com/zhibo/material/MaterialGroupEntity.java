@@ -24,7 +24,7 @@ public class MaterialGroupEntity {
     @Column(length = 36)
     private String id;
 
-    /** image / video / document */
+    /** image / video / document / article */
     @Column(nullable = false, length = 16)
     private String type;
 

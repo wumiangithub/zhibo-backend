@@ -278,6 +278,9 @@ public class ActivityService {
     @Transactional
     public CreateActivityResponse update(String id, UpdateActivityRequest request) {
         ActivityEntity entity = requireActivity(id);
+        if (isRiskPending(entity.getRiskStatus())) {
+            throw new IllegalArgumentException("审核中不可编辑");
+        }
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
@@ -350,6 +353,7 @@ public class ActivityService {
             ));
         }
 
+        entity.setRiskStatus("pending");
         activityRepository.save(entity);
 
         if (hasHosts) {
@@ -780,6 +784,11 @@ public class ActivityService {
             throw new IllegalArgumentException("viewerStyle 无效");
         }
         return value;
+    }
+
+    /** 待审核或未写状态时，直播间基本信息不可改。 */
+    private static boolean isRiskPending(String status) {
+        return status == null || status.isBlank() || "pending".equalsIgnoreCase(status.trim());
     }
 
     private static String trimToNull(String value) {

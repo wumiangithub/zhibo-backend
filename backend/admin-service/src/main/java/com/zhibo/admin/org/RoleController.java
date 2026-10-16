@@ -30,24 +30,22 @@ public class RoleController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<RoleDetailResponse> detail(@PathVariable String id) {
-        return ApiResponse.ok(roleService.detail(parseId(id)));
+    public ApiResponse<RoleDetailResponse> detail(@PathVariable Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("角色 id 无效");
+        }
+        return ApiResponse.ok(roleService.detail(id));
     }
 
     @PutMapping("/{id}/menus")
     public ApiResponse<RoleDetailResponse> saveMenus(
-            @PathVariable String id,
+            @PathVariable Long id,
             @RequestBody SaveRoleMenusRequest request,
             HttpServletRequest httpRequest) {
-        return ApiResponse.ok(roleService.saveMenus(parseId(id), request.getMenuCodes(), currentUserId(httpRequest)));
-    }
-
-    private static long parseId(String id) {
-        try {
-            return Long.parseLong(id);
-        } catch (NumberFormatException ex) {
+        if (id == null || id <= 0) {
             throw new IllegalArgumentException("角色 id 无效");
         }
+        return ApiResponse.ok(roleService.saveMenus(id, request.getMenuCodes(), currentUserId(httpRequest)));
     }
 
     private static long currentUserId(HttpServletRequest request) {

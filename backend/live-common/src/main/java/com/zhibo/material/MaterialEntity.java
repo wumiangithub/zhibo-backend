@@ -24,7 +24,7 @@ public class MaterialEntity {
     @Column(length = 36)
     private String id;
 
-    /** image / video / document */
+    /** image / video / document / article */
     @Column(nullable = false, length = 16)
     private String type;
 
@@ -34,10 +34,12 @@ public class MaterialEntity {
     @Column(nullable = false, length = 256)
     private String name;
 
-    @Column(nullable = false, length = 2048)
+    /** 文章可空 */
+    @Column(length = 2048)
     private String url;
 
-    @Column(name = "object_key", nullable = false, length = 1024)
+    /** 文章可空 */
+    @Column(name = "object_key", length = 1024)
     private String objectKey;
 
     @Column(name = "file_size")

@@ -96,6 +96,32 @@ class MaterialControllerTest {
     }
 
     @Test
+    void createArticle_ok() throws Exception {
+        MaterialItemResponse item = new MaterialItemResponse();
+        item.setId("a1");
+        item.setName("这里是文章的标题");
+        item.setType("article");
+        when(materialService.createArticle(any(), eq(10001L))).thenReturn(item);
+
+        mockMvc.perform(post("/api/materials/articles")
+                        .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "groupId":"g1",
+                                  "title":"这里是文章的标题",
+                                  "author":"作者",
+                                  "content":"<p>正文</p>"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.id").value("a1"))
+                .andExpect(jsonPath("$.data.type").value("article"))
+                .andExpect(jsonPath("$.data.name").value("这里是文章的标题"));
+    }
+
+    @Test
     void register_ok() throws Exception {
         MaterialItemResponse item = new MaterialItemResponse();
         item.setId("m1");

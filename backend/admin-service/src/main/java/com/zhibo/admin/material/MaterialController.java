@@ -1,14 +1,18 @@
 package com.zhibo.admin.material;
 
+import com.zhibo.admin.material.dto.ArticleDetailResponse;
+import com.zhibo.admin.material.dto.CreateArticleRequest;
 import com.zhibo.admin.material.dto.CreateMaterialGroupRequest;
 import com.zhibo.admin.material.dto.DeleteIdResponse;
 import com.zhibo.admin.material.dto.MaterialGroupResponse;
 import com.zhibo.admin.material.dto.MaterialListResponse;
 import com.zhibo.admin.material.dto.MaterialItemResponse;
+import com.zhibo.admin.material.dto.MoveMaterialRequest;
 import com.zhibo.admin.material.dto.RegisterMaterialsRequest;
 import com.zhibo.admin.material.dto.RegisterMaterialsResponse;
 import com.zhibo.admin.material.dto.RenameMaterialGroupRequest;
 import com.zhibo.admin.material.dto.RenameMaterialRequest;
+import com.zhibo.admin.material.dto.ReplaceImageRequest;
 import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
@@ -72,6 +76,28 @@ public class MaterialController {
                 materialService.list(type, groupId, keyword, selectableOnly, page, pageSize));
     }
 
+    /** 文章详情，含正文。 */
+    @GetMapping("/articles/{id}")
+    public ApiResponse<ArticleDetailResponse> getArticle(@PathVariable String id) {
+        return ApiResponse.ok(materialService.getArticle(id));
+    }
+
+    /** 编辑文章。待审核返回 400。成功后两审回到 pending。 */
+    @PutMapping("/articles/{id}")
+    public ApiResponse<MaterialItemResponse> updateArticle(
+            @PathVariable String id,
+            @RequestBody CreateArticleRequest request) {
+        return ApiResponse.ok(materialService.updateArticle(id, request));
+    }
+
+    /** 新建文章：标题 / 作者 / HTML，不经 TOS 登记。 */
+    @PostMapping("/articles")
+    public ApiResponse<MaterialItemResponse> createArticle(
+            @RequestBody CreateArticleRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(materialService.createArticle(request, currentUserId(httpRequest)));
+    }
+
     @PostMapping
     public ApiResponse<RegisterMaterialsResponse> register(
             @RequestBody RegisterMaterialsRequest request,
@@ -85,6 +111,22 @@ public class MaterialController {
             return number.longValue();
         }
         throw new AuthException(401, "未登录");
+    }
+
+    /** 移到同类型其他分组。不改审核状态。 */
+    @PutMapping("/{id}/group")
+    public ApiResponse<MaterialItemResponse> move(
+            @PathVariable String id,
+            @RequestBody MoveMaterialRequest request) {
+        return ApiResponse.ok(materialService.move(id, request));
+    }
+
+    /** 裁剪后替换图片。待审核返回 400。成功后两审回到 pending。 */
+    @PutMapping("/{id}/image")
+    public ApiResponse<MaterialItemResponse> replaceImage(
+            @PathVariable String id,
+            @RequestBody ReplaceImageRequest request) {
+        return ApiResponse.ok(materialService.replaceImage(id, request));
     }
 
     /** 只改展示名；不改 TOS objectKey/url。 */

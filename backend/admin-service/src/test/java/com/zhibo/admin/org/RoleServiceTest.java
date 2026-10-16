@@ -40,6 +40,14 @@ class RoleServiceTest {
     private RoleService roleService;
 
     @Test
+    void list_returnsNumericId() {
+        when(roleRepository.findActive()).thenReturn(List.of(role(1L, "系统管理员", "")));
+        var item = roleService.list().get(0);
+        assertEquals(1L, item.getId());
+        assertEquals("系统管理员", item.getName());
+    }
+
+    @Test
     void detail_joinsAccountAndDepartment() {
         when(roleRepository.findById(1L)).thenReturn(Optional.of(role(1L, "系统管理员", "最高权限")));
         when(yhidRoleRepository.findActiveAccountIds(1L)).thenReturn(List.of(31L));
@@ -61,6 +69,7 @@ class RoleServiceTest {
         when(liveRoleMenuRepository.findByRoleIdAndRsStatus(1L, 1)).thenReturn(List.of());
 
         RoleDetailResponse detail = roleService.detail(1L);
+        assertEquals(1L, detail.getId());
         assertEquals("王五", detail.getMembers().get(0).getUserName());
         assertEquals("技术管理中心", detail.getMembers().get(0).getDepartmentName());
         assertEquals("系统管理员", detail.getName());

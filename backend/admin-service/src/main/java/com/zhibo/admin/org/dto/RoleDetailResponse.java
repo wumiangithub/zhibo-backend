@@ -9,7 +9,8 @@ import java.util.List;
 @Getter
 @Setter
 public class RoleDetailResponse {
-    private String id;
+    /** 角色主键 {@code sys_uimsrole.rs_mainkey_id}，JSON 数字 */
+    private Long id;
     private String name;
     private String remark;
     private List<RoleMemberItem> members = new ArrayList<>();

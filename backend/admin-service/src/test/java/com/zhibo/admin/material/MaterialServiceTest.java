@@ -1,5 +1,9 @@
 package com.zhibo.admin.material;
 
+import com.zhibo.admin.material.dto.ArticleDetailResponse;
+import com.zhibo.admin.material.dto.CreateArticleRequest;
+import com.zhibo.admin.material.dto.MoveMaterialRequest;
+import com.zhibo.admin.material.dto.ReplaceImageRequest;
 import com.zhibo.admin.material.dto.CreateMaterialGroupRequest;
 import com.zhibo.admin.material.dto.MaterialGroupResponse;
 import com.zhibo.admin.material.dto.MaterialListResponse;
@@ -11,6 +15,8 @@ import com.zhibo.admin.material.dto.RenameMaterialRequest;
 import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.material.MaterialArticleEntity;
+import com.zhibo.material.MaterialArticleRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
@@ -48,6 +54,8 @@ class MaterialServiceTest {
     private MaterialGroupRepository groupRepository;
     @Mock
     private MaterialRepository materialRepository;
+    @Mock
+    private MaterialArticleRepository articleRepository;
     @Mock
     private SysUserAccountRepository userRepository;
 
@@ -319,6 +327,231 @@ class MaterialServiceTest {
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         assertThrows(IllegalArgumentException.class, () -> materialService.softDelete("m1"));
+    }
+
+    @Test
+    void createArticle_writesTitleAuthorAndSnapshot() {
+        MaterialGroupEntity g = group("g-article", "article", "默认分组", true);
+        when(groupRepository.findById("g-article")).thenReturn(Optional.of(g));
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
+        when(materialRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(articleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateArticleRequest req = new CreateArticleRequest();
+        req.setGroupId("g-article");
+        req.setTitle("  这里是文章的标题  ");
+        req.setAuthor(" 作者 ");
+        req.setContent("<p>正文</p>");
+
+        MaterialItemResponse resp = materialService.createArticle(req, 10001L);
+
+        assertEquals("这里是文章的标题", resp.getName());
+        assertEquals("article", resp.getType());
+        assertEquals("g-article", resp.getGroupId());
+        assertEquals("pending", resp.getAiAuditStatus());
+        assertEquals("pending", resp.getRiskAuditStatus());
+        assertEquals("10001", resp.getUploaderId());
+        assertEquals("张三", resp.getUploaderName());
+        assertNull(resp.getUrl());
+        assertNull(resp.getObjectKey());
+        assertNull(resp.getThumbUrl());
+
+        ArgumentCaptor<MaterialArticleEntity> body = ArgumentCaptor.forClass(MaterialArticleEntity.class);
+        verify(articleRepository).save(body.capture());
+        assertEquals("作者", body.getValue().getAuthor());
+        assertEquals("<p>正文</p>", body.getValue().getContent());
+        assertEquals(resp.getId(), body.getValue().getId());
+    }
+
+    @Test
+    void createArticle_rejectsEmptyHtml() {
+        MaterialGroupEntity g = group("g-article", "article", "默认分组", true);
+        when(groupRepository.findById("g-article")).thenReturn(Optional.of(g));
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
+
+        CreateArticleRequest req = new CreateArticleRequest();
+        req.setGroupId("g-article");
+        req.setTitle("标题");
+        req.setAuthor("作者");
+        req.setContent("<p><br></p>");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.createArticle(req, 10001L));
+        assertEquals("content 不能为空", ex.getMessage());
+        verify(materialRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createArticle_rejectsLongTitleAndWrongGroup() {
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
+        MaterialGroupEntity image = group("g1", "image", "默认分组", true);
+        when(groupRepository.findById("g1")).thenReturn(Optional.of(image));
+
+        CreateArticleRequest wrongGroup = new CreateArticleRequest();
+        wrongGroup.setGroupId("g1");
+        wrongGroup.setTitle("标题");
+        wrongGroup.setAuthor("作者");
+        wrongGroup.setContent("<p>正文</p>");
+        IllegalArgumentException groupEx = assertThrows(IllegalArgumentException.class,
+                () -> materialService.createArticle(wrongGroup, 10001L));
+        assertEquals("分组类型与素材类型不一致", groupEx.getMessage());
+
+        MaterialGroupEntity article = group("g-article", "article", "默认分组", true);
+        when(groupRepository.findById("g-article")).thenReturn(Optional.of(article));
+        CreateArticleRequest longTitle = new CreateArticleRequest();
+        longTitle.setGroupId("g-article");
+        longTitle.setTitle("标".repeat(46));
+        longTitle.setAuthor("作者");
+        longTitle.setContent("<p>正文</p>");
+        IllegalArgumentException titleEx = assertThrows(IllegalArgumentException.class,
+                () -> materialService.createArticle(longTitle, 10001L));
+        assertEquals("title 不能超过45个字", titleEx.getMessage());
+    }
+
+    @Test
+    void register_rejectsArticleType() {
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
+        RegisterMaterialsRequest req = new RegisterMaterialsRequest();
+        req.setType("article");
+        req.setGroupId("g1");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.register(req, 10001L));
+        assertEquals("type 须为 image / video / document", ex.getMessage());
+    }
+
+    @Test
+    void list_acceptsArticleType() {
+        when(materialRepository.search(
+                        eq("article"), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        MaterialListResponse resp = materialService.list("article", null, null, false, 1, 20);
+        assertEquals(0, resp.getTotal());
+    }
+
+    @Test
+    void move_changesGroupWithoutTouchingAudit() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        m.setAiAuditStatus("passed");
+        m.setRiskAuditStatus("rejected");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(groupRepository.findById("g2")).thenReturn(Optional.of(group("g2", "image", "分组2", false)));
+
+        MoveMaterialRequest req = new MoveMaterialRequest();
+        req.setGroupId("g2");
+        MaterialItemResponse resp = materialService.move("m1", req);
+
+        assertEquals("g2", resp.getGroupId());
+        assertEquals("passed", resp.getAiAuditStatus());
+        assertEquals("rejected", resp.getRiskAuditStatus());
+    }
+
+    @Test
+    void move_rejectsDifferentType() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(groupRepository.findById("g-article")).thenReturn(
+                Optional.of(group("g-article", "article", "默认分组", true)));
+
+        MoveMaterialRequest req = new MoveMaterialRequest();
+        req.setGroupId("g-article");
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.move("m1", req));
+        assertEquals("分组类型与素材类型不一致", ex.getMessage());
+    }
+
+    @Test
+    void replaceImage_pendingRejects() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        ReplaceImageRequest req = new ReplaceImageRequest();
+        req.setUrl("https://cdn/b.jpg");
+        req.setObjectKey("material/image/2_b.jpg");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.replaceImage("m1", req));
+        assertEquals("审核中不可编辑", ex.getMessage());
+    }
+
+    @Test
+    void replaceImage_passedResetsAudit() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        m.setAiAuditStatus("passed");
+        m.setRiskAuditStatus("passed");
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.existsByObjectKeyAndDeletedAtIsNull("material/image/2_b.jpg"))
+                .thenReturn(false);
+
+        ReplaceImageRequest req = new ReplaceImageRequest();
+        req.setUrl("https://cdn/b.jpg");
+        req.setObjectKey("material/image/2_b.jpg");
+        req.setFileSize(12L);
+        req.setMeta("100*80");
+        MaterialItemResponse resp = materialService.replaceImage("m1", req);
+
+        assertEquals("https://cdn/b.jpg", resp.getUrl());
+        assertEquals("pending", resp.getAiAuditStatus());
+        assertEquals("pending", resp.getRiskAuditStatus());
+        assertEquals("100*80", resp.getMeta());
+    }
+
+    @Test
+    void updateArticle_pendingRejects() {
+        MaterialEntity m = material("a1", "article", "g-article", "标题");
+        when(materialRepository.findById("a1")).thenReturn(Optional.of(m));
+        CreateArticleRequest req = new CreateArticleRequest();
+        req.setTitle("新标题");
+        req.setAuthor("作者");
+        req.setContent("<p>新正文</p>");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.updateArticle("a1", req));
+        assertEquals("审核中不可编辑", ex.getMessage());
+    }
+
+    @Test
+    void updateArticle_passedResetsAudit() {
+        MaterialEntity m = material("a1", "article", "g-article", "标题");
+        m.setAiAuditStatus("passed");
+        m.setRiskAuditStatus("rejected");
+        MaterialArticleEntity body = new MaterialArticleEntity();
+        body.setId("a1");
+        body.setAuthor("旧作者");
+        body.setContent("<p>旧</p>");
+        when(materialRepository.findById("a1")).thenReturn(Optional.of(m));
+        when(articleRepository.findById("a1")).thenReturn(Optional.of(body));
+
+        CreateArticleRequest req = new CreateArticleRequest();
+        req.setTitle("新标题");
+        req.setAuthor("新作者");
+        req.setContent("<p>新正文</p>");
+        MaterialItemResponse resp = materialService.updateArticle("a1", req);
+
+        assertEquals("新标题", resp.getName());
+        assertEquals("pending", resp.getAiAuditStatus());
+        assertEquals("pending", resp.getRiskAuditStatus());
+        assertEquals("新作者", body.getAuthor());
+        assertEquals("<p>新正文</p>", body.getContent());
+    }
+
+    @Test
+    void getArticle_returnsBody() {
+        MaterialEntity m = material("a1", "article", "g-article", "标题");
+        m.setAiAuditStatus("passed");
+        m.setRiskAuditStatus("passed");
+        MaterialArticleEntity body = new MaterialArticleEntity();
+        body.setId("a1");
+        body.setAuthor("作者");
+        body.setContent("<p>正文</p>");
+        when(materialRepository.findById("a1")).thenReturn(Optional.of(m));
+        when(articleRepository.findById("a1")).thenReturn(Optional.of(body));
+
+        ArticleDetailResponse detail = materialService.getArticle("a1");
+        assertEquals("标题", detail.getTitle());
+        assertEquals("作者", detail.getAuthor());
+        assertEquals("<p>正文</p>", detail.getContent());
+        assertEquals("passed", detail.getAiAuditStatus());
     }
 
     @Test

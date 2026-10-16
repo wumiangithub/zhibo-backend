@@ -37,7 +37,7 @@ public class RoleService {
         List<RoleListItem> list = new ArrayList<>();
         for (SysUimsRoleEntity role : roleRepository.findActive()) {
             RoleListItem item = new RoleListItem();
-            item.setId(Long.toString(role.getId()));
+            item.setId(role.getId());
             item.setName(role.getRoleName());
             list.add(item);
         }
@@ -47,7 +47,7 @@ public class RoleService {
     public RoleDetailResponse detail(long roleId) {
         SysUimsRoleEntity role = requireActive(roleId);
         RoleDetailResponse response = new RoleDetailResponse();
-        response.setId(Long.toString(role.getId()));
+        response.setId(role.getId());
         response.setName(role.getRoleName());
         response.setRemark(role.getRemark() == null ? "" : role.getRemark());
         response.setMenus(LiveMenuCatalog.tree());
