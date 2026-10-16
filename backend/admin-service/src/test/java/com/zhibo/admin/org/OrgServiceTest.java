@@ -39,6 +39,10 @@ class OrgServiceTest {
     private SysUserAccountRepository userRepository;
     @Mock
     private LiveAccountRepository liveAccountRepository;
+    @Mock
+    private SysUimsYhidRoleRepository yhidRoleRepository;
+    @Mock
+    private SysUimsRoleRepository roleRepository;
 
     @InjectMocks
     private OrgService orgService;
@@ -69,8 +73,9 @@ class OrgServiceTest {
                 user(19L, 19L, "王某", null)
         ));
         when(liveAccountRepository.findByUserIdIn(any())).thenReturn(List.of());
+        when(yhidRoleRepository.findByRsStatusAndAccountIdIn(eq(1), any())).thenReturn(List.of());
 
-        OrgEmployeeListResponse resp = orgService.listEmployees(58L, null, 1, 20);
+        OrgEmployeeListResponse resp = orgService.listEmployees(58L, null, null, 1, 20);
         assertEquals(2, resp.getTotal());
         assertEquals(2, resp.getList().size());
         assertTrue(resp.getList().get(0).isLiveEnabled());
@@ -90,16 +95,18 @@ class OrgServiceTest {
         disabled.setUserId(19L);
         disabled.setEnabled(0);
         when(liveAccountRepository.findByUserIdIn(Set.of(19L))).thenReturn(List.of(disabled));
+        when(yhidRoleRepository.findByRsStatusAndAccountIdIn(eq(1), any())).thenReturn(List.of());
 
-        OrgEmployeeListResponse resp = orgService.listEmployees(58L, null, 1, 20);
+        OrgEmployeeListResponse resp = orgService.listEmployees(58L, null, null, 1, 20);
         assertFalse(resp.getList().get(0).isLiveEnabled());
         assertEquals("disabled", resp.getList().get(0).getHqStatus());
     }
 
     @Test
     void listEmployees_rejectsBadPage() {
-        assertThrows(IllegalArgumentException.class, () -> orgService.listEmployees(1L, null, 0, 20));
-        assertThrows(IllegalArgumentException.class, () -> orgService.listEmployees(1L, null, 1, 0));
+        assertThrows(IllegalArgumentException.class, () -> orgService.listEmployees(1L, null, null, 0, 20));
+        assertThrows(IllegalArgumentException.class, () -> orgService.listEmployees(1L, null, null, 1, 0));
+        assertThrows(IllegalArgumentException.class, () -> orgService.listEmployees(1L, null, 0L, 1, 20));
     }
 
     @Test
@@ -110,6 +117,7 @@ class OrgServiceTest {
                 user(19L, 19L, "王某", null)
         ));
         when(liveAccountRepository.findByUserIdIn(any())).thenReturn(List.of());
+        when(yhidRoleRepository.findByRsStatusAndAccountIdIn(eq(1), any())).thenReturn(List.of());
         HrUimsyhgwxxEntity p1 = position(1L, 1L, 58L);
         HrUimsyhgwxxEntity p2 = position(2L, 19L, 58L);
         HrUimsyhgwxxEntity p3 = position(3L, 19L, 66L);
@@ -119,10 +127,40 @@ class OrgServiceTest {
                 dept(66L, "QKYSY01", "事业一部", 1L)
         ));
 
-        OrgEmployeeListResponse resp = orgService.listEmployees(null, null, 1, 20);
+        OrgEmployeeListResponse resp = orgService.listEmployees(null, null, null, 1, 20);
         assertEquals(2, resp.getTotal());
         assertEquals("技术管理中心", resp.getList().get(0).getDepartmentName());
         assertEquals("技术管理中心、事业一部", resp.getList().get(1).getDepartmentName());
+        assertEquals("", resp.getList().get(0).getRoleNames());
+    }
+
+    @Test
+    void listEmployees_filtersByRole_andJoinsRoleNames() {
+        when(deptRepository.findById(58L)).thenReturn(Optional.of(dept(58L, "QKYZB0102", "技术管理中心", 1L)));
+        when(positionRepository.findDistinctYhidByBmid(58L)).thenReturn(List.of(1L, 19L));
+        when(userRepository.findActiveByYhidIn(eq(List.of(1L, 19L)), isNull())).thenReturn(List.of(
+                user(1L, 1L, "蔡奕坤", 10),
+                user(19L, 19L, "王某", 10)
+        ));
+        when(yhidRoleRepository.findActiveAccountIds(3L)).thenReturn(List.of(19L));
+        when(liveAccountRepository.findByUserIdIn(any())).thenReturn(List.of());
+        SysUimsYhidRoleEntity link = new SysUimsYhidRoleEntity();
+        link.setId(1L);
+        link.setRsStatus(1);
+        link.setAccountId(19L);
+        link.setRoleId(3L);
+        when(yhidRoleRepository.findByRsStatusAndAccountIdIn(eq(1), any())).thenReturn(List.of(link));
+        SysUimsRoleEntity role = new SysUimsRoleEntity();
+        role.setId(3L);
+        role.setRsStatus(1);
+        role.setRsDispindex(0);
+        role.setRoleName("测试");
+        when(roleRepository.findAllById(any())).thenReturn(List.of(role));
+
+        OrgEmployeeListResponse resp = orgService.listEmployees(58L, null, 3L, 1, 20);
+        assertEquals(1, resp.getTotal());
+        assertEquals("王某", resp.getList().get(0).getUserName());
+        assertEquals("测试", resp.getList().get(0).getRoleNames());
     }
 
     private static HrUimsyhgwxxEntity position(Long id, Long yhid, Long bmid) {

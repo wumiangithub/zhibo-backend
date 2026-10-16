@@ -35,9 +35,10 @@ public class OrgController {
     public ApiResponse<OrgEmployeeListResponse> listEmployees(
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String userName,
+            @RequestParam(required = false) Long roleId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.ok(orgService.listEmployees(deptId, userName, page, pageSize));
+        return ApiResponse.ok(orgService.listEmployees(deptId, userName, roleId, page, pageSize));
     }
 
     @PutMapping("/employees/{id}/live-enabled")

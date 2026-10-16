@@ -33,6 +33,8 @@ public class OrgService {
     private final HrUimsyhgwxxRepository positionRepository;
     private final SysUserAccountRepository userRepository;
     private final LiveAccountRepository liveAccountRepository;
+    private final SysUimsYhidRoleRepository yhidRoleRepository;
+    private final SysUimsRoleRepository roleRepository;
 
     public List<DeptTreeNode> departmentTree() {
         List<SysUimsbmxxEntity> rows = deptRepository.findActiveEnabled();
@@ -62,10 +64,14 @@ public class OrgService {
 
     /**
      * @param deptId 部门 id；{@code null} 表示「全部」（有在职岗位的全部账号）
+     * @param roleId 角色 id；{@code null} 表示不按角色筛
      */
-    public OrgEmployeeListResponse listEmployees(Long deptId, String userName, int page, int pageSize) {
+    public OrgEmployeeListResponse listEmployees(Long deptId, String userName, Long roleId, int page, int pageSize) {
         if (deptId != null && deptId <= 0) {
             throw new IllegalArgumentException("deptId 无效");
+        }
+        if (roleId != null && roleId <= 0) {
+            throw new IllegalArgumentException("roleId 无效");
         }
         if (page < 1) {
             throw new IllegalArgumentException("page 从 1 开始");
@@ -104,6 +110,10 @@ public class OrgService {
             unique.putIfAbsent(u.getId(), u);
         }
         List<SysUserAccountEntity> ordered = new ArrayList<>(unique.values());
+        if (roleId != null) {
+            Set<Long> inRole = new LinkedHashSet<>(yhidRoleRepository.findActiveAccountIds(roleId));
+            ordered.removeIf(u -> !inRole.contains(u.getId()));
+        }
         response.setTotal(ordered.size());
 
         int from = (page - 1) * pageSize;
@@ -119,6 +129,7 @@ public class OrgService {
         Map<Long, String> deptNameByYhid = allDepts
                 ? loadDeptNamesByYhid(pageRows.stream().map(SysUserAccountEntity::getYhid).collect(Collectors.toSet()))
                 : Map.of();
+        Map<Long, String> roleNamesByAccount = loadRoleNames(ids);
 
         for (SysUserAccountEntity u : pageRows) {
             OrgEmployeeItem item = new OrgEmployeeItem();
@@ -129,6 +140,7 @@ public class OrgService {
             } else {
                 item.setDepartmentName(singleDeptName);
             }
+            item.setRoleNames(roleNamesByAccount.getOrDefault(u.getId(), ""));
             item.setLiveEnabled(liveMap.getOrDefault(u.getId(), true));
             item.setHqStatus(mapHqStatus(u.getShzt()));
             response.getList().add(item);
@@ -183,6 +195,40 @@ public class OrgService {
             namesByYhid.computeIfAbsent(g.getYhid(), k -> new LinkedHashSet<>()).add(name);
         }
         for (Map.Entry<Long, LinkedHashSet<String>> e : namesByYhid.entrySet()) {
+            result.put(e.getKey(), String.join("、", e.getValue()));
+        }
+        return result;
+    }
+
+    private Map<Long, String> loadRoleNames(Set<Long> accountIds) {
+        Map<Long, String> result = new HashMap<>();
+        if (accountIds == null || accountIds.isEmpty()) {
+            return result;
+        }
+        List<SysUimsYhidRoleEntity> links = yhidRoleRepository.findByRsStatusAndAccountIdIn(1, accountIds);
+        if (links.isEmpty()) {
+            return result;
+        }
+        Set<Long> roleIds = links.stream().map(SysUimsYhidRoleEntity::getRoleId).collect(Collectors.toSet());
+        Map<Long, String> nameByRole = new HashMap<>();
+        for (SysUimsRoleEntity role : roleRepository.findAllById(roleIds)) {
+            if (!Objects.equals(role.getRsStatus(), 1)) {
+                continue;
+            }
+            if (role.getRoleName() == null || role.getRoleName().isBlank()) {
+                continue;
+            }
+            nameByRole.put(role.getId(), role.getRoleName());
+        }
+        Map<Long, LinkedHashSet<String>> namesByAccount = new LinkedHashMap<>();
+        for (SysUimsYhidRoleEntity link : links) {
+            String name = nameByRole.get(link.getRoleId());
+            if (name == null) {
+                continue;
+            }
+            namesByAccount.computeIfAbsent(link.getAccountId(), k -> new LinkedHashSet<>()).add(name);
+        }
+        for (Map.Entry<Long, LinkedHashSet<String>> e : namesByAccount.entrySet()) {
             result.put(e.getKey(), String.join("、", e.getValue()));
         }
         return result;
