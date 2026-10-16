@@ -62,6 +62,13 @@ public class SysUserAccountEntity {
     @Column(name = "yhid")
     private Long yhid;
 
+    /**
+     * 总部审核状态：{@code 10} 正常，{@code 0} 禁用；可空。
+     * 只读展示，本站不改此列。
+     */
+    @Column(name = "shzt")
+    private Integer shzt;
+
     /** CRM 档案码；有则作为 saler JWT 的 {@code identifier}。 */
     @Column(length = 50)
     private String code;
