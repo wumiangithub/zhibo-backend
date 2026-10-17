@@ -26,7 +26,7 @@ public class LiveReportService {
     private final LiveReportAuditRepository audits;
     private final SysUserAccountRepository users;
     private final ObjectMapper mapper;
-    private final Clock clock = Clock.systemDefaultZone();
+    private final Clock clock;
 
     @Transactional
     public LiveReportDtos.Result create(LiveReportDtos.SaveRequest req, long userId) {
@@ -81,7 +81,9 @@ public class LiveReportService {
             if (req.planTimes().size() <= old.size() || !req.planTimes().subList(0,old.size()).equals(old))
                 throw new IllegalArgumentException("已通过报备只能在末尾增加计划时间");
             validatePlans(req.planTimes()); setPlans(e, req.planTimes());
-            reports.save(e); return new LiveReportDtos.Result(id,e.getStatus());
+            reports.save(e);
+            addAudit(id,"append",null,"追加 "+(req.planTimes().size()-old.size())+" 段计划时间",operator);
+            return new LiveReportDtos.Result(id,e.getStatus());
         }
         if (!"rejected".equals(e.getStatus())) throw new IllegalArgumentException("当前状态不可编辑");
         requireFull(req);
@@ -91,6 +93,8 @@ public class LiveReportService {
         e.setCoverUrl(req.coverUrl()); e.setCoverObjectKey(req.coverObjectKey()); e.setHostId(host.getId());
         e.setCoverFileSize(req.coverFileSize()); e.setCoverMimeType(req.coverMimeType());
         e.setHostName(host.getUserName()); e.setHostAvatar(host.getUserAvatar()); e.setAttachments(json(req.attachments()));
+        e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
+        e.setDepartmentName(AuthService.resolveDepartmentName(operator));
         e.setStatus("pending"); e.setSubmittedAt(LocalDateTime.now(clock)); reports.save(e);
         addAudit(id,"resubmit",null,null,operator); return new LiveReportDtos.Result(id,e.getStatus());
     }
@@ -116,7 +120,7 @@ public class LiveReportService {
         if(content==null||content.trim().isEmpty()||content.trim().length()>500) throw new IllegalArgumentException("报备内容需为 1~500 字");
         validatePlans(times); String base="live-report/"+id+"/";
         if(coverKey==null||!(coverKey.startsWith(base+"cover/")||coverKey.startsWith("material/image/"))) throw new IllegalArgumentException("封面须来自素材中心图片或报备封面目录");
-        if(coverSize==null||coverSize<=0||(coverKey.startsWith(base+"cover/")&&coverSize>=2*MB)) throw new IllegalArgumentException("封面大小错误");
+        if(coverSize==null||coverSize<=0||coverSize>5*MB) throw new IllegalArgumentException("封面大小须不超过 5MB");
         if(coverMime==null||!Set.of("image/jpeg","image/png").contains(coverMime)) throw new IllegalArgumentException("封面只支持 JPG/PNG");
         if(files==null||files.isEmpty()||files.size()>20) throw new IllegalArgumentException("材料需为 1~20 份");
         for(var f:files){String n=f.name().toLowerCase(Locale.ROOT); if(!f.objectKey().startsWith(base+"attachment/")||!(n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf"))||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB) throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");}
