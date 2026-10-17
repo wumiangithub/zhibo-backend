@@ -1,0 +1,625 @@
+openapi: "3.0.3"
+info:
+  title: zhibo live-service
+  description: |
+    钱坤直播观看端 / 中控台 API（live-service :8082）。
+    
+    契约来源：`zhibo-shared/docs/API约定.md`。
+    
+    **通则**
+    - 成功：`code === 0`（HTTP 仍多为 200）
+    - 活动路径 `{id}` 均为本站 **UUID**
+    - 时间：`yyyy-MM-dd HH:mm:ss`
+    - JSON 不输出 `null` 字段
+    - 观看端不走管理端 JWT
+  version: "2.0.0"
+  contact:
+    name: zhibo-backend
+servers:
+  - url: "http://127.0.0.1:8082"
+    description: 本地 live-service
+tags:
+  - name: 观看
+  - name: 进出房
+  - name: 中控台
+  - name: 回调
+paths:
+  /api/watch/activities:
+    get:
+      tags:
+        - 观看
+      summary: 活动列表（精简）
+      operationId: listWatchActivities
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 从 1 起（D37）
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: state
+          in: query
+          schema:
+            type: integer
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchList"
+  /api/watch/{id}:
+    get:
+      tags:
+        - 观看
+      summary: 观看嵌入（iframe 兜底）
+      operationId: getWatchEmbed
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: guestId
+          in: query
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9]+$"
+          description: 只能字母数字；不传则后端生成
+        - name: nickname
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+          description: 默认「观众」
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchEmbed"
+  /api/watch/{id}/sdk:
+    get:
+      tags:
+        - 观看
+      summary: 学生端观看 SDK 初始化载荷
+      operationId: getWatchSdk
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: guestId
+          in: query
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9]+$"
+          description: 只能字母数字；不传则后端生成
+        - name: nickname
+          in: query
+          schema:
+            type: string
+            maxLength: 50
+          description: 默认「观众」
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchSdk"
+  /api/watch/{id}/attendance/enter:
+    post:
+      tags:
+        - 进出房
+      summary: 进入（辅通道）
+      description: "前端在 VITE_ATTENDANCE_CLIENT_REPORT=true 时调用。"
+      operationId: attendanceEnter
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceEnterRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
+  /api/watch/{id}/attendance/leave:
+    post:
+      tags:
+        - 进出房
+      summary: 离开（辅通道，批量）
+      operationId: attendanceLeave
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttendanceLeaveRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseAttendanceLeave"
+  /api/callbacks/vhall/presence:
+    post:
+      tags:
+        - 回调
+      summary: 微吼上下线回调（主通道）
+      description: 微吼主动 POST，不是前端调用。method_id 须为 20。
+      operationId: vhallPresenceCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VhallPresenceCallback"
+      responses:
+        200:
+          description: 按微吼约定响应
+  /api/watch/{id}/attendees:
+    get:
+      tags:
+        - 中控台
+      summary: 中控台进出名单
+      description: 打开页面、换 Tab、搜索、加载更多时调用；不要轮询。
+      operationId: listWatchAttendees
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: tab
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - online
+              - offline
+            default: all
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 从 1 起（D37）
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: keyword
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseAttendeeList"
+  /api/watch/{id}/presence-trend:
+    get:
+      tags:
+        - 中控台
+      summary: 进出三线走势
+      description: 数据来自 presence_event，不要调微吼 report/online。
+      operationId: getWatchPresenceTrend
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: startTime
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: endTime
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: bucketSeconds
+          in: query
+          schema:
+            type: integer
+            default: 60
+            enum:
+              - 60
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePresenceTrend"
+  /api/watch/{id}/chat-filter:
+    get:
+      tags:
+        - 中控台
+      summary: 聊天审核页 URL
+      operationId: getChatFilterPage
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: email
+          in: query
+          schema:
+            type: string
+          description: "默认 assistant@zhibo.local"
+        - name: name
+          in: query
+          schema:
+            type: string
+            maxLength: 30
+          description: 默认「助理」
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseChatFilter"
+components:
+  parameters:
+    WatchActivityId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+      description: 本站活动 UUID
+  schemas:
+    ApiResponseBase:
+      type: object
+      required:
+        - code
+        - msg
+      properties:
+        code:
+          type: integer
+          example: 0
+        msg:
+          type: string
+          example: ok
+    Provider:
+      type: string
+      enum:
+        - vhall
+        - aliyun
+        - tencent
+    IdData:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+    WatchActivitySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          type: integer
+        startTime:
+          type: string
+        coverUrl:
+          type: string
+    WatchActivityListData:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/WatchActivitySummary"
+    WatchEmbedData:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          type: integer
+        type:
+          type: integer
+        nickname:
+          type: string
+        guestId:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        embedUrl:
+          type: string
+          format: uri
+    VhallSdkPayload:
+      type: object
+      properties:
+        scriptUrl:
+          type: string
+          format: uri
+        jqueryUrl:
+          type: string
+          nullable: true
+        account:
+          type: string
+          description: 回显用；init 不要传
+        email:
+          type: string
+        username:
+          type: string
+        webinarId:
+          type: string
+        appKey:
+          type: string
+        signedAt:
+          type: string
+        signType:
+          type: integer
+          example: 0
+        sign:
+          type: string
+    WatchSdkData:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          $ref: "#/components/schemas/Provider"
+        title:
+          type: string
+        state:
+          type: integer
+        type:
+          type: integer
+        nickname:
+          type: string
+        guestId:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        sdk:
+          $ref: "#/components/schemas/VhallSdkPayload"
+        embedUrl:
+          type: string
+          format: uri
+    AttendanceEnterRequest:
+      type: object
+      required:
+        - userId
+        - enterTime
+      properties:
+        userId:
+          type: string
+        enterTime:
+          type: string
+          example: "2026-09-30 10:00:00"
+        mid:
+          type: string
+        nickname:
+          type: string
+        avatarUrl:
+          type: string
+    AttendanceLeaveRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required:
+              - userId
+              - enterTime
+              - leaveTime
+            properties:
+              userId:
+                type: string
+              enterTime:
+                type: string
+              leaveTime:
+                type: string
+              mid:
+                type: string
+    AttendanceLeaveData:
+      type: object
+      properties:
+        updated:
+          type: integer
+        skipped:
+          type: integer
+        missing:
+          type: integer
+    AttendeeItem:
+      type: object
+      required:
+        - userId
+        - enterTime
+        - online
+      properties:
+        userId:
+          type: string
+        nickname:
+          type: string
+        avatarUrl:
+          type: string
+        enterTime:
+          type: string
+        leaveTime:
+          type: string
+        online:
+          type: boolean
+    AttendeeListData:
+      type: object
+      required:
+        - activityState
+        - total
+        - page
+        - pageSize
+        - list
+      properties:
+        activityState:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttendeeItem"
+    PresenceTrendPoint:
+      type: object
+      properties:
+        time:
+          type: string
+        online:
+          type: integer
+        enter:
+          type: integer
+        leave:
+          type: integer
+    PresenceTrend:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+        endTime:
+          type: string
+        bucketSeconds:
+          type: integer
+          example: 60
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/PresenceTrendPoint"
+    ChatFilterData:
+      type: object
+      required:
+        - pageUrl
+      properties:
+        pageUrl:
+          type: string
+          format: uri
+    VhallPresenceCallback:
+      type: object
+      description: 微吼上下线回调 body（字段以微吼文档为准）
+      properties:
+        method_id:
+          type: integer
+          example: 20
+        type:
+          type: string
+          enum:
+            - Join
+            - Leave
+        webinar_id:
+          type: string
+        sender_id:
+          type: string
+        time:
+          type: integer
+          description: Unix 秒
+        mid:
+          type: string
+        signature:
+          type: string
+        context:
+          type: object
+          properties:
+            nickname:
+              type: string
+            avatar:
+              type: string
+    ApiResponseId:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/IdData"
+    ApiResponseWatchList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/WatchActivityListData"
+    ApiResponseWatchEmbed:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/WatchEmbedData"
+    ApiResponseWatchSdk:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/WatchSdkData"
+    ApiResponseAttendanceLeave:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AttendanceLeaveData"
+    ApiResponseAttendeeList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/AttendeeListData"
+    ApiResponsePresenceTrend:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/PresenceTrend"
+    ApiResponseChatFilter:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ChatFilterData"

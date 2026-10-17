@@ -10,7 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,18 +18,18 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/org/roles")
+@RequestMapping("/api/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
     private final RoleService roleService;
 
-    @GetMapping
+    @GetMapping("/list")
     public ApiResponse<List<RoleListItem>> list() {
         return ApiResponse.ok(roleService.list());
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/detail/{id}")
     public ApiResponse<RoleDetailResponse> detail(@PathVariable Long id) {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("角色 id 无效");
@@ -37,11 +37,11 @@ public class RoleController {
         return ApiResponse.ok(roleService.detail(id));
     }
 
-    @PutMapping("/{id}/menus")
-    public ApiResponse<RoleDetailResponse> saveMenus(
-            @PathVariable Long id,
+    @PostMapping("/save")
+    public ApiResponse<RoleDetailResponse> save(
             @RequestBody SaveRoleMenusRequest request,
             HttpServletRequest httpRequest) {
+        Long id = request.getId();
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("角色 id 无效");
         }

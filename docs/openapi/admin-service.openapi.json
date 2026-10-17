@@ -1,0 +1,4144 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "zhibo admin-service",
+    "description": "钱坤直播管理端 API（admin-service :8081）。\n\n契约来源：`zhibo-shared/docs/API约定.md`。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 失败：业务 `code` —— `400` 参数、`401` 未登录、`403` 停用、`500` 服务器、`501` 服务商未接入、云侧失败透传或 `502`\n- 活动路径 `{id}` 均为本站 **UUID**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 除登录白名单外需 `Authorization: Bearer <accessToken>`",
+    "version": "2.0.0",
+    "contact": {
+      "name": "zhibo-backend"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8081",
+      "description": "本地 admin-service"
+    }
+  ],
+  "tags": [
+    {
+      "name": "登录鉴权"
+    },
+    {
+      "name": "图片上传"
+    },
+    {
+      "name": "素材中心"
+    },
+    {
+      "name": "活动管理"
+    },
+    {
+      "name": "统计"
+    },
+    {
+      "name": "中控台"
+    },
+    {
+      "name": "员工组织"
+    }
+  ],
+  "paths": {
+    "/api/auth/captcha": {
+      "get": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "图形验证码",
+        "operationId": "getCaptcha",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCaptcha"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "账号密码登录（返回微信 state，不发 JWT）",
+        "operationId": "login",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseLoginPending"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/wechat/callback": {
+      "get": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "微信扫码回调（GET）",
+        "description": "微信 redirect；建议返回极简 HTML。正式 Token 只经 login/query。",
+        "operationId": "wechatCallbackGet",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML 或业务结果"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "微信扫码回调（POST）",
+        "operationId": "wechatCallbackPost",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML 或业务结果"
+          }
+        }
+      }
+    },
+    "/api/auth/login/query": {
+      "get": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "轮询扫码结果 / 取 JWT",
+        "operationId": "loginQuery",
+        "security": [],
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseLoginQuery"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "刷新 access + refresh",
+        "operationId": "refreshToken",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTokenPair"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "登录鉴权"
+        ],
+        "summary": "当前员工",
+        "operationId": "getMe",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMe"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uploads/image": {
+      "post": {
+        "tags": [
+          "图片上传"
+        ],
+        "summary": "图片上传（代理微吼）",
+        "operationId": "uploadImage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "bmp/gif/jpg/jpeg/png/psd，≤5MB"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseUploadImage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/uploads/tos-sts": {
+      "get": {
+        "tags": [
+          "图片上传"
+        ],
+        "summary": "火山 TOS 临时上传凭证",
+        "operationId": "getTosSts",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseTosSts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/groups": {
+      "get": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "分组列表",
+        "operationId": "listMaterialGroups",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MaterialType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialGroups"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "新建分组",
+        "operationId": "createMaterialGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "name"
+                ],
+                "properties": {
+                  "type": {
+                    "$ref": "#/components/schemas/MaterialType"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialGroup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/groups/{id}": {
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "重命名分组",
+        "operationId": "renameMaterialGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialGroup"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "删除分组",
+        "operationId": "deleteMaterialGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials": {
+      "get": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "素材分页列表",
+        "operationId": "listMaterials",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MaterialType"
+            }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selectableOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "description": "true 时仅两审均为 passed"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "从 1 起（D37）"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "批量登记（TOS 上传成功后）",
+        "operationId": "registerMaterials",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaterialRegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialRegister"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/articles": {
+      "post": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "新建文章",
+        "operationId": "createArticle",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArticleCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/articles/{id}": {
+      "get": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "文章详情",
+        "operationId": "getArticle",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseArticleDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "编辑文章",
+        "description": "待审核不可编辑；成功后两审回 pending",
+        "operationId": "updateArticle",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "author",
+                  "content"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 45
+                  },
+                  "author": {
+                    "type": "string",
+                    "maxLength": 16
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 100000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/{id}": {
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "修改展示名",
+        "operationId": "renameMaterial",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "软删素材",
+        "operationId": "deleteMaterial",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/{id}/group": {
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "移动分组",
+        "operationId": "moveMaterialGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "groupId"
+                ],
+                "properties": {
+                  "groupId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/{id}/image": {
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "裁剪替换图片",
+        "operationId": "replaceMaterialImage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "objectKey"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "objectKey": {
+                    "type": "string"
+                  },
+                  "fileSize": {
+                    "type": "integer"
+                  },
+                  "meta": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/{id}/ai-audit": {
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "改 AI 审核状态",
+        "operationId": "updateMaterialAiAudit",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "$ref": "#/components/schemas/AuditWriteStatus"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/materials/{id}/risk-audit": {
+      "put": {
+        "tags": [
+          "素材中心"
+        ],
+        "summary": "改风控合规状态",
+        "operationId": "updateMaterialRiskAudit",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/MaterialId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "$ref": "#/components/schemas/AuditWriteStatus"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMaterialItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities": {
+      "post": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "创建活动",
+        "operationId": "createActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateActivityRequest"
+              },
+              "examples": {
+                "video": {
+                  "summary": "视频直播",
+                  "value": {
+                    "provider": "vhall",
+                    "title": "开发者大会",
+                    "startTime": "2026-10-01 20:00:00",
+                    "endTime": "2026-10-01 22:00:00",
+                    "type": 2,
+                    "introduction": "简介",
+                    "coverUrl": "https://cnstatic01.e.vhall.com/upload/xxx.jpg",
+                    "ultraLowLatency": false,
+                    "autoList": true,
+                    "hostIds": [
+                      "10001"
+                    ],
+                    "ownerIds": [
+                      "10001"
+                    ],
+                    "products": [],
+                    "coursewareMaterialIds": []
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "活动列表",
+        "operationId": "listActivities",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "从 1 起（D37）"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "标题或本站活动 UUID"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ActivityState"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Provider"
+            }
+          },
+          {
+            "name": "shelfStatus",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ShelfStatus"
+            }
+          },
+          {
+            "name": "startFrom",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "example": "2026-10-01"
+            },
+            "description": "yyyy-MM-dd"
+          },
+          {
+            "name": "startTo",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "example": "2026-10-31"
+            },
+            "description": "yyyy-MM-dd"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseActivityList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}": {
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "活动详情",
+        "operationId": "getActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseActivityDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "改活动（基本信息 Tab）",
+        "operationId": "updateActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActivityRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "软删活动",
+        "operationId": "deleteActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/playback": {
+      "put": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "回放设置",
+        "operationId": "updatePlayback",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/sales": {
+      "put": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "售卖设置",
+        "operationId": "updateSales",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSales"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/end": {
+      "post": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "结束直播",
+        "operationId": "endActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEndActivity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/shelf": {
+      "post": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "上架 / 下架",
+        "operationId": "shelfActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShelfRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseShelf"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/audits": {
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "审核记录",
+        "operationId": "listActivityAudits",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAudits"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/audit": {
+      "post": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "提交审核",
+        "operationId": "auditActivity",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuditSubmitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAuditSubmit"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/records": {
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "某场活动的回放列表",
+        "operationId": "listActivityRecords",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseRecordList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/host": {
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "主持人开播链接",
+        "description": "管理端拿到 hostUrl 后新窗口打开，不要 iframe。canBroadcast 不为真 → 400。",
+        "operationId": "getActivityHost",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseHost"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/embed": {
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "管理后台嵌入页",
+        "operationId": "getActivityEmbed",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEmbed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/stats": {
+      "get": {
+        "tags": [
+          "统计"
+        ],
+        "summary": "观看概览",
+        "operationId": "getActivityStats",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseStats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/stats/online": {
+      "get": {
+        "tags": [
+          "统计"
+        ],
+        "summary": "在线趋势（微吼对照，分钟级）",
+        "description": "startTime 与 endTime 跨度必须 ≤1 天。",
+        "operationId": "getActivityOnlineTrend",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "2026-09-17 00:00:00"
+            }
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "2026-09-17 23:59:59"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOnlineTrend"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/presence-trend": {
+      "get": {
+        "tags": [
+          "统计"
+        ],
+        "summary": "进出三线走势（管理端）",
+        "description": "与 live GET /api/watch/{id}/presence-trend 同形。",
+        "operationId": "getActivityPresenceTrend",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bucketSeconds",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 60,
+              "enum": [
+                60
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePresenceTrend"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/activities/{id}/attendees": {
+      "get": {
+        "tags": [
+          "中控台"
+        ],
+        "summary": "中控台进出名单（废弃）",
+        "description": "废弃：新代码一律用 live GET /api/watch/{id}/attendees。实现可暂时保留。",
+        "deprecated": true,
+        "operationId": "listActivityAttendeesDeprecated",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "tab",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "online",
+                "offline"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "从 1 起（D37）"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseAttendeeList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees": {
+      "get": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "归属人 / 主播候选",
+        "operationId": "listEmployeeCandidates",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "按 user_name 包含匹配；最多 20 条"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEmployees"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/org/departments/tree": {
+      "get": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "部门树",
+        "operationId": "getOrgDepartmentTree",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOrgDeptTree"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/org/employees": {
+      "get": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "部门下员工",
+        "operationId": "listOrgEmployees",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "deptId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "不传=全部；有值不含下级"
+          },
+          {
+            "name": "userName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "roleId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "从 1 起（D37）"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOrgEmployees"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/org/employees/{id}/live-enabled": {
+      "put": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "直播账号启停",
+        "operationId": "setEmployeeLiveEnabled",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "账号 rs_mainkey_id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveEnabledRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseLiveEnabled"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/list": {
+      "get": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "在用角色列表",
+        "operationId": "listRoles",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOrgRoles"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/detail/{id}": {
+      "get": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "角色详情（成员 + 菜单）",
+        "operationId": "getRoleDetail",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "角色 rs_mainkey_id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOrgRoleDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/save": {
+      "post": {
+        "tags": [
+          "员工组织"
+        ],
+        "summary": "保存角色本站菜单",
+        "description": "整表替换 live_role_menu。id 在 body。",
+        "operationId": "saveRoleMenus",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleMenusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOrgRoleDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "管理端 access JWT；不要带 refresh"
+      }
+    },
+    "parameters": {
+      "ActivityId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        },
+        "description": "本站活动 UUID"
+      },
+      "MaterialId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "素材 / 分组 UUID"
+      }
+    },
+    "schemas": {
+      "ApiResponseBase": {
+        "type": "object",
+        "required": [
+          "code",
+          "msg"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "0 成功；400/401/403/500/501/502…",
+            "example": 0
+          },
+          "msg": {
+            "type": "string",
+            "example": "ok"
+          }
+        }
+      },
+      "Provider": {
+        "type": "string",
+        "enum": [
+          "vhall",
+          "aliyun",
+          "tencent"
+        ],
+        "description": "直播服务商；创建后不可改"
+      },
+      "ActivityType": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "description": "1音频 / 2视频 / 3互动 / 4录播"
+      },
+      "ActivityState": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "description": "0全部(列表筛) / 1直播 / 2预告 / 3结束 / 4点播 / 5回放"
+      },
+      "ViewerStyle": {
+        "type": "string",
+        "enum": [
+          "traditional",
+          "immersive"
+        ]
+      },
+      "WarmupType": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video"
+        ]
+      },
+      "ShelfStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "on",
+          "off",
+          "banned"
+        ]
+      },
+      "RiskStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "passed",
+          "rejected"
+        ]
+      },
+      "SellType": {
+        "type": "string",
+        "enum": [
+          "free",
+          "paid",
+          "encrypted",
+          "specified"
+        ]
+      },
+      "AccessValidityType": {
+        "type": "string",
+        "enum": [
+          "long",
+          "days"
+        ]
+      },
+      "PlaybackValidityType": {
+        "type": "string",
+        "enum": [
+          "forever",
+          "days"
+        ]
+      },
+      "MaterialType": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video",
+          "document",
+          "article"
+        ]
+      },
+      "MaterialFileType": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video",
+          "document"
+        ],
+        "description": "批量登记仅接受文件类型，不含 article"
+      },
+      "AuditWriteStatus": {
+        "type": "string",
+        "enum": [
+          "passed",
+          "rejected"
+        ]
+      },
+      "MaterialAuditStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "passed",
+          "rejected"
+        ]
+      },
+      "IdData": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "EmployeeBrief": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "rs_mainkey_id 十进制字符串"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string"
+          },
+          "userAccount": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductRef": {
+        "type": "object",
+        "required": [
+          "spuId",
+          "productName"
+        ],
+        "properties": {
+          "spuId": {
+            "type": "string",
+            "description": "十进制字符串"
+          },
+          "productName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "CoursewareItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MaterialType"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "CaptchaData": {
+        "type": "object",
+        "required": [
+          "captchaId",
+          "imageBase64"
+        ],
+        "properties": {
+          "captchaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "imageBase64": {
+            "type": "string",
+            "description": "data:image/png;base64,... 可直接作 img src"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "userAccount",
+          "password",
+          "captchaId",
+          "captchaCode"
+        ],
+        "properties": {
+          "userAccount": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "description": "AES-256-GCM：IV(12)+ciphertext+tag → Base64"
+          },
+          "captchaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "captchaCode": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginPendingData": {
+        "type": "object",
+        "required": [
+          "state",
+          "expiresIn"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "微信 qrconnect state"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "秒；建议 120～180"
+          }
+        }
+      },
+      "LoginQueryData": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "description": "0 pending / 1 success / 2 failed / 3 expired"
+          },
+          "errorMsg": {
+            "type": "string"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "access 秒数，默认 7200"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "refreshExpiresIn": {
+            "type": "integer",
+            "description": "refresh 秒数，默认 604800"
+          },
+          "user": {
+            "$ref": "#/components/schemas/EmployeeBrief"
+          }
+        }
+      },
+      "RefreshRequest": {
+        "type": "object",
+        "required": [
+          "accessToken",
+          "refreshToken"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "旧 access，过期也要原样带上"
+          },
+          "refreshToken": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenPairData": {
+        "type": "object",
+        "required": [
+          "accessToken",
+          "expiresIn",
+          "refreshToken",
+          "refreshExpiresIn"
+        ],
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "example": 7200
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "refreshExpiresIn": {
+            "type": "integer",
+            "example": 604800
+          }
+        }
+      },
+      "UploadImageData": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "微吼 domain_url"
+          }
+        }
+      },
+      "TosStsData": {
+        "type": "object",
+        "required": [
+          "region",
+          "endpoint",
+          "bucketName",
+          "accessKeyId",
+          "secretAccessKey",
+          "sessionToken",
+          "expiredTime"
+        ],
+        "properties": {
+          "region": {
+            "type": "string",
+            "example": "cn-shanghai"
+          },
+          "endpoint": {
+            "type": "string",
+            "example": "tos-cn-shanghai.volces.com",
+            "description": "主机名，无 https://"
+          },
+          "bucketName": {
+            "type": "string"
+          },
+          "accessKeyId": {
+            "type": "string"
+          },
+          "secretAccessKey": {
+            "type": "string"
+          },
+          "sessionToken": {
+            "type": "string"
+          },
+          "expiredTime": {
+            "type": "string",
+            "description": "ISO-8601 UTC（带 Z）",
+            "example": "2026-10-10T06:00:00Z"
+          }
+        }
+      },
+      "MaterialGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "count": {
+            "type": "integer"
+          },
+          "isDefault": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MaterialItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MaterialType"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "文章省略"
+          },
+          "objectKey": {
+            "type": "string",
+            "description": "文章省略"
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "meta": {
+            "type": "string"
+          },
+          "fileSize": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "example": "available"
+          },
+          "aiAuditStatus": {
+            "$ref": "#/components/schemas/MaterialAuditStatus"
+          },
+          "riskAuditStatus": {
+            "$ref": "#/components/schemas/MaterialAuditStatus"
+          },
+          "uploaderId": {
+            "type": "string"
+          },
+          "uploaderName": {
+            "type": "string"
+          },
+          "departmentName": {
+            "type": "string"
+          },
+          "uploadedAt": {
+            "type": "string",
+            "example": "2026-10-12 14:00:00"
+          }
+        }
+      },
+      "MaterialListData": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaterialItem"
+            }
+          }
+        }
+      },
+      "MaterialRegisterRequest": {
+        "type": "object",
+        "required": [
+          "type",
+          "groupId",
+          "items"
+        ],
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/MaterialFileType"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "url",
+                "objectKey"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "url": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "objectKey": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "fileSize": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "mimeType": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "meta": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              }
+            }
+          }
+        }
+      },
+      "MaterialRegisterData": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MaterialItem"
+            }
+          }
+        }
+      },
+      "ArticleCreateRequest": {
+        "type": "object",
+        "required": [
+          "groupId",
+          "title",
+          "author",
+          "content"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 45
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 100000
+          }
+        }
+      },
+      "ArticleDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "aiAuditStatus": {
+            "$ref": "#/components/schemas/MaterialAuditStatus"
+          },
+          "riskAuditStatus": {
+            "$ref": "#/components/schemas/MaterialAuditStatus"
+          }
+        }
+      },
+      "CreateActivityRequest": {
+        "type": "object",
+        "required": [
+          "provider",
+          "title",
+          "startTime",
+          "type",
+          "autoList",
+          "hostIds"
+        ],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "startTime": {
+            "type": "string",
+            "description": "yyyy-MM-dd HH:mm:ss",
+            "example": "2026-10-01 20:00:00"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "须晚于 startTime；只落本站库"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ActivityType"
+          },
+          "recordId": {
+            "type": "string",
+            "description": "type=4 且 provider=vhall 时必填"
+          },
+          "introduction": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "viewerStyle": {
+            "$ref": "#/components/schemas/ViewerStyle"
+          },
+          "ultraLowLatency": {
+            "type": "boolean",
+            "description": "创建后不可改"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "detailHtml": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "autoList": {
+            "type": "boolean",
+            "description": "风控通过后是否自动上架；创建时 shelfStatus 一律 pending"
+          },
+          "hostIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            },
+            "description": "主播员工 id"
+          },
+          "ownerIds": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            }
+          },
+          "products": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ProductRef"
+            }
+          },
+          "coursewareMaterialIds": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "UpdateActivityRequest": {
+        "type": "object",
+        "description": "至少填一个字段；未出现的关联字段不改",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "introduction": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "detailHtml": {
+            "type": "string",
+            "maxLength": 100000
+          },
+          "autoList": {
+            "type": "boolean"
+          },
+          "hostIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            }
+          },
+          "ownerIds": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            }
+          },
+          "products": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ProductRef"
+            }
+          },
+          "coursewareMaterialIds": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "PlaybackSettingsRequest": {
+        "type": "object",
+        "required": [
+          "playbackEnabled"
+        ],
+        "properties": {
+          "playbackEnabled": {
+            "type": "boolean"
+          },
+          "playbackValidityType": {
+            "$ref": "#/components/schemas/PlaybackValidityType"
+          },
+          "playbackValidityDays": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "playbackSpeedAllow": {
+            "type": "boolean"
+          },
+          "playbackFastForwardAllow": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SalesSettingsRequest": {
+        "type": "object",
+        "required": [
+          "sellAlone",
+          "sellType"
+        ],
+        "properties": {
+          "sellAlone": {
+            "type": "boolean"
+          },
+          "sellType": {
+            "$ref": "#/components/schemas/SellType"
+          },
+          "price": {
+            "description": "paid 时必填；元，最多 2 位小数"
+          },
+          "linePrice": {
+            "description": "须 > price；非 paid 忽略"
+          },
+          "password": {
+            "type": "string",
+            "pattern": "^\\d{6}$",
+            "description": "encrypted 时必填；明文 6 位数字"
+          },
+          "accessValidityType": {
+            "$ref": "#/components/schemas/AccessValidityType"
+          },
+          "accessValidityDays": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "SalesSettingsData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sellType": {
+            "$ref": "#/components/schemas/SellType"
+          },
+          "validityLabel": {
+            "type": "string"
+          }
+        }
+      },
+      "ShelfRequest": {
+        "type": "object",
+        "required": [
+          "listed"
+        ],
+        "properties": {
+          "listed": {
+            "type": "boolean",
+            "description": "true 上架 / false 下架"
+          }
+        }
+      },
+      "ShelfData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shelfStatus": {
+            "$ref": "#/components/schemas/ShelfStatus"
+          }
+        }
+      },
+      "AuditSubmitRequest": {
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "rejected"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "仅驳回必填"
+          }
+        }
+      },
+      "AuditSubmitData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "riskStatus": {
+            "$ref": "#/components/schemas/RiskStatus"
+          },
+          "shelfStatus": {
+            "$ref": "#/components/schemas/ShelfStatus"
+          }
+        }
+      },
+      "AuditRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "rejected"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "operatorId": {
+            "type": "string"
+          },
+          "operatorName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivitySummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "title": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ActivityState"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ActivityType"
+          },
+          "viewerStyle": {
+            "$ref": "#/components/schemas/ViewerStyle"
+          },
+          "shareLink": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "shelfStatus": {
+            "$ref": "#/components/schemas/ShelfStatus"
+          },
+          "riskStatus": {
+            "$ref": "#/components/schemas/RiskStatus"
+          },
+          "sellType": {
+            "$ref": "#/components/schemas/SellType"
+          },
+          "validityLabel": {
+            "type": "string"
+          },
+          "canBroadcast": {
+            "type": "boolean"
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeBrief"
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductRef"
+            }
+          }
+        }
+      },
+      "ActivityDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ActivitySummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "providerRoomId": {
+                "type": "string"
+              },
+              "vhallWebinarId": {
+                "type": "string",
+                "description": "兼容字段；仅 vhall 时等于 providerRoomId"
+              },
+              "introduction": {
+                "type": "string"
+              },
+              "endTime": {
+                "type": "string"
+              },
+              "verify": {
+                "type": "integer"
+              },
+              "pv": {
+                "type": "integer"
+              },
+              "fullEmbedShareLink": {
+                "type": "string"
+              },
+              "ultraLowLatency": {
+                "type": "boolean"
+              },
+              "detailHtml": {
+                "type": "string"
+              },
+              "autoList": {
+                "type": "boolean"
+              },
+              "hosts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EmployeeBrief"
+                }
+              },
+              "coursewares": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CoursewareItem"
+                }
+              },
+              "sellAlone": {
+                "type": "boolean"
+              },
+              "price": {},
+              "linePrice": {},
+              "accessValidityType": {
+                "$ref": "#/components/schemas/AccessValidityType"
+              },
+              "accessValidityDays": {
+                "type": "integer"
+              },
+              "password": {
+                "type": "string",
+                "description": "仅 encrypted 时回显明文；勿给观看端"
+              },
+              "playbackEnabled": {
+                "type": "boolean"
+              },
+              "playbackValidityType": {
+                "$ref": "#/components/schemas/PlaybackValidityType"
+              },
+              "playbackValidityDays": {
+                "type": "integer"
+              },
+              "playbackSpeedAllow": {
+                "type": "boolean"
+              },
+              "playbackFastForwardAllow": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "ActivityListData": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivitySummary"
+            }
+          }
+        }
+      },
+      "ActivityRecordItem": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "create-demand 的 record_id"
+          },
+          "title": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "string",
+            "example": "01:02:03"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityRecordListData": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityRecordItem"
+            }
+          }
+        }
+      },
+      "EndActivityData": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "integer",
+            "example": 3
+          }
+        }
+      },
+      "HostData": {
+        "type": "object",
+        "required": [
+          "provider",
+          "hostUrl"
+        ],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "hostUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "EmbedData": {
+        "type": "object",
+        "required": [
+          "embedUrl"
+        ],
+        "properties": {
+          "embedUrl": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "ActivityStats": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "integer"
+          },
+          "pv": {
+            "type": "integer"
+          },
+          "onlineCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "OnlinePoint": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        }
+      },
+      "OnlineTrend": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OnlinePoint"
+            }
+          }
+        }
+      },
+      "PresenceTrendPoint": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string"
+          },
+          "online": {
+            "type": "integer"
+          },
+          "enter": {
+            "type": "integer"
+          },
+          "leave": {
+            "type": "integer"
+          }
+        }
+      },
+      "PresenceTrend": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          },
+          "bucketSeconds": {
+            "type": "integer",
+            "example": 60
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PresenceTrendPoint"
+            }
+          }
+        }
+      },
+      "AttendeeItem": {
+        "type": "object",
+        "required": [
+          "userId",
+          "enterTime",
+          "online"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "avatarUrl": {
+            "type": "string"
+          },
+          "enterTime": {
+            "type": "string"
+          },
+          "leaveTime": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AttendeeListData": {
+        "type": "object",
+        "required": [
+          "activityState",
+          "total",
+          "page",
+          "pageSize",
+          "list"
+        ],
+        "properties": {
+          "activityState": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttendeeItem"
+            }
+          }
+        }
+      },
+      "OrgDeptNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "string"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrgDeptNode"
+            }
+          }
+        }
+      },
+      "OrgEmployeeItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userName": {
+            "type": "string"
+          },
+          "departmentName": {
+            "type": "string"
+          },
+          "roleNames": {
+            "type": "string"
+          },
+          "liveEnabled": {
+            "type": "boolean"
+          },
+          "hqStatus": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "disabled",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "OrgEmployeeListData": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrgEmployeeItem"
+            }
+          }
+        }
+      },
+      "LiveEnabledRequest": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LiveEnabledData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "liveEnabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OrgRoleBrief": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "sys_uimsrole.rs_mainkey_id"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "OrgRoleDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "remark": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "userName": {
+                  "type": "string"
+                },
+                "departmentName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "menus": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "menuCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RoleMenusRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "menuCodes"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "角色 rs_mainkey_id"
+          },
+          "menuCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "live-manage"
+            ]
+          }
+        }
+      },
+      "ApiResponseId": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/IdData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseCaptcha": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/CaptchaData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseLoginPending": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LoginPendingData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseLoginQuery": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LoginQueryData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseTokenPair": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TokenPairData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseMe": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/EmployeeBrief"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseUploadImage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/UploadImageData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseTosSts": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/TosStsData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseMaterialGroups": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MaterialGroup"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseMaterialGroup": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MaterialGroup"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseMaterialList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MaterialListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseMaterialItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MaterialItem"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseMaterialRegister": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MaterialRegisterData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseArticleDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ArticleDetail"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseActivityList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ActivityListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseActivityDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ActivityDetail"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseRecordList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ActivityRecordListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseEndActivity": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/EndActivityData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseHost": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/HostData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseEmbed": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/EmbedData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseStats": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ActivityStats"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseOnlineTrend": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/OnlineTrend"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponsePresenceTrend": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/PresenceTrend"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseAttendeeList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AttendeeListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseSales": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SalesSettingsData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseShelf": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/ShelfData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseAuditSubmit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/AuditSubmitData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseAudits": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/AuditRecord"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseEmployees": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "list": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/EmployeeBrief"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseOrgDeptTree": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OrgDeptNode"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseOrgEmployees": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/OrgEmployeeListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseLiveEnabled": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/LiveEnabledData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseOrgRoles": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/OrgRoleBrief"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseOrgRoleDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/OrgRoleDetail"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

@@ -72,6 +72,7 @@ public class RoleService {
             }
         }
         liveRoleMenuRepository.deleteByRoleId(roleId);
+        liveRoleMenuRepository.flush();
         for (String code : codes) {
             LiveRoleMenuEntity row = new LiveRoleMenuEntity();
             row.setRsStatus(1);
