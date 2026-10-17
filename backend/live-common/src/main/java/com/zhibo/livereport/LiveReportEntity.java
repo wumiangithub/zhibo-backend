@@ -15,13 +15,14 @@ public class LiveReportEntity {
     @Column(name = "plan_times", nullable = false, columnDefinition = "json") private String planTimes;
     @Column(name = "plan_start_min", nullable = false) private LocalDateTime planStartMin;
     @Column(name = "plan_end_max", nullable = false) private LocalDateTime planEndMax;
-    @Column(name = "cover_url", nullable = false, length = 1024) private String coverUrl;
-    @Column(name = "cover_object_key", nullable = false, length = 512) private String coverObjectKey;
+    @Column(name = "cover_url", nullable = false, length = 2048) private String coverUrl;
+    @Column(name = "cover_object_key", nullable = false, length = 1024) private String coverObjectKey;
     @Column(name = "cover_file_size", nullable = false) private Long coverFileSize;
     @Column(name = "cover_mime_type", nullable = false, length = 100) private String coverMimeType;
+    @Column(name = "cover_material_id", length = 36) private String coverMaterialId;
     @Column(name = "host_id", nullable = false) private Long hostId;
     @Column(name = "host_name", nullable = false, length = 50) private String hostName;
-    @Column(name = "host_avatar", length = 500) private String hostAvatar;
+    @Column(name = "host_avatar", length = 2048) private String hostAvatar;
     @Column(nullable = false, columnDefinition = "json") private String attachments;
     @Column(nullable = false, length = 16) private String status;
     @Column(name = "bound_live_count", nullable = false) private Integer boundLiveCount = 0;

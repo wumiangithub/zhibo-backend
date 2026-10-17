@@ -7,6 +7,8 @@ import com.zhibo.livereport.LiveReportAuditEntity;
 import com.zhibo.livereport.LiveReportAuditRepository;
 import com.zhibo.livereport.LiveReportEntity;
 import com.zhibo.livereport.LiveReportRepository;
+import com.zhibo.material.MaterialEntity;
+import com.zhibo.material.MaterialRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +30,7 @@ import static org.mockito.Mockito.when;
 
 class LiveReportServiceTest {
     private static final String REPORT_ID = "3f6d06e2-9f8d-4f5f-9f3a-2c9f7f0a1b01";
+    private static final String COVER_MATERIAL_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     /** 固定时钟：2026-10-17 14:00:00（未来第 7 天即 2026-10-24，当日 23:59:59 可用） */
@@ -36,15 +39,17 @@ class LiveReportServiceTest {
     private final LiveReportRepository reports = mock(LiveReportRepository.class);
     private final LiveReportAuditRepository audits = mock(LiveReportAuditRepository.class);
     private final SysUserAccountRepository users = mock(SysUserAccountRepository.class);
+    private final MaterialRepository materials = mock(MaterialRepository.class);
     private final ObjectMapper mapper = new ObjectMapper();
     private LiveReportService service;
 
     @BeforeEach
     void setUp() {
         Clock fixed = Clock.fixed(NOW.atZone(ZONE).toInstant(), ZONE);
-        service = new LiveReportService(reports, audits, users, mapper, fixed);
+        service = new LiveReportService(reports, audits, users, materials, mapper, fixed);
         when(users.findById(7L)).thenReturn(Optional.of(user(7L, "审核员")));
         when(users.findById(8L)).thenReturn(Optional.of(user(8L, "张美丽")));
+        when(materials.findById(COVER_MATERIAL_ID)).thenReturn(Optional.of(passedImage(1024L)));
     }
 
     // ---------- 状态编辑门禁 ----------
@@ -56,7 +61,7 @@ class LiveReportServiceTest {
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.update("r1", new LiveReportDtos.UpdateRequest(null, null, null,
-                        null, null, null, null, null, null), 7L));
+                        null, null, null, null, null, null, null), 7L));
 
         assertEquals("待审核报备不可编辑", error.getMessage());
         verify(reports, never()).save(report);
@@ -69,7 +74,7 @@ class LiveReportServiceTest {
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.update("r1", new LiveReportDtos.UpdateRequest(null, null, List.of(plan(2, 3)),
-                        null, null, null, null, null, null), 7L));
+                        null, null, null, null, null, null, null), 7L));
 
         assertEquals("已绑定直播的报备不可编辑", error.getMessage());
     }
@@ -82,7 +87,7 @@ class LiveReportServiceTest {
         when(reports.findById("r1")).thenReturn(Optional.of(report));
 
         LiveReportDtos.Result result = service.update("r1", new LiveReportDtos.UpdateRequest(
-                null, null, List.of(first, plan(3, 4)), null, null, null, null, null, null), 7L);
+                null, null, List.of(first, plan(3, 4)), null, null, null, null, null, null, null), 7L);
 
         assertEquals("passed", result.status());
         verify(reports).save(report);
@@ -101,7 +106,7 @@ class LiveReportServiceTest {
         // 旧段被改动（结束时间不同），即使整体更长也必须拒绝
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.update("r1", new LiveReportDtos.UpdateRequest(null, null,
-                        List.of(plan(1, 3), plan(3, 4)), null, null, null, null, null, null), 7L));
+                        List.of(plan(1, 3), plan(3, 4)), null, null, null, null, null, null, null), 7L));
 
         assertEquals("已通过报备只能在末尾增加计划时间", error.getMessage());
         verify(reports, never()).save(report);
@@ -190,15 +195,38 @@ class LiveReportServiceTest {
 
     @Test
     void createRejectsCoverOverFiveMB() {
-        LiveReportDtos.SaveRequest req = new LiveReportDtos.SaveRequest(REPORT_ID, "标题", "内容",
-                List.of(plan("2026-10-18 10:00:00", "2026-10-18 12:00:00")),
-                "https://cdn/x.jpg", "material/image/x.jpg", 6L * 1024 * 1024, "image/jpeg", "8",
-                List.of(attachment("a.pdf", 1024L)));
+        when(materials.findById(COVER_MATERIAL_ID)).thenReturn(Optional.of(passedImage(6L * 1024 * 1024)));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.create(validRequest(), 7L));
+
+        assertEquals("封面大小须不超过 5MB", error.getMessage());
+    }
+
+    @Test
+    void createRejectsUnapprovedCover() {
+        MaterialEntity pending = passedImage(1024L);
+        pending.setAiAuditStatus("pending");
+        when(materials.findById(COVER_MATERIAL_ID)).thenReturn(Optional.of(pending));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.create(validRequest(), 7L));
+
+        assertEquals("封面须来自素材中心已审核通过的图片", error.getMessage());
+    }
+
+    @Test
+    void createRejectsBlankCoverUrl() {
+        LiveReportDtos.SaveRequest base = validRequest();
+        LiveReportDtos.SaveRequest req = new LiveReportDtos.SaveRequest(base.id(), base.title(),
+                base.content(), base.planTimes(), "  ", base.coverObjectKey(),
+                base.coverFileSize(), base.coverMimeType(), base.coverMaterialId(), base.hostId(),
+                base.attachments());
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.create(req, 7L));
 
-        assertEquals("封面大小须不超过 5MB", error.getMessage());
+        assertEquals("请选择报备封面", error.getMessage());
     }
 
     @Test
@@ -206,7 +234,8 @@ class LiveReportServiceTest {
         LiveReportDtos.SaveRequest base = validRequest();
         LiveReportDtos.SaveRequest req = new LiveReportDtos.SaveRequest("not-a-uuid", base.title(),
                 base.content(), base.planTimes(), base.coverUrl(), base.coverObjectKey(),
-                base.coverFileSize(), base.coverMimeType(), base.hostId(), base.attachments());
+                base.coverFileSize(), base.coverMimeType(), base.coverMaterialId(), base.hostId(),
+                base.attachments());
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.create(req, 7L));
@@ -228,7 +257,7 @@ class LiveReportServiceTest {
                 "live-report/r1/attachment/a.pdf", 1024L, "application/pdf");
         LiveReportDtos.Result result = service.update("r1", new LiveReportDtos.UpdateRequest(
                 "标题", "内容", List.of(plan("2026-10-18 10:00:00", "2026-10-18 12:00:00")),
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", "8",
+                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, "8",
                 List.of(file)), 7L);
 
         assertEquals("pending", result.status());
@@ -301,8 +330,22 @@ class LiveReportServiceTest {
     }
 
     private LiveReportDtos.PlanTime plan(int startDays, int endDays) {
-        return new LiveReportDtos.PlanTime(LocalDateTime.now().plusDays(startDays).format(FMT),
-                LocalDateTime.now().plusDays(endDays).format(FMT));
+        return new LiveReportDtos.PlanTime(NOW.plusDays(startDays).format(FMT),
+                NOW.plusDays(endDays).format(FMT));
+    }
+
+    private MaterialEntity passedImage(long fileSize) {
+        MaterialEntity m = new MaterialEntity();
+        m.setId(COVER_MATERIAL_ID);
+        m.setType("image");
+        m.setName("x.jpg");
+        m.setUrl("https://cdn/x.jpg");
+        m.setObjectKey("material/image/x.jpg");
+        m.setFileSize(fileSize);
+        m.setMimeType("image/jpeg");
+        m.setAiAuditStatus("passed");
+        m.setRiskAuditStatus("passed");
+        return m;
     }
 
     private LiveReportDtos.PlanTime plan(String startTime, String endTime) {
@@ -320,13 +363,13 @@ class LiveReportServiceTest {
 
     private LiveReportDtos.SaveRequest validRequestWithTimes(List<LiveReportDtos.PlanTime> times) {
         return new LiveReportDtos.SaveRequest(REPORT_ID, "标题", "内容", times,
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", "8",
+                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, "8",
                 List.of(attachment("a.pdf", 1024L)));
     }
 
     private LiveReportDtos.SaveRequest validRequestWithAttachments(List<LiveReportDtos.Attachment> files) {
         return new LiveReportDtos.SaveRequest(REPORT_ID, "标题", "内容",
                 List.of(plan("2026-10-18 10:00:00", "2026-10-18 12:00:00")),
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", "8", files);
+                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, "8", files);
     }
 }

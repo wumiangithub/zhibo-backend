@@ -17,8 +17,9 @@ public final class LiveMenuCatalog {
         return List.of(
                 node("workbench", "工作台", leaf("overview", "概况")),
                 node("live", "直播",
-                        leaf("live-manage", "直播管理"),
+                        leaf("live-report", "直播报备"),
                         leaf("live-create", "新建直播"),
+                        leaf("live-manage", "直播管理"),
                         leaf("live-console", "直播中控台")),
                 node("settings", "设置",
                         leaf("materials", "素材中心"),

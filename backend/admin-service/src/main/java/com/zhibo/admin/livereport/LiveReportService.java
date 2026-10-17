@@ -7,6 +7,8 @@ import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.livereport.*;
+import com.zhibo.material.MaterialEntity;
+import com.zhibo.material.MaterialRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +27,7 @@ public class LiveReportService {
     private final LiveReportRepository reports;
     private final LiveReportAuditRepository audits;
     private final SysUserAccountRepository users;
+    private final MaterialRepository materials;
     private final ObjectMapper mapper;
     private final Clock clock;
 
@@ -34,13 +37,16 @@ public class LiveReportService {
         if (reports.existsById(req.id())) throw new IllegalArgumentException("报备 ID 已存在");
         SysUserAccountEntity operator = user(userId, "当前员工不存在");
         SysUserAccountEntity host = user(parseId(req.hostId(), "主播不存在"), "主播不存在");
-        validateFull(req.id(), req.title(), req.content(), req.planTimes(), req.coverObjectKey(),
-                req.coverFileSize(), req.coverMimeType(), req.attachments());
+        validateFull(req.id(), req.title(), req.content(), req.planTimes(), req.coverUrl(),
+                req.coverObjectKey(), req.coverFileSize(), req.coverMimeType(), req.coverMaterialId(),
+                req.attachments());
         LiveReportEntity e = new LiveReportEntity();
         e.setId(req.id()); e.setTitle(req.title().trim()); e.setContent(req.content().trim());
-        setPlans(e, req.planTimes()); e.setCoverUrl(req.coverUrl()); e.setCoverObjectKey(req.coverObjectKey());
-        e.setCoverFileSize(req.coverFileSize()); e.setCoverMimeType(req.coverMimeType());
-        e.setHostId(host.getId()); e.setHostName(host.getUserName()); e.setHostAvatar(host.getUserAvatar());
+        setPlans(e, req.planTimes());
+        applyCover(e, req.id(), req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
+                req.coverMimeType(), req.coverMaterialId());
+        e.setHostId(host.getId()); e.setHostName(host.getUserName());
+        e.setHostAvatar(AuthService.resolveAvatar(host));
         e.setAttachments(json(req.attachments())); e.setStatus("pending"); e.setBoundLiveCount(0);
         e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
         e.setDepartmentName(AuthService.resolveDepartmentName(operator)); e.setSubmittedAt(LocalDateTime.now(clock));
@@ -88,11 +94,14 @@ public class LiveReportService {
         if (!"rejected".equals(e.getStatus())) throw new IllegalArgumentException("当前状态不可编辑");
         requireFull(req);
         SysUserAccountEntity host = user(parseId(req.hostId(), "主播不存在"), "主播不存在");
-        validateFull(id,req.title(),req.content(),req.planTimes(),req.coverObjectKey(),req.coverFileSize(),req.coverMimeType(),req.attachments());
+        validateFull(id,req.title(),req.content(),req.planTimes(),req.coverUrl(),req.coverObjectKey(),
+                req.coverFileSize(),req.coverMimeType(),req.coverMaterialId(),req.attachments());
         e.setTitle(req.title().trim()); e.setContent(req.content().trim()); setPlans(e, req.planTimes());
-        e.setCoverUrl(req.coverUrl()); e.setCoverObjectKey(req.coverObjectKey()); e.setHostId(host.getId());
-        e.setCoverFileSize(req.coverFileSize()); e.setCoverMimeType(req.coverMimeType());
-        e.setHostName(host.getUserName()); e.setHostAvatar(host.getUserAvatar()); e.setAttachments(json(req.attachments()));
+        applyCover(e, id, req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
+                req.coverMimeType(), req.coverMaterialId());
+        e.setHostId(host.getId());
+        e.setHostName(host.getUserName()); e.setHostAvatar(AuthService.resolveAvatar(host));
+        e.setAttachments(json(req.attachments()));
         e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
         e.setDepartmentName(AuthService.resolveDepartmentName(operator));
         e.setStatus("pending"); e.setSubmittedAt(LocalDateTime.now(clock)); reports.save(e);
@@ -112,18 +121,79 @@ public class LiveReportService {
     @Transactional(readOnly=true)
     public LiveReportDtos.AuditList audits(String id) {
         report(id); return new LiveReportDtos.AuditList(audits.findByReportIdOrderByCreatedAtDesc(id).stream()
-            .map(a->new LiveReportDtos.AuditItem(a.getId(),a.getAction(),a.getResult(),a.getReason(),String.valueOf(a.getOperatorId()),a.getOperatorName(),a.getCreatedAt())).toList());
+            .map(a->new LiveReportDtos.AuditItem(a.getId(),a.getAction(),a.getResult(),a.getReason(),String.valueOf(a.getOperatorId()),a.getOperatorName(),formatTime(a.getCreatedAt()))).toList());
     }
 
-    private void validateFull(String id,String title,String content,List<LiveReportDtos.PlanTime> times,String coverKey,Long coverSize,String coverMime,List<LiveReportDtos.Attachment> files) {
+    private void validateFull(String id,String title,String content,List<LiveReportDtos.PlanTime> times,
+            String coverUrl,String coverKey,Long coverSize,String coverMime,String coverMaterialId,
+            List<LiveReportDtos.Attachment> files) {
         if(title==null||title.trim().isEmpty()||title.trim().length()>64) throw new IllegalArgumentException("报备名称需为 1~64 字");
         if(content==null||content.trim().isEmpty()||content.trim().length()>500) throw new IllegalArgumentException("报备内容需为 1~500 字");
-        validatePlans(times); String base="live-report/"+id+"/";
-        if(coverKey==null||!(coverKey.startsWith(base+"cover/")||coverKey.startsWith("material/image/"))) throw new IllegalArgumentException("封面须来自素材中心图片或报备封面目录");
-        if(coverSize==null||coverSize<=0||coverSize>5*MB) throw new IllegalArgumentException("封面大小须不超过 5MB");
-        if(coverMime==null||!Set.of("image/jpeg","image/png").contains(coverMime)) throw new IllegalArgumentException("封面只支持 JPG/PNG");
+        validatePlans(times);
+        validateCover(id, coverUrl, coverKey, coverSize, coverMime, coverMaterialId);
+        String base="live-report/"+id+"/";
         if(files==null||files.isEmpty()||files.size()>20) throw new IllegalArgumentException("材料需为 1~20 份");
-        for(var f:files){String n=f.name().toLowerCase(Locale.ROOT); if(!f.objectKey().startsWith(base+"attachment/")||!(n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf"))||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB) throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");}
+        for(var f:files){
+            if(f.name()==null||f.objectKey()==null) throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");
+            String n=f.name().toLowerCase(Locale.ROOT);
+            if(!f.objectKey().startsWith(base+"attachment/")||!(n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf"))||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB)
+                throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");
+        }
+    }
+
+    /** 素材中心封面必须存在、未删、图片、两审通过；旧 live-report/{id}/cover/ 仅校验格式。 */
+    private void validateCover(String id, String coverUrl, String coverKey, Long coverSize, String coverMime, String coverMaterialId) {
+        if (coverUrl == null || coverUrl.isBlank()) throw new IllegalArgumentException("请选择报备封面");
+        if (coverKey == null || coverKey.isBlank()) throw new IllegalArgumentException("封面须来自素材中心图片或报备封面目录");
+        String legacyCover = "live-report/" + id + "/cover/";
+        if (coverKey.startsWith("material/image/")) {
+            if (coverMaterialId == null || coverMaterialId.isBlank()) throw new IllegalArgumentException("封面须来自素材中心已审核通过的图片");
+            MaterialEntity m = materials.findById(coverMaterialId)
+                    .filter(x -> x.getDeletedAt() == null)
+                    .orElseThrow(() -> new IllegalArgumentException("封面素材不存在"));
+            if (!"image".equals(m.getType())) throw new IllegalArgumentException("封面须为图片素材");
+            if (!"passed".equals(m.getAiAuditStatus()) || !"passed".equals(m.getRiskAuditStatus()))
+                throw new IllegalArgumentException("封面须来自素材中心已审核通过的图片");
+            if (m.getObjectKey() == null || !coverKey.equals(m.getObjectKey()))
+                throw new IllegalArgumentException("封面素材与对象键不一致");
+            if (m.getFileSize() == null || m.getFileSize() <= 0) throw new IllegalArgumentException("封面素材缺少大小");
+            coverSize = m.getFileSize();
+            coverMime = resolveCoverMime(m);
+        } else if (!coverKey.startsWith(legacyCover)) {
+            throw new IllegalArgumentException("封面须来自素材中心图片或报备封面目录");
+        }
+        if (coverSize == null || coverSize <= 0 || coverSize > 5 * MB) throw new IllegalArgumentException("封面大小须不超过 5MB");
+        if (coverMime == null || !Set.of("image/jpeg", "image/png").contains(coverMime))
+            throw new IllegalArgumentException("封面只支持 JPG/PNG");
+    }
+
+    private void applyCover(LiveReportEntity e, String id, String coverUrl, String coverKey, Long coverSize,
+            String coverMime, String coverMaterialId) {
+        if (coverKey != null && coverKey.startsWith("material/image/") && coverMaterialId != null && !coverMaterialId.isBlank()) {
+            MaterialEntity m = materials.findById(coverMaterialId).orElseThrow(() -> new IllegalArgumentException("封面素材不存在"));
+            e.setCoverUrl(m.getUrl());
+            e.setCoverObjectKey(m.getObjectKey());
+            e.setCoverFileSize(m.getFileSize());
+            e.setCoverMimeType(resolveCoverMime(m));
+            e.setCoverMaterialId(m.getId());
+            return;
+        }
+        e.setCoverUrl(coverUrl);
+        e.setCoverObjectKey(coverKey);
+        e.setCoverFileSize(coverSize);
+        e.setCoverMimeType(coverMime);
+        e.setCoverMaterialId(null);
+    }
+
+    private String resolveCoverMime(MaterialEntity m) {
+        String mime = m.getMimeType();
+        if (mime != null && Set.of("image/jpeg", "image/png", "image/jpg").contains(mime.toLowerCase(Locale.ROOT))) {
+            return mime.equalsIgnoreCase("image/jpg") ? "image/jpeg" : mime.toLowerCase(Locale.ROOT);
+        }
+        String name = m.getName() == null ? "" : m.getName().toLowerCase(Locale.ROOT);
+        if (name.endsWith(".png")) return "image/png";
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+        throw new IllegalArgumentException("封面只支持 JPG/PNG");
     }
     private void validatePlans(List<LiveReportDtos.PlanTime> xs){if(xs==null||xs.isEmpty()||xs.size()>10)throw new IllegalArgumentException("计划时间需为 1~10 段"); LocalDate max=LocalDate.now(clock).plusDays(7); for(var x:xs){LocalDateTime s=parse(x.startTime()),e=parse(x.endTime());if(!e.isAfter(s))throw new IllegalArgumentException("计划结束时间须晚于开始时间");if(e.toLocalDate().isAfter(max))throw new IllegalArgumentException("报备计划截止日期不能超过未来第 7 天");}}
     private LocalDateTime parse(String s){try{return LocalDateTime.parse(s,TIME);}catch(DateTimeParseException|NullPointerException ex){throw new IllegalArgumentException("时间格式须为 yyyy-MM-dd HH:mm:ss");}}
@@ -137,6 +207,7 @@ public class LiveReportService {
     private void setPlans(LiveReportEntity e,List<LiveReportDtos.PlanTime> xs){e.setPlanTimes(json(xs));e.setPlanStartMin(xs.stream().map(x->parse(x.startTime())).min(LocalDateTime::compareTo).orElseThrow());e.setPlanEndMax(xs.stream().map(x->parse(x.endTime())).max(LocalDateTime::compareTo).orElseThrow());}
     private List<LiveReportDtos.Attachment> attachments(LiveReportEntity e){return read(e.getAttachments(),new TypeReference<>(){});}
     private <T>T read(String s,TypeReference<T> t){try{return mapper.readValue(s,t);}catch(JsonProcessingException e){throw new IllegalStateException("报备数据损坏",e);}}
-    private LiveReportDtos.Detail detailOf(LiveReportEntity e){return new LiveReportDtos.Detail(e.getId(),e.getTitle(),e.getContent(),plans(e),e.getCoverUrl(),e.getCoverObjectKey(),e.getCoverFileSize(),e.getCoverMimeType(),new LiveReportDtos.Host(String.valueOf(e.getHostId()),e.getHostName(),e.getHostAvatar()),attachments(e),e.getStatus(),e.getBoundLiveCount(),String.valueOf(e.getSubmitterId()),e.getSubmitterName(),e.getDepartmentName(),e.getSubmittedAt(),e.getUpdatedAt());}
+    private LiveReportDtos.Detail detailOf(LiveReportEntity e){return new LiveReportDtos.Detail(e.getId(),e.getTitle(),e.getContent(),plans(e),e.getCoverUrl(),e.getCoverObjectKey(),e.getCoverFileSize(),e.getCoverMimeType(),e.getCoverMaterialId(),new LiveReportDtos.Host(String.valueOf(e.getHostId()),e.getHostName(),e.getHostAvatar()),attachments(e),e.getStatus(),e.getBoundLiveCount(),String.valueOf(e.getSubmitterId()),e.getSubmitterName(),e.getDepartmentName(),formatTime(e.getSubmittedAt()),formatTime(e.getUpdatedAt()));}
+    private String formatTime(LocalDateTime t){return t==null?null:t.format(TIME);}
     private void addAudit(String reportId,String action,String result,String reason,SysUserAccountEntity u){LiveReportAuditEntity a=new LiveReportAuditEntity();a.setReportId(reportId);a.setAction(action);a.setResult(result);a.setReason(reason);a.setOperatorId(u.getId());a.setOperatorName(u.getUserName());audits.save(a);}
 }
