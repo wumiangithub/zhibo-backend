@@ -10,8 +10,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * 经 AutoConfiguration.imports 加载，不依赖业务包扫 {@code com.zhibo}。
  */
 @AutoConfiguration
-@EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole"})
-@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole"})
+@EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport"})
+@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport"})
 @ComponentScan({"com.zhibo.liveprovider", "com.zhibo.attendance", "com.zhibo.presence"})
 public class ActivityJpaConfig {
 }

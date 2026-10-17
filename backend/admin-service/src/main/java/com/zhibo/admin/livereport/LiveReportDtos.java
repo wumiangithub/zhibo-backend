@@ -1,0 +1,34 @@
+package com.zhibo.admin.livereport;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public final class LiveReportDtos {
+    private LiveReportDtos() {}
+    public record PlanTime(@NotBlank String startTime, @NotBlank String endTime) {}
+    public record Attachment(@NotBlank String name, @NotBlank String url, @NotBlank String objectKey,
+                             @NotNull Long fileSize, String mimeType) {}
+    public record Host(String id, String userName, String avatar) {}
+    public record SaveRequest(@NotBlank String id, @NotBlank @Size(max=64) String title,
+            @NotBlank @Size(max=500) String content, @NotNull @Size(min=1,max=10) List<PlanTime> planTimes,
+            @NotBlank String coverUrl, @NotBlank String coverObjectKey, Long coverFileSize,
+            String coverMimeType, @NotBlank String hostId,
+            @NotNull @Size(min=1,max=20) List<Attachment> attachments) {}
+    public record UpdateRequest(String title, String content, List<PlanTime> planTimes,
+            String coverUrl, String coverObjectKey, Long coverFileSize, String coverMimeType,
+            String hostId, List<Attachment> attachments) {}
+    public record AuditRequest(@NotBlank String result, @Size(max=500) String reason) {}
+    public record Result(String id, String status) {}
+    public record Detail(String id, String title, String content, List<PlanTime> planTimes,
+            String coverUrl, String coverObjectKey, Long coverFileSize, String coverMimeType,
+            Host host, List<Attachment> attachments,
+            String status, int boundLiveCount, String submitterId, String submitterName,
+            String departmentName, LocalDateTime submittedAt, LocalDateTime updatedAt) {}
+    public record ListResult(int page, int pageSize, long total, List<Detail> list) {}
+    public record AuditItem(String id, String action, String result, String reason,
+            String operatorId, String operatorName, LocalDateTime createdAt) {}
+    public record AuditList(List<AuditItem> list) {}
+}

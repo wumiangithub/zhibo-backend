@@ -1,0 +1,41 @@
+CREATE TABLE live_report (
+  id VARCHAR(36) PRIMARY KEY,
+  title VARCHAR(64) NOT NULL,
+  content VARCHAR(500) NOT NULL,
+  plan_times JSON NOT NULL,
+  plan_start_min DATETIME NOT NULL,
+  plan_end_max DATETIME NOT NULL,
+  cover_url VARCHAR(1024) NOT NULL,
+  cover_object_key VARCHAR(512) NOT NULL,
+  cover_file_size BIGINT NOT NULL,
+  cover_mime_type VARCHAR(100) NOT NULL,
+  host_id BIGINT NOT NULL,
+  host_name VARCHAR(50) NOT NULL,
+  host_avatar VARCHAR(500) NULL,
+  attachments JSON NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  bound_live_count INT NOT NULL DEFAULT 0,
+  submitter_id BIGINT NOT NULL,
+  submitter_name VARCHAR(50) NOT NULL,
+  department_name VARCHAR(200) NULL,
+  submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_live_report_status (status),
+  INDEX idx_live_report_host_name (host_name),
+  INDEX idx_live_report_plan_range (plan_start_min, plan_end_max),
+  INDEX idx_live_report_submitted_at (submitted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='直播报备';
+
+CREATE TABLE live_report_audit (
+  id VARCHAR(36) PRIMARY KEY,
+  report_id VARCHAR(36) NOT NULL,
+  action VARCHAR(16) NOT NULL,
+  result VARCHAR(16) NULL,
+  reason VARCHAR(500) NULL,
+  operator_id BIGINT NOT NULL,
+  operator_name VARCHAR(50) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_report_audit_report_time (report_id, created_at),
+  CONSTRAINT fk_report_audit_report FOREIGN KEY (report_id) REFERENCES live_report(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='直播报备审核记录';
