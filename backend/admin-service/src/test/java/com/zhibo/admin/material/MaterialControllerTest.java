@@ -200,9 +200,10 @@ class MaterialControllerTest {
         MaterialItemResponse item = new MaterialItemResponse();
         item.setId("m1");
         item.setAiAuditStatus(1);
-        when(materialService.updateAiAudit(eq("m1"), any())).thenReturn(item);
+        when(materialService.updateAiAudit(eq("m1"), any(), eq(10001L))).thenReturn(item);
 
         mockMvc.perform(put("/api/v1/materials/ai-audit/m1")
+                        .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":1}"))
                 .andExpect(status().isOk())
@@ -215,9 +216,10 @@ class MaterialControllerTest {
         MaterialItemResponse item = new MaterialItemResponse();
         item.setId("m1");
         item.setRiskAuditStatus(2);
-        when(materialService.updateRiskAudit(eq("m1"), any())).thenReturn(item);
+        when(materialService.updateRiskAudit(eq("m1"), any(), eq(10001L))).thenReturn(item);
 
         mockMvc.perform(put("/api/v1/materials/risk-audit/m1")
+                        .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":2}"))
                 .andExpect(status().isOk())

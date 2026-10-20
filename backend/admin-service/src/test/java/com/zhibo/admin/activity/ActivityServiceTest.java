@@ -16,6 +16,7 @@ import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
+import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
 import com.zhibo.admin.activity.dto.AuditListResponse;
 import com.zhibo.admin.activity.dto.AuditRequest;
 import com.zhibo.admin.activity.dto.AuditResultResponse;
@@ -720,6 +721,40 @@ class ActivityServiceTest {
                 .thenThrow(new VhallException(600, "rid-err", "参数错误"));
 
         VhallException ex = assertThrows(VhallException.class, () -> activityService.pushStream(uuid));
+        assertEquals(600, ex.getCode());
+        assertEquals("参数错误", ex.getMessage());
+    }
+
+    @Test
+    void streamStatus_mapsStatus() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("752172335");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.getStreamStatus("752172335")).thenReturn(1);
+
+        ActivityStreamStatusResponse response = activityService.streamStatus(uuid);
+        assertEquals(1, response.getStatus());
+    }
+
+    @Test
+    void streamStatus_propagatesVhallFailure() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("752172335");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.getStreamStatus("752172335"))
+                .thenThrow(new VhallException(600, "rid-err", "参数错误"));
+
+        VhallException ex = assertThrows(VhallException.class, () -> activityService.streamStatus(uuid));
         assertEquals(600, ex.getCode());
         assertEquals("参数错误", ex.getMessage());
     }

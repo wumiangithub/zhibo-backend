@@ -8,6 +8,7 @@ import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
+import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.AuditListResponse;
 import com.zhibo.admin.activity.dto.AuditRequest;
@@ -85,6 +86,12 @@ public class ActivityController {
     @GetMapping("/push-stream/{id}")
     public ApiResponse<ActivityPushStreamResponse> pushStream(@PathVariable String id) {
         return ApiResponse.ok(activityService.pushStream(id));
+    }
+
+    /** 某场活动的第三方推流是否有流。只读，当前登录员工可查。 */
+    @GetMapping("/stream-status/{id}")
+    public ApiResponse<ActivityStreamStatusResponse> streamStatus(@PathVariable String id) {
+        return ApiResponse.ok(activityService.streamStatus(id));
     }
 
     /** 第三方推流开始直播。当前登录员工可调。不是结束直播 {@code /end/{id}}。 */

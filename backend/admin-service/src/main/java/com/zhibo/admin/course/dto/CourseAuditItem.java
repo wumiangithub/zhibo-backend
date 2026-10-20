@@ -13,5 +13,7 @@ public class CourseAuditItem {
     private String reason;
     private Long operatorId;
     private String operatorName;
+    /** 操作人部门展示名；无则不输出 */
+    private String departmentName;
     private String createdTime;
 }

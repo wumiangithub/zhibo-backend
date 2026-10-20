@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo live-service",
     "description": "钱坤直播观看端 / 中控台 API（live-service :8082）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 活动路径 `{id}` 均为本站 **UUID**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 观看端不走管理端 JWT",
-    "version": "2.3.0",
+    "version": "2.3.1",
     "contact": {
       "name": "zhibo-backend"
     }

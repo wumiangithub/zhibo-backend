@@ -51,6 +51,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_CHAT_FILTER = "/v3/webinars/manage/chat-filter";
     /** 当前活动的 rtmp 推流地址；业务参数仅 webinar_id */
     static final String PATH_STREAM_PUSH = "/v3/webinars/live/get-stream-push-address";
+    /** 当前活动是否有推流；业务参数仅 webinar_id；data.status：0 无 / 1 有 */
+    static final String PATH_STREAM_STATUS = "/v3/webinars/stream/get-stream-status";
     static final String EMBED_BASE = "https://e.vhall.com/v3/embed/live/detail/";
     static final String SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
     static final int ROLE_HOST = 1;
@@ -376,6 +378,19 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("微吼未返回推流地址");
         }
         return new PushStreamInfo(streamAddress.trim(), streamCode.trim(), trimToNull(asString(data.get("expire_time"))));
+    }
+
+    @Override
+    public int getStreamStatus(String providerRoomId) {
+        requireRoomId(providerRoomId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.getForData(
+                PATH_STREAM_STATUS, Map.of("webinar_id", providerRoomId), Map.class);
+        Integer status = data == null ? null : asInteger(data.get("status"));
+        if (status == null || (status != 0 && status != 1)) {
+            throw new IllegalStateException("微吼未返回推流状态");
+        }
+        return status;
     }
 
     @Override

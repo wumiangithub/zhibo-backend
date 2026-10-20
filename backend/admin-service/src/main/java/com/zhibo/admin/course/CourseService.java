@@ -42,11 +42,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -250,10 +252,26 @@ public class CourseService {
     public CourseAuditListResponse audits(String id) {
         CourseEntity entity = requireCourse(id);
         CourseAuditListResponse response = new CourseAuditListResponse();
+        List<CourseAuditEntity> rows =
+                auditRepository.findByCourseIdOrderByCreatedTimeDesc(entity.getId());
+        Set<Long> opIds = rows.stream()
+                .map(CourseAuditEntity::getOperatorId)
+                .filter(Objects::nonNull)
+                .filter(opId -> opId > 0)
+                .collect(Collectors.toSet());
+        Map<Long, String> deptByUser = new HashMap<>();
+        if (!opIds.isEmpty()) {
+            for (SysUserAccountEntity user : userRepository.findAllById(opIds)) {
+                String dept = AuthService.resolveDepartmentName(user);
+                if (dept != null && !dept.isBlank()) {
+                    deptByUser.put(user.getId(), dept);
+                }
+            }
+        }
         List<CourseAuditItem> list = new ArrayList<>();
         boolean hasSubmit = false;
-        for (CourseAuditEntity row : auditRepository.findByCourseIdOrderByCreatedTimeDesc(entity.getId())) {
-            CourseAuditItem item = toAuditItem(row);
+        for (CourseAuditEntity row : rows) {
+            CourseAuditItem item = toAuditItem(row, deptByUser.get(row.getOperatorId()));
             if ("submit".equals(item.getAction())) {
                 hasSubmit = true;
             }
@@ -671,13 +689,14 @@ public class CourseService {
         return person;
     }
 
-    private CourseAuditItem toAuditItem(CourseAuditEntity row) {
+    private CourseAuditItem toAuditItem(CourseAuditEntity row, String departmentName) {
         CourseAuditItem item = new CourseAuditItem();
         item.setId(row.getId());
         String action = row.getAction() == null || row.getAction().isBlank() ? "audit" : row.getAction();
         item.setAction(action);
         item.setOperatorId(row.getOperatorId());
         item.setOperatorName(row.getOperatorName());
+        item.setDepartmentName(departmentName);
         item.setCreatedTime(formatTime(row.getCreatedTime()));
         if (!"submit".equals(action)) {
             item.setResult(row.getResult());

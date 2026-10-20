@@ -14,7 +14,7 @@ info:
     - 时间：`yyyy-MM-dd HH:mm:ss`
     - JSON 不输出 `null` 字段
     - 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`
-  version: "2.3.0"
+  version: "2.3.1"
   contact:
     name: zhibo-backend
 servers:
@@ -1051,6 +1051,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponsePushStream"
+  /api/v1/activities/stream-status/{id}:
+    get:
+      tags:
+        - 活动管理
+      summary: 第三方推流是否有流
+      description: 只读。选中 rtmp 时查询。status：0 无流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。
+      operationId: getActivityStreamStatus
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseStreamStatus"
   /api/v1/activities/live/start/{id}:
     post:
       tags:
@@ -3083,6 +3102,18 @@ components:
           type: string
           description: 有效期，对应微吼 expire_time；没有则不返回；库：DATETIME(3)
           example: "2026-02-15 00:00:01"
+    StreamStatusData:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: integer
+          description: 是否有流：0 无，1 有。对应微吼 data.status；库：VARCHAR(16)
+          enum:
+            - 0
+            - 1
+          example: 0
     EmbedData:
       type: object
       required:
@@ -4158,6 +4189,14 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/PushStreamData"
+    ApiResponseStreamStatus:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/StreamStatusData"
     ApiResponseEmbed:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"

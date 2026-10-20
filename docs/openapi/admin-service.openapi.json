@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo admin-service",
     "description": "钱坤直播管理端 API（admin-service :8081）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现接口/建表校验的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 失败：业务 `code` —— `400` 参数、`401` 未登录、`403` 停用、`500` 服务器、`501` 服务商未接入、云侧失败透传或 `502`\n- 活动路径 `{id}` 均为本站 **UUID**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`",
-    "version": "2.3.0",
+    "version": "2.3.1",
     "contact": {
       "name": "zhibo-backend"
     }
@@ -1717,6 +1717,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponsePushStream"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/stream-status/{id}": {
+      "get": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "第三方推流是否有流",
+        "description": "只读。选中 rtmp 时查询。status：0 无流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。",
+        "operationId": "getActivityStreamStatus",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseStreamStatus"
                 }
               }
             }
@@ -4635,6 +4667,23 @@
           }
         }
       },
+      "StreamStatusData": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "是否有流：0 无，1 有。对应微吼 data.status；库：VARCHAR(16)",
+            "enum": [
+              0,
+              1
+            ],
+            "example": 0
+          }
+        }
+      },
       "EmbedData": {
         "type": "object",
         "required": [
@@ -6192,6 +6241,22 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/PushStreamData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseStreamStatus": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/StreamStatusData"
               }
             }
           }

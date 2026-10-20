@@ -28,6 +28,6 @@ public final class LiveReportDtos {
             String departmentName, String submittedTime, String updatedTime) {}
     public record ListResult(int page, int pageSize, long total, List<Detail> list) {}
     public record AuditItem(String id, String action, String result, String reason,
-            Long operatorId, String operatorName, String createdTime) {}
+            Long operatorId, String operatorName, String departmentName, String createdTime) {}
     public record AuditList(List<AuditItem> list) {}
 }

@@ -16,6 +16,12 @@
 
 规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；共享配置走 `.env`（可提交）；`VOLC_ACCESS_KEY`/`SECRET` 等敏感项放 `.env.local`（不进 git；GitHub 会拦）；包名 `com.zhibo.vhall`。
 
+## 工作区安全（D64，红线）
+
+- **禁止**用 `git checkout HEAD --` / `git restore` / `git reset --hard` / `git clean -fd` 覆盖或删除未提交 WIP（含「修乱码」「修错误替换」）。
+- 危险操作前先 commit（用户授权）或 `git stash push -u`。
+- 细则：`../zhibo-shared/docs/工作区与Git安全.md`。
+
 ## 主键 / 外键类型（D56，强制）
 
 类型跟库走，**禁止**把数字主键改成 `String` 再在接口里传来传去：
@@ -56,14 +62,15 @@
 - 接口 JSON 和 Query 传整数，不传 `pending` / `passed` 这类英文。
 - 已经落地的字符串枚举（直播/课程上架与风控、报备状态等）本次不改。以后新增按本条。
 
-## OpenAPI（D58 / D61，强制）
+## OpenAPI（D58 / D61 / D65，强制）
 
 维护 `docs/openapi/*.yaml`（生成脚本 `docs/openapi/generate-openapi.mjs`，及同步到 shared 的对外片段）时：
 
 - **每一个**路径参数 / Query / 请求与响应 schema 属性都必须有**中文** `description`（D58）。
 - 枚举必须写 `enum` 列表，并在 `description`（或独立枚举 schema）里用中文列清每个取值（如 `0 待审核 / 1 已通过 / 2 已驳回`）。禁止只列 code 不写中文。
 - **落库类型与长度（D61）**：能表达的约束写进 `maxLength`/`format`/`minimum` 等；`description` 建议附带 `库：VARCHAR(64)` / `BIGINT` / `DECIMAL(10,2)` 等，与 Flyway 一致。导出件供 Apifox，也是正式后端按文档反向实现的输入之一。
-- 与 `../zhibo-shared/docs/API约定.md`「通则 · OpenAPI」及决策 D58/D61 一致；改接口时改生成脚本并重新导出。
+- 与 `../zhibo-shared/docs/API约定.md`「通则 · OpenAPI」及决策 D58/D61/D65 一致。
+- **D65**：改接口时以契约与代码为准；生成脚本可顺带改。**禁止**每次改接口都跑 `generate-openapi.mjs` 重导 yaml/json；**仅用户明确要求「重新生成 / 导出 OpenAPI」时再跑。**
 
 ## 本地进程（强制）
 

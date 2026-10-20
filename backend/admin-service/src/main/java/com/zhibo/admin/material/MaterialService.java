@@ -13,6 +13,8 @@ import com.zhibo.admin.material.dto.RegisterMaterialsResponse;
 import com.zhibo.admin.material.dto.RenameMaterialGroupRequest;
 import com.zhibo.admin.material.dto.RenameMaterialRequest;
 import com.zhibo.admin.material.dto.ReplaceImageRequest;
+import com.zhibo.admin.material.dto.MaterialAuditListResponse;
+import com.zhibo.admin.material.dto.MaterialAuditRecordItem;
 import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
@@ -20,6 +22,8 @@ import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.material.MaterialArticleEntity;
 import com.zhibo.material.MaterialArticleRepository;
 import com.zhibo.material.MaterialAudit;
+import com.zhibo.material.MaterialAuditLogEntity;
+import com.zhibo.material.MaterialAuditLogRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
@@ -33,11 +37,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +63,7 @@ public class MaterialService {
     private final MaterialGroupRepository groupRepository;
     private final MaterialRepository materialRepository;
     private final MaterialArticleRepository articleRepository;
+    private final MaterialAuditLogRepository auditLogRepository;
     private final SysUserAccountRepository userRepository;
 
     public List<MaterialGroupResponse> listGroups(String type) {
@@ -385,19 +394,59 @@ public class MaterialService {
     }
 
     @Transactional
-    public MaterialItemResponse updateAiAudit(String id, UpdateMaterialAuditRequest request) {
+    public MaterialItemResponse updateAiAudit(String id, UpdateMaterialAuditRequest request, long operatorId) {
         MaterialEntity entity = requireActiveMaterial(id);
-        entity.setAiAuditStatus(requireAuditWriteStatus(request));
+        int status = requireAuditWriteStatus(request);
+        entity.setAiAuditStatus(status);
         materialRepository.save(entity);
+        addAuditLog(entity.getId(), "ai", status, requireOperator(operatorId));
         return toItemResponse(entity);
     }
 
     @Transactional
-    public MaterialItemResponse updateRiskAudit(String id, UpdateMaterialAuditRequest request) {
+    public MaterialItemResponse updateRiskAudit(String id, UpdateMaterialAuditRequest request, long operatorId) {
         MaterialEntity entity = requireActiveMaterial(id);
-        entity.setRiskAuditStatus(requireAuditWriteStatus(request));
+        int status = requireAuditWriteStatus(request);
+        entity.setRiskAuditStatus(status);
         materialRepository.save(entity);
+        addAuditLog(entity.getId(), "risk", status, requireOperator(operatorId));
         return toItemResponse(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public MaterialAuditListResponse listAudits(String id) {
+        requireActiveMaterial(id);
+        List<MaterialAuditLogEntity> rows =
+                auditLogRepository.findByMaterialIdOrderByCreatedTimeDesc(id);
+        Set<Long> opIds = rows.stream()
+                .map(MaterialAuditLogEntity::getOperatorId)
+                .filter(Objects::nonNull)
+                .filter(opId -> opId > 0)
+                .collect(Collectors.toSet());
+        Map<Long, String> deptByUser = new HashMap<>();
+        if (!opIds.isEmpty()) {
+            for (SysUserAccountEntity user : userRepository.findAllById(opIds)) {
+                String dept = AuthService.resolveDepartmentName(user);
+                if (dept != null && !dept.isBlank()) {
+                    deptByUser.put(user.getId(), dept);
+                }
+            }
+        }
+        MaterialAuditListResponse response = new MaterialAuditListResponse();
+        for (MaterialAuditLogEntity row : rows) {
+            MaterialAuditRecordItem item = new MaterialAuditRecordItem();
+            item.setId(row.getId());
+            item.setAction(row.getAction());
+            item.setResult(row.getResult());
+            item.setOperatorId(row.getOperatorId());
+            item.setOperatorName(row.getOperatorName());
+            item.setDepartmentName(deptByUser.get(row.getOperatorId()));
+            if (row.getCreatedTime() != null) {
+                item.setCreatedTime(row.getCreatedTime().format(UPLOADED_TIME));
+            }
+            response.getList().add(item);
+        }
+        return response;
     }
 
     @Transactional
@@ -463,6 +512,21 @@ public class MaterialService {
             throw new IllegalArgumentException("status 须为 1 或 2");
         }
         return status;
+    }
+
+    private SysUserAccountEntity requireOperator(long operatorId) {
+        return userRepository.findById(operatorId)
+                .orElseThrow(() -> new IllegalArgumentException("当前员工不存在"));
+    }
+
+    private void addAuditLog(String materialId, String action, int status, SysUserAccountEntity operator) {
+        MaterialAuditLogEntity row = new MaterialAuditLogEntity();
+        row.setMaterialId(materialId);
+        row.setAction(action);
+        row.setResult(status == MaterialAudit.PASSED ? "passed" : "rejected");
+        row.setOperatorId(operator.getId());
+        row.setOperatorName(operator.getUserName() == null ? "" : operator.getUserName());
+        auditLogRepository.save(row);
     }
 
     private MaterialGroupEntity requireGroup(String id) {

@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -223,6 +224,43 @@ class VhallLiveProviderTest {
                 .thenThrow(failure);
 
         VhallException thrown = assertThrows(VhallException.class, () -> provider.getPushStream("99"));
+        assertEquals(failure, thrown);
+    }
+
+    @Test
+    void getStreamStatus_mapsZeroAndOne() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_STREAM_STATUS), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("status", 0));
+        assertEquals(0, provider.getStreamStatus("752172335"));
+
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_STREAM_STATUS), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("status", 1));
+        assertEquals(1, provider.getStreamStatus("752172335"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient, times(2)).getForData(
+                eq(VhallLiveProvider.PATH_STREAM_STATUS), captor.capture(), eq(Map.class));
+        assertEquals("752172335", captor.getAllValues().get(0).get("webinar_id"));
+        assertEquals(1, captor.getAllValues().get(0).size());
+    }
+
+    @Test
+    void getStreamStatus_rejectsMissingStatus() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_STREAM_STATUS), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of());
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> provider.getStreamStatus("752172335"));
+        assertEquals("微吼未返回推流状态", ex.getMessage());
+    }
+
+    @Test
+    void getStreamStatus_propagatesVhallFailure() {
+        VhallException failure = new VhallException(512002, "rid", "活动不存在");
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_STREAM_STATUS), anyMap(), eq(Map.class)))
+                .thenThrow(failure);
+
+        VhallException thrown = assertThrows(VhallException.class, () -> provider.getStreamStatus("99"));
         assertEquals(failure, thrown);
     }
 

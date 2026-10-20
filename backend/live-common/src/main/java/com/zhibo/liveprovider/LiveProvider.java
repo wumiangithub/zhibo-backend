@@ -75,4 +75,11 @@ public interface LiveProvider {
      * srt、口令开播不走本方法。
      */
     PushStreamInfo getPushStream(String providerRoomId);
+
+    /**
+     * 第三方推流是否已到达本场直播间。
+     *
+     * @return {@code 0} 无流，{@code 1} 有流
+     */
+    int getStreamStatus(String providerRoomId);
 }

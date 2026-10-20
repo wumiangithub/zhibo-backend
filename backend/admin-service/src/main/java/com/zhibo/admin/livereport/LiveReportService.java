@@ -22,6 +22,7 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service @RequiredArgsConstructor
 public class LiveReportService {
@@ -139,8 +140,33 @@ public class LiveReportService {
 
     @Transactional(readOnly=true)
     public LiveReportDtos.AuditList audits(String id) {
-        report(id); return new LiveReportDtos.AuditList(audits.findByReportIdOrderByCreatedTimeDesc(id).stream()
-            .map(a->new LiveReportDtos.AuditItem(a.getId(),a.getAction(),a.getResult(),a.getReason(),a.getOperatorId(),a.getOperatorName(),formatTime(a.getCreatedTime()))).toList());
+        report(id);
+        List<LiveReportAuditEntity> rows = audits.findByReportIdOrderByCreatedTimeDesc(id);
+        Set<Long> opIds = rows.stream()
+                .map(LiveReportAuditEntity::getOperatorId)
+                .filter(Objects::nonNull)
+                .filter(opId -> opId > 0)
+                .collect(Collectors.toSet());
+        Map<Long, String> deptByUser = new HashMap<>();
+        if (!opIds.isEmpty()) {
+            for (SysUserAccountEntity u : users.findAllById(opIds)) {
+                String dept = AuthService.resolveDepartmentName(u);
+                if (dept != null && !dept.isBlank()) {
+                    deptByUser.put(u.getId(), dept);
+                }
+            }
+        }
+        return new LiveReportDtos.AuditList(rows.stream()
+                .map(a -> new LiveReportDtos.AuditItem(
+                        a.getId(),
+                        a.getAction(),
+                        a.getResult(),
+                        a.getReason(),
+                        a.getOperatorId(),
+                        a.getOperatorName(),
+                        deptByUser.get(a.getOperatorId()),
+                        formatTime(a.getCreatedTime())))
+                .toList());
     }
 
     private void validateFull(String id,String title,String content,List<LiveReportDtos.PlanTime> times,

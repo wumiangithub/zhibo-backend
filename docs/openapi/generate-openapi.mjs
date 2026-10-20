@@ -1,6 +1,9 @@
 /**
  * 按 zhibo-shared/docs/API约定.md 生成 OpenAPI 3.0.3
  * 用法：node generate-openapi.mjs
+ *
+ * D65：不要每次改接口都跑本脚本。仅用户明确要求「重新生成 / 导出 OpenAPI」时再执行。
+ * 改接口时以 API约定 + 代码为准；本脚本源可顺带改，产物等用户点名再导。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -1621,6 +1624,18 @@ function buildAdmin() {
         },
       },
     },
+    StreamStatusData: {
+      type: 'object',
+      required: ['status'],
+      properties: {
+        status: {
+          type: 'integer',
+          description: '是否有流：0 无，1 有。对应微吼 data.status',
+          enum: [0, 1],
+          example: 0,
+        },
+      },
+    },
     EmbedData: {
       type: 'object',
       required: ['embedUrl'],
@@ -2197,6 +2212,7 @@ function buildAdmin() {
     },
     ApiResponseHost: { $ref: '#/components/schemas/HostData' },
     ApiResponsePushStream: { $ref: '#/components/schemas/PushStreamData' },
+    ApiResponseStreamStatus: { $ref: '#/components/schemas/StreamStatusData' },
     ApiResponseEmbed: { $ref: '#/components/schemas/EmbedData' },
     ApiResponseStats: { $ref: '#/components/schemas/ActivityStats' },
     ApiResponseOnlineTrend: { $ref: '#/components/schemas/OnlineTrend' },
@@ -3012,6 +3028,18 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponsePushStream'),
       },
     },
+    '/api/v1/activities/stream-status/{id}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '第三方推流是否有流',
+        description:
+          '只读。选中 rtmp 时查询。status：0 无流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。',
+        operationId: 'getActivityStreamStatus',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseStreamStatus'),
+      },
+    },
     '/api/v1/activities/live/start/{id}': {
       post: {
         tags: ['活动管理'],
@@ -3558,7 +3586,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.3.0',
+      version: '2.3.1',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4046,7 +4074,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.3.0',
+      version: '2.3.1',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4123,7 +4151,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.3.0',
+      version: '2.3.1',
       contact: { name: 'zhibo' },
     },
     servers: [

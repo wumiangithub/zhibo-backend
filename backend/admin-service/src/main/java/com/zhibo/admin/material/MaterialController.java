@@ -4,6 +4,7 @@ import com.zhibo.admin.material.dto.ArticleDetailResponse;
 import com.zhibo.admin.material.dto.CreateArticleRequest;
 import com.zhibo.admin.material.dto.CreateMaterialGroupRequest;
 import com.zhibo.admin.material.dto.DeleteIdResponse;
+import com.zhibo.admin.material.dto.MaterialAuditListResponse;
 import com.zhibo.admin.material.dto.MaterialGroupResponse;
 import com.zhibo.admin.material.dto.MaterialListResponse;
 import com.zhibo.admin.material.dto.MaterialItemResponse;
@@ -142,16 +143,24 @@ public class MaterialController {
     @PutMapping("/ai-audit/{id}")
     public ApiResponse<MaterialItemResponse> updateAiAudit(
             @PathVariable String id,
-            @RequestBody UpdateMaterialAuditRequest request) {
-        return ApiResponse.ok(materialService.updateAiAudit(id, request));
+            @RequestBody UpdateMaterialAuditRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(materialService.updateAiAudit(id, request, currentUserId(httpRequest)));
     }
 
     /** 风控合规：仅 1 通过 / 2 驳回。 */
     @PutMapping("/risk-audit/{id}")
     public ApiResponse<MaterialItemResponse> updateRiskAudit(
             @PathVariable String id,
-            @RequestBody UpdateMaterialAuditRequest request) {
-        return ApiResponse.ok(materialService.updateRiskAudit(id, request));
+            @RequestBody UpdateMaterialAuditRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(materialService.updateRiskAudit(id, request, currentUserId(httpRequest)));
+    }
+
+    /** 审核记录（AI / 风控流水），按时间倒序。 */
+    @GetMapping("/audits/{id}")
+    public ApiResponse<MaterialAuditListResponse> listAudits(@PathVariable String id) {
+        return ApiResponse.ok(materialService.listAudits(id));
     }
 
     @DeleteMapping("/delete/{id}")

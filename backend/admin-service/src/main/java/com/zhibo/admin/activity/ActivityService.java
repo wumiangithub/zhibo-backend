@@ -28,6 +28,7 @@ import com.zhibo.admin.activity.dto.ActivityPerson;
 import com.zhibo.admin.activity.dto.ActivityProductView;
 import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
+import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordItem;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.ActivitySummary;
@@ -76,6 +77,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -602,10 +604,17 @@ public class ActivityService {
     public AuditListResponse audits(String id) {
         ActivityEntity entity = requireActivity(id);
         AuditListResponse response = new AuditListResponse();
+        List<ActivityAuditEntity> rows =
+                auditRepository.findByActivityIdOrderByCreatedTimeDesc(entity.getId());
+        Map<Long, String> deptByUser = departmentNamesOf(rows.stream()
+                .map(ActivityAuditEntity::getOperatorId)
+                .filter(Objects::nonNull)
+                .filter(opId -> opId > 0)
+                .collect(Collectors.toSet()));
         List<AuditRecordItem> list = new ArrayList<>();
         boolean hasSubmit = false;
-        for (ActivityAuditEntity row : auditRepository.findByActivityIdOrderByCreatedTimeDesc(entity.getId())) {
-            AuditRecordItem item = toAuditItem(row);
+        for (ActivityAuditEntity row : rows) {
+            AuditRecordItem item = toAuditItem(row, deptByUser.get(row.getOperatorId()));
             if ("submit".equals(item.getAction())) {
                 hasSubmit = true;
             }
@@ -695,6 +704,20 @@ public class ActivityService {
         return response;
     }
 
+    /**
+     * 某场本站活动的第三方推流是否有流。srt 与口令开播不走本方法。
+     * 已软删由 {@link #requireActivity} 抛 400；未接入服务商由注册表抛 501。
+     * 微吼失败原样向上抛，不吞掉。
+     */
+    public ActivityStreamStatusResponse streamStatus(String id) {
+        ActivityEntity entity = requireActivity(id);
+        LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+        int status = liveProvider.getStreamStatus(entity.getProviderRoomId());
+        ActivityStreamStatusResponse response = new ActivityStreamStatusResponse();
+        response.setStatus(status);
+        return response;
+    }
+
     public ActivityEntity requireActivity(String id) {
         String uuid = ActivityIds.requireUuid(id);
         ActivityEntity entity = activityRepository.findById(uuid)
@@ -722,7 +745,7 @@ public class ActivityService {
         auditRepository.save(row);
     }
 
-    private AuditRecordItem toAuditItem(ActivityAuditEntity row) {
+    private AuditRecordItem toAuditItem(ActivityAuditEntity row, String departmentName) {
         AuditRecordItem item = new AuditRecordItem();
         item.setId(row.getId());
         String action = row.getAction();
@@ -733,6 +756,7 @@ public class ActivityService {
         if ("submit".equals(action)) {
             item.setOperatorId(row.getOperatorId());
             item.setOperatorName(row.getOperatorName());
+            item.setDepartmentName(departmentName);
             if (row.getCreatedTime() != null) {
                 item.setCreatedTime(row.getCreatedTime().format(CREATED_TIME));
             }
@@ -744,10 +768,26 @@ public class ActivityService {
         }
         item.setOperatorId(row.getOperatorId());
         item.setOperatorName(row.getOperatorName());
+        item.setDepartmentName(departmentName);
         if (row.getCreatedTime() != null) {
             item.setCreatedTime(row.getCreatedTime().format(CREATED_TIME));
         }
         return item;
+    }
+
+    /** 批量解析操作人部门展示名；无部门的 id 不入 map。 */
+    private Map<Long, String> departmentNamesOf(Set<Long> operatorIds) {
+        if (operatorIds == null || operatorIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> out = new HashMap<>();
+        for (SysUserAccountEntity user : userRepository.findAllById(operatorIds)) {
+            String dept = AuthService.resolveDepartmentName(user);
+            if (dept != null && !dept.isBlank()) {
+                out.put(user.getId(), dept);
+            }
+        }
+        return out;
     }
 
     /** 历史活动没有 submit 时，按创建时间补一条「发起申请」，不落库。 */

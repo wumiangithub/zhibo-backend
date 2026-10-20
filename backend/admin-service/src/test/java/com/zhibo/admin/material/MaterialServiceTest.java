@@ -17,6 +17,7 @@ import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.material.MaterialArticleEntity;
 import com.zhibo.material.MaterialArticleRepository;
+import com.zhibo.material.MaterialAuditLogRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
@@ -56,6 +57,8 @@ class MaterialServiceTest {
     private MaterialRepository materialRepository;
     @Mock
     private MaterialArticleRepository articleRepository;
+    @Mock
+    private MaterialAuditLogRepository auditLogRepository;
     @Mock
     private SysUserAccountRepository userRepository;
 
@@ -194,14 +197,16 @@ class MaterialServiceTest {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
         m.setAiAuditStatus(0);
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
         req.setStatus(1);
-        MaterialItemResponse resp = materialService.updateAiAudit("m1", req);
+        MaterialItemResponse resp = materialService.updateAiAudit("m1", req, 10001L);
 
         assertEquals(1, resp.getAiAuditStatus());
         assertEquals(1, m.getAiAuditStatus());
         verify(materialRepository).save(m);
+        verify(auditLogRepository).save(any());
     }
 
     @Test
@@ -209,13 +214,15 @@ class MaterialServiceTest {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
         m.setRiskAuditStatus(1);
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
         req.setStatus(2);
-        MaterialItemResponse resp = materialService.updateRiskAudit("m1", req);
+        MaterialItemResponse resp = materialService.updateRiskAudit("m1", req, 10001L);
 
         assertEquals(2, resp.getRiskAuditStatus());
         assertEquals(2, m.getRiskAuditStatus());
+        verify(auditLogRepository).save(any());
     }
 
     @Test
@@ -226,7 +233,7 @@ class MaterialServiceTest {
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
         req.setStatus(0);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.updateAiAudit("m1", req));
+                () -> materialService.updateAiAudit("m1", req, 10001L));
         assertEquals("status 须为 1 或 2", ex.getMessage());
     }
 
