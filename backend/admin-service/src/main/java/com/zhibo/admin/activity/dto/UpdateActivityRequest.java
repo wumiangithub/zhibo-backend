@@ -21,8 +21,8 @@ public class UpdateActivityRequest {
     private String detailHtml;
     private Boolean autoList;
     /** 全量覆盖主播；传了则至少 1 人 */
-    private List<String> hostIds;
-    private List<String> ownerIds;
+    private List<Long> hostIds;
+    private List<Long> ownerIds;
     private List<CreateActivityRequest.ProductBinding> products;
     /** 全量覆盖课件；传 [] 清空 */
     private List<String> coursewareMaterialIds;

@@ -11,14 +11,14 @@ import java.util.Optional;
 public interface ActivityRepository extends JpaRepository<ActivityEntity, String> {
 
     @Query("SELECT a FROM ActivityEntity a WHERE " +
-            "a.deletedAt IS NULL AND " +
+            "a.deletedTime IS NULL AND " +
             "(:provider IS NULL OR a.provider = :provider) AND " +
             "(:state IS NULL OR a.state = :state) AND " +
             "(:keyword IS NULL OR a.title LIKE CONCAT('%', :keyword, '%') OR a.id = :keyword) AND " +
             "(:shelfStatus IS NULL OR a.shelfStatus = :shelfStatus) AND " +
             "(:startFrom IS NULL OR a.startTime >= :startFrom) AND " +
             "(:startTo IS NULL OR a.startTime <= :startTo) " +
-            "ORDER BY a.createdAt DESC")
+            "ORDER BY a.createdTime DESC")
     Page<ActivityEntity> search(
             @Param("provider") String provider,
             @Param("state") Integer state,
@@ -28,7 +28,7 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
             @Param("startTo") String startTo,
             Pageable pageable);
 
-    Page<ActivityEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    Page<ActivityEntity> findAllByOrderByCreatedTimeDesc(Pageable pageable);
 
     Optional<ActivityEntity> findByProviderAndProviderRoomId(String provider, String providerRoomId);
 }

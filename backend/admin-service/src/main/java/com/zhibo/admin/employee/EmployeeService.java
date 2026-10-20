@@ -30,7 +30,7 @@ public class EmployeeService {
 
     private EmployeeItem toItem(SysUserAccountEntity user) {
         EmployeeItem item = new EmployeeItem();
-        item.setId(Long.toString(user.getId()));
+        item.setId(user.getId());
         item.setUserName(user.getUserName());
         item.setAvatar(AuthService.resolveAvatar(user));
         item.setDepartmentName(AuthService.resolveDepartmentName(user));

@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 观看端。路径命名 D62：动作在前、单 id 末尾。 */
 @RestController
-@RequestMapping("/api/watch")
+@RequestMapping("/api/v1/watch")
 @RequiredArgsConstructor
 public class WatchController {
 
@@ -27,7 +28,7 @@ public class WatchController {
         return ApiResponse.ok(watchService.listActivities(page, pageSize, state));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/detail/{id}")
     public ApiResponse<WatchResponse> watch(
             @PathVariable String id,
             @RequestParam(required = false) String guestId,
@@ -35,7 +36,7 @@ public class WatchController {
         return ApiResponse.ok(watchService.watch(id, guestId, nickname));
     }
 
-    @GetMapping("/{id}/sdk")
+    @GetMapping("/sdk/{id}")
     public ApiResponse<WatchSdkResponse> sdk(
             @PathVariable String id,
             @RequestParam(required = false) String guestId,

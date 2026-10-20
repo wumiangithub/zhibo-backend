@@ -7,7 +7,7 @@ public record ProviderRecordItem(
         String id,
         String title,
         String duration,
-        String createdAt,
+        String createdTime,
         String coverUrl
 ) {
 }

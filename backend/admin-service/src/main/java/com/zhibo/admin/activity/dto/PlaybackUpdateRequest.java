@@ -3,7 +3,7 @@ package com.zhibo.admin.activity.dto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-/** PUT /api/activities/{id}/playback */
+/** PUT /api/v1/activities/playback/{id} */
 @Data
 public class PlaybackUpdateRequest {
 

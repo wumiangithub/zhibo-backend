@@ -26,6 +26,10 @@ public class ActivityEntity {
     @Column(length = 36)
     private String id;
 
+    /** 绑定的已通过直播报备 ID；空表示未绑定。 */
+    @Column(name = "report_id", length = 36)
+    private String reportId;
+
     /** 直播服务商：vhall / aliyun / tencent。 */
     @Column(nullable = false, length = 32)
     private String provider;
@@ -111,8 +115,8 @@ public class ActivityEntity {
     private String validityLabel;
 
     /** 软删时间；非空则对外视为不存在。 */
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    @Column(name = "deleted_time")
+    private LocalDateTime deletedTime;
 
     /** 风控通过后是否自动上架。 */
     @Column(name = "auto_list", nullable = false)
@@ -163,12 +167,12 @@ public class ActivityEntity {
     private Boolean playbackFastForwardAllow = Boolean.TRUE;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_time", nullable = false, updatable = false)
+    private LocalDateTime createdTime;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "updated_time", nullable = false)
+    private LocalDateTime updatedTime;
 
     @PrePersist
     void assignIdIfMissing() {

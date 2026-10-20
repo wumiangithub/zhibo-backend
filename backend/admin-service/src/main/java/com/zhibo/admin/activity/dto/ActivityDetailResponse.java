@@ -25,6 +25,10 @@ public class ActivityDetailResponse extends ActivitySummary {
     private String detailHtml;
 
     private Boolean autoList;
+    /** 绑定的直播报备 ID；未绑定不输出 */
+    private String reportId;
+    /** 绑定报备标题，供编辑页只读回显 */
+    private String reportTitle;
     private List<ActivityPerson> hosts;
     private List<ActivityCoursewareView> coursewares;
 

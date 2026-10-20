@@ -7,9 +7,12 @@ import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.livereport.*;
+import com.zhibo.material.MaterialAudit;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -25,6 +28,7 @@ public class LiveReportService {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final long MB = 1024L * 1024L;
     private final LiveReportRepository reports;
+    private final LiveReportPlanRepository planRows;
     private final LiveReportAuditRepository audits;
     private final SysUserAccountRepository users;
     private final MaterialRepository materials;
@@ -33,24 +37,25 @@ public class LiveReportService {
 
     @Transactional
     public LiveReportDtos.Result create(LiveReportDtos.SaveRequest req, long userId) {
-        validateUuid(req.id());
-        if (reports.existsById(req.id())) throw new IllegalArgumentException("报备 ID 已存在");
+        String id = UUID.randomUUID().toString();
         SysUserAccountEntity operator = user(userId, "当前员工不存在");
-        SysUserAccountEntity host = user(parseId(req.hostId(), "主播不存在"), "主播不存在");
-        validateFull(req.id(), req.title(), req.content(), req.planTimes(), req.coverUrl(),
+        SysUserAccountEntity host = user(requireHostId(req.hostId()), "主播不存在");
+        validateFull(id, req.title(), req.content(), req.planTimes(), req.coverUrl(),
                 req.coverObjectKey(), req.coverFileSize(), req.coverMimeType(), req.coverMaterialId(),
-                req.attachments());
+                req.attachments(), true);
         LiveReportEntity e = new LiveReportEntity();
-        e.setId(req.id()); e.setTitle(req.title().trim()); e.setContent(req.content().trim());
+        e.setId(id); e.setTitle(req.title().trim()); e.setContent(req.content().trim());
         setPlans(e, req.planTimes());
-        applyCover(e, req.id(), req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
+        applyCover(e, id, req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
                 req.coverMimeType(), req.coverMaterialId());
         e.setHostId(host.getId()); e.setHostName(host.getUserName());
         e.setHostAvatar(AuthService.resolveAvatar(host));
         e.setAttachments(json(req.attachments())); e.setStatus("pending"); e.setBoundLiveCount(0);
         e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
-        e.setDepartmentName(AuthService.resolveDepartmentName(operator)); e.setSubmittedAt(LocalDateTime.now(clock));
-        reports.save(e); addAudit(e.getId(), "submit", null, null, operator);
+        e.setDepartmentName(AuthService.resolveDepartmentName(operator)); e.setSubmittedTime(LocalDateTime.now(clock));
+        reports.save(e);
+        replacePlanRows(e.getId(), req.planTimes());
+        addAudit(e.getId(), "submit", null, null, operator);
         return new LiveReportDtos.Result(e.getId(), e.getStatus());
     }
 
@@ -60,16 +65,27 @@ public class LiveReportService {
         if (page < 1 || pageSize < 1 || pageSize > 100) throw new IllegalArgumentException("分页参数错误");
         if (status != null && !status.isBlank() && !Set.of("pending","passed","rejected").contains(status))
             throw new IllegalArgumentException("审核状态错误");
-        var spec = (org.springframework.data.jpa.domain.Specification<LiveReportEntity>) (root,q,cb) -> {
+        LocalDateTime from = blank(startFrom) ? null : parse(startFrom);
+        LocalDateTime to = blank(startTo) ? null : parse(startTo);
+        var spec = (org.springframework.data.jpa.domain.Specification<LiveReportEntity>) (root, q, cb) -> {
             List<Predicate> ps = new ArrayList<>();
             if (title != null && !title.isBlank()) ps.add(cb.like(root.get("title"), "%"+title.trim()+"%"));
             if (hostName != null && !hostName.isBlank()) ps.add(cb.like(root.get("hostName"), "%"+hostName.trim()+"%"));
             if (status != null && !status.isBlank()) ps.add(cb.equal(root.get("status"), status));
-            if (startFrom != null && !startFrom.isBlank()) ps.add(cb.greaterThanOrEqualTo(root.get("planEndMax"), parse(startFrom)));
-            if (startTo != null && !startTo.isBlank()) ps.add(cb.lessThanOrEqualTo(root.get("planStartMin"), parse(startTo)));
+            // 任一段与 [startFrom, startTo] 相交；不用 planStartMin/planEndMax，避免多段空洞误命中
+            if (from != null || to != null) {
+                Subquery<Integer> sq = q.subquery(Integer.class);
+                Root<LiveReportPlanEntity> plan = sq.from(LiveReportPlanEntity.class);
+                List<Predicate> planPs = new ArrayList<>();
+                planPs.add(cb.equal(plan.get("reportId"), root.get("id")));
+                if (from != null) planPs.add(cb.greaterThanOrEqualTo(plan.get("endTime"), from));
+                if (to != null) planPs.add(cb.lessThanOrEqualTo(plan.get("startTime"), to));
+                sq.select(cb.literal(1)).where(planPs.toArray(Predicate[]::new));
+                ps.add(cb.exists(sq));
+            }
             return cb.and(ps.toArray(Predicate[]::new));
         };
-        var p = reports.findAll(spec, PageRequest.of(page-1,pageSize,Sort.by(Sort.Direction.DESC,"submittedAt")));
+        var p = reports.findAll(spec, PageRequest.of(page-1,pageSize,Sort.by(Sort.Direction.DESC,"submittedTime")));
         return new LiveReportDtos.ListResult(page,pageSize,p.getTotalElements(),p.stream().map(this::detailOf).toList());
     }
 
@@ -88,14 +104,15 @@ public class LiveReportService {
                 throw new IllegalArgumentException("已通过报备只能在末尾增加计划时间");
             validatePlans(req.planTimes()); setPlans(e, req.planTimes());
             reports.save(e);
+            replacePlanRows(id, req.planTimes());
             addAudit(id,"append",null,"追加 "+(req.planTimes().size()-old.size())+" 段计划时间",operator);
             return new LiveReportDtos.Result(id,e.getStatus());
         }
         if (!"rejected".equals(e.getStatus())) throw new IllegalArgumentException("当前状态不可编辑");
         requireFull(req);
-        SysUserAccountEntity host = user(parseId(req.hostId(), "主播不存在"), "主播不存在");
+        SysUserAccountEntity host = user(requireHostId(req.hostId()), "主播不存在");
         validateFull(id,req.title(),req.content(),req.planTimes(),req.coverUrl(),req.coverObjectKey(),
-                req.coverFileSize(),req.coverMimeType(),req.coverMaterialId(),req.attachments());
+                req.coverFileSize(),req.coverMimeType(),req.coverMaterialId(),req.attachments(),false);
         e.setTitle(req.title().trim()); e.setContent(req.content().trim()); setPlans(e, req.planTimes());
         applyCover(e, id, req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
                 req.coverMimeType(), req.coverMaterialId());
@@ -104,13 +121,15 @@ public class LiveReportService {
         e.setAttachments(json(req.attachments()));
         e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
         e.setDepartmentName(AuthService.resolveDepartmentName(operator));
-        e.setStatus("pending"); e.setSubmittedAt(LocalDateTime.now(clock)); reports.save(e);
+        e.setStatus("pending"); e.setSubmittedTime(LocalDateTime.now(clock)); reports.save(e);
+        replacePlanRows(id, req.planTimes());
         addAudit(id,"resubmit",null,null,operator); return new LiveReportDtos.Result(id,e.getStatus());
     }
 
     @Transactional
     public LiveReportDtos.Result audit(String id, LiveReportDtos.AuditRequest req, long userId) {
-        LiveReportEntity e=report(id); if (!"pending".equals(e.getStatus())) throw new IllegalArgumentException("仅待审核报备可审核");
+        LiveReportEntity e=report(id);
+        if (!Set.of("pending","passed","rejected").contains(e.getStatus())) throw new IllegalArgumentException("报备状态不可审核");
         if (!Set.of("passed","rejected").contains(req.result())) throw new IllegalArgumentException("审核结果错误");
         String reason=req.reason()==null?null:req.reason().trim();
         if ("rejected".equals(req.result()) && (reason==null || reason.isEmpty())) throw new IllegalArgumentException("驳回原因不能为空");
@@ -120,23 +139,26 @@ public class LiveReportService {
 
     @Transactional(readOnly=true)
     public LiveReportDtos.AuditList audits(String id) {
-        report(id); return new LiveReportDtos.AuditList(audits.findByReportIdOrderByCreatedAtDesc(id).stream()
-            .map(a->new LiveReportDtos.AuditItem(a.getId(),a.getAction(),a.getResult(),a.getReason(),String.valueOf(a.getOperatorId()),a.getOperatorName(),formatTime(a.getCreatedAt()))).toList());
+        report(id); return new LiveReportDtos.AuditList(audits.findByReportIdOrderByCreatedTimeDesc(id).stream()
+            .map(a->new LiveReportDtos.AuditItem(a.getId(),a.getAction(),a.getResult(),a.getReason(),a.getOperatorId(),a.getOperatorName(),formatTime(a.getCreatedTime()))).toList());
     }
 
     private void validateFull(String id,String title,String content,List<LiveReportDtos.PlanTime> times,
             String coverUrl,String coverKey,Long coverSize,String coverMime,String coverMaterialId,
-            List<LiveReportDtos.Attachment> files) {
+            List<LiveReportDtos.Attachment> files, boolean create) {
         if(title==null||title.trim().isEmpty()||title.trim().length()>64) throw new IllegalArgumentException("报备名称需为 1~64 字");
         if(content==null||content.trim().isEmpty()||content.trim().length()>500) throw new IllegalArgumentException("报备内容需为 1~500 字");
         validatePlans(times);
         validateCover(id, coverUrl, coverKey, coverSize, coverMime, coverMaterialId);
-        String base="live-report/"+id+"/";
+        // 新建时主键尚未告知客户端，材料先落到固定目录；编辑沿用已有 live-report/{id}/attachment/。
+        String shared = "live-report/attachment/";
+        String scoped = "live-report/" + id + "/attachment/";
         if(files==null||files.isEmpty()||files.size()>20) throw new IllegalArgumentException("材料需为 1~20 份");
         for(var f:files){
             if(f.name()==null||f.objectKey()==null) throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");
             String n=f.name().toLowerCase(Locale.ROOT);
-            if(!f.objectKey().startsWith(base+"attachment/")||!(n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf"))||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB)
+            boolean prefixOk = f.objectKey().startsWith(shared) || (!create && f.objectKey().startsWith(scoped));
+            if(!prefixOk||!(n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf"))||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB)
                 throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");
         }
     }
@@ -149,10 +171,10 @@ public class LiveReportService {
         if (coverKey.startsWith("material/image/")) {
             if (coverMaterialId == null || coverMaterialId.isBlank()) throw new IllegalArgumentException("封面须来自素材中心已审核通过的图片");
             MaterialEntity m = materials.findById(coverMaterialId)
-                    .filter(x -> x.getDeletedAt() == null)
+                    .filter(x -> x.getDeletedTime() == null)
                     .orElseThrow(() -> new IllegalArgumentException("封面素材不存在"));
             if (!"image".equals(m.getType())) throw new IllegalArgumentException("封面须为图片素材");
-            if (!"passed".equals(m.getAiAuditStatus()) || !"passed".equals(m.getRiskAuditStatus()))
+            if (!MaterialAudit.bothPassed(m))
                 throw new IllegalArgumentException("封面须来自素材中心已审核通过的图片");
             if (m.getObjectKey() == null || !coverKey.equals(m.getObjectKey()))
                 throw new IllegalArgumentException("封面素材与对象键不一致");
@@ -200,14 +222,35 @@ public class LiveReportService {
     private void requireFull(LiveReportDtos.UpdateRequest r){if(r.title()==null||r.content()==null||r.planTimes()==null||r.coverUrl()==null||r.coverObjectKey()==null||r.hostId()==null||r.attachments()==null)throw new IllegalArgumentException("驳回后重新提交需包含完整字段");}
     private LiveReportEntity report(String id){return reports.findById(id).orElseThrow(()->new IllegalArgumentException("报备不存在"));}
     private SysUserAccountEntity user(long id,String msg){return users.findById(id).filter(u->Integer.valueOf(1).equals(u.getRsStatus())).orElseThrow(()->new IllegalArgumentException(msg));}
-    private long parseId(String id,String msg){try{return Long.parseLong(id);}catch(Exception e){throw new IllegalArgumentException(msg);}}
-    private void validateUuid(String id){try{UUID.fromString(id);}catch(Exception e){throw new IllegalArgumentException("报备 ID 格式错误");}}
+    private long requireHostId(Long hostId){if(hostId==null||hostId<=0L)throw new IllegalArgumentException("主播不存在");return hostId;}
     private String json(Object v){try{return mapper.writeValueAsString(v);}catch(JsonProcessingException e){throw new IllegalArgumentException("数据格式错误");}}
     private List<LiveReportDtos.PlanTime> plans(LiveReportEntity e){return read(e.getPlanTimes(),new TypeReference<>(){});}
-    private void setPlans(LiveReportEntity e,List<LiveReportDtos.PlanTime> xs){e.setPlanTimes(json(xs));e.setPlanStartMin(xs.stream().map(x->parse(x.startTime())).min(LocalDateTime::compareTo).orElseThrow());e.setPlanEndMax(xs.stream().map(x->parse(x.endTime())).max(LocalDateTime::compareTo).orElseThrow());}
+    private void setPlans(LiveReportEntity e, List<LiveReportDtos.PlanTime> xs) {
+        e.setPlanTimes(json(xs));
+        e.setPlanStartMin(xs.stream().map(x -> parse(x.startTime())).min(LocalDateTime::compareTo).orElseThrow());
+        e.setPlanEndMax(xs.stream().map(x -> parse(x.endTime())).max(LocalDateTime::compareTo).orElseThrow());
+    }
+
+    /** 全量替换子表行，与 plan_times JSON 保持一致。须在 live_report 行已落库后调用。 */
+    private void replacePlanRows(String reportId, List<LiveReportDtos.PlanTime> xs) {
+        planRows.deleteByReportId(reportId);
+        List<LiveReportPlanEntity> rows = new ArrayList<>(xs.size());
+        for (int i = 0; i < xs.size(); i++) {
+            LiveReportDtos.PlanTime t = xs.get(i);
+            LiveReportPlanEntity row = new LiveReportPlanEntity();
+            row.setReportId(reportId);
+            row.setStartTime(parse(t.startTime()));
+            row.setEndTime(parse(t.endTime()));
+            row.setSortOrder(i);
+            rows.add(row);
+        }
+        planRows.saveAll(rows);
+    }
+
+    private static boolean blank(String s) { return s == null || s.isBlank(); }
     private List<LiveReportDtos.Attachment> attachments(LiveReportEntity e){return read(e.getAttachments(),new TypeReference<>(){});}
     private <T>T read(String s,TypeReference<T> t){try{return mapper.readValue(s,t);}catch(JsonProcessingException e){throw new IllegalStateException("报备数据损坏",e);}}
-    private LiveReportDtos.Detail detailOf(LiveReportEntity e){return new LiveReportDtos.Detail(e.getId(),e.getTitle(),e.getContent(),plans(e),e.getCoverUrl(),e.getCoverObjectKey(),e.getCoverFileSize(),e.getCoverMimeType(),e.getCoverMaterialId(),new LiveReportDtos.Host(String.valueOf(e.getHostId()),e.getHostName(),e.getHostAvatar()),attachments(e),e.getStatus(),e.getBoundLiveCount(),String.valueOf(e.getSubmitterId()),e.getSubmitterName(),e.getDepartmentName(),formatTime(e.getSubmittedAt()),formatTime(e.getUpdatedAt()));}
+    private LiveReportDtos.Detail detailOf(LiveReportEntity e){return new LiveReportDtos.Detail(e.getId(),e.getTitle(),e.getContent(),plans(e),e.getCoverUrl(),e.getCoverObjectKey(),e.getCoverFileSize(),e.getCoverMimeType(),e.getCoverMaterialId(),new LiveReportDtos.Host(e.getHostId(),e.getHostName(),e.getHostAvatar()),attachments(e),e.getStatus(),e.getBoundLiveCount(),e.getSubmitterId(),e.getSubmitterName(),e.getDepartmentName(),formatTime(e.getSubmittedTime()),formatTime(e.getUpdatedTime()));}
     private String formatTime(LocalDateTime t){return t==null?null:t.format(TIME);}
     private void addAudit(String reportId,String action,String result,String reason,SysUserAccountEntity u){LiveReportAuditEntity a=new LiveReportAuditEntity();a.setReportId(reportId);a.setAction(action);a.setResult(result);a.setReason(reason);a.setOperatorId(u.getId());a.setOperatorName(u.getUserName());audits.save(a);}
 }

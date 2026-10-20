@@ -55,13 +55,13 @@ public class MaterialEntity {
     @Column(nullable = false, length = 16)
     private String status = "available";
 
-    /** pending / passed / rejected */
-    @Column(name = "ai_audit_status", nullable = false, length = 16)
-    private String aiAuditStatus = "pending";
+    /** 0 待审核 / 1 已通过 / 2 已驳回 */
+    @Column(name = "ai_audit_status", nullable = false)
+    private Integer aiAuditStatus = MaterialAudit.PENDING;
 
-    /** pending / passed / rejected */
-    @Column(name = "risk_audit_status", nullable = false, length = 16)
-    private String riskAuditStatus = "pending";
+    /** 0 待审核 / 1 已通过 / 2 已驳回 */
+    @Column(name = "risk_audit_status", nullable = false)
+    private Integer riskAuditStatus = MaterialAudit.PENDING;
 
     /** 上传人 sys_useraccount.rs_mainkey_id；旧行可空 */
     @Column(name = "uploader_id")
@@ -75,16 +75,16 @@ public class MaterialEntity {
     @Column(name = "department_name", length = 256)
     private String departmentName;
 
-    @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    @Column(name = "deleted_time")
+    private LocalDateTime deletedTime;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_time", nullable = false, updatable = false)
+    private LocalDateTime createdTime;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "updated_time", nullable = false)
+    private LocalDateTime updatedTime;
 
     @PrePersist
     void assignIdIfMissing() {
@@ -94,11 +94,11 @@ public class MaterialEntity {
         if (status == null || status.isBlank()) {
             status = "available";
         }
-        if (aiAuditStatus == null || aiAuditStatus.isBlank()) {
-            aiAuditStatus = "pending";
+        if (aiAuditStatus == null) {
+            aiAuditStatus = MaterialAudit.PENDING;
         }
-        if (riskAuditStatus == null || riskAuditStatus.isBlank()) {
-            riskAuditStatus = "pending";
+        if (riskAuditStatus == null) {
+            riskAuditStatus = MaterialAudit.PENDING;
         }
     }
 }

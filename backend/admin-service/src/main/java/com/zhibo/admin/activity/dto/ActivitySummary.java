@@ -19,7 +19,7 @@ public class ActivitySummary {
     private Integer type;
     private String viewerStyle;
     private String shareLink;
-    private String createdAt;
+    private String createdTime;
     private String shelfStatus;
     private String riskStatus;
     private String sellType;

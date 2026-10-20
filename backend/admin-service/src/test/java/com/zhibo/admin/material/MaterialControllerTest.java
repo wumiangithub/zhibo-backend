@@ -48,7 +48,7 @@ class MaterialControllerTest {
         when(materialService.listGroups("image"))
                 .thenReturn(List.of(new MaterialGroupResponse("g1", "默认分组", 2, true)));
 
-        mockMvc.perform(get("/api/materials/groups").param("type", "image"))
+        mockMvc.perform(get("/api/v1/materials/groups/list").param("type", "image"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].id").value("g1"))
@@ -67,10 +67,10 @@ class MaterialControllerTest {
         item.setName("a.jpg");
         item.setType("image");
         resp.setList(List.of(item));
-        when(materialService.list(eq("image"), isNull(), isNull(), eq(false), eq(1), eq(20)))
+        when(materialService.list(eq("image"), isNull(), isNull(), isNull(), eq(false), eq(1), eq(20)))
                 .thenReturn(resp);
 
-        mockMvc.perform(get("/api/materials").param("type", "image"))
+        mockMvc.perform(get("/api/v1/materials/list").param("type", "image"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.page").value(1))
@@ -84,15 +84,34 @@ class MaterialControllerTest {
         resp.setPage(1);
         resp.setPageSize(20);
         resp.setList(List.of());
-        when(materialService.list(eq("image"), isNull(), isNull(), eq(true), eq(1), eq(20)))
+        when(materialService.list(eq("image"), isNull(), isNull(), isNull(), eq(true), eq(1), eq(20)))
                 .thenReturn(resp);
 
-        mockMvc.perform(get("/api/materials")
+        mockMvc.perform(get("/api/v1/materials/list")
                         .param("type", "image")
                         .param("selectableOnly", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    void list_passesKeywordAndAuditStatus() throws Exception {
+        MaterialListResponse resp = new MaterialListResponse();
+        resp.setTotal(0);
+        resp.setPage(1);
+        resp.setPageSize(20);
+        resp.setList(List.of());
+        when(materialService.list(eq("image"), eq("g1"), eq("封面"), eq("2"), eq(false), eq(1), eq(20)))
+                .thenReturn(resp);
+
+        mockMvc.perform(get("/api/v1/materials/list")
+                        .param("type", "image")
+                        .param("groupId", "g1")
+                        .param("keyword", "封面")
+                        .param("auditStatus", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0));
     }
 
     @Test
@@ -103,7 +122,7 @@ class MaterialControllerTest {
         item.setType("article");
         when(materialService.createArticle(any(), eq(10001L))).thenReturn(item);
 
-        mockMvc.perform(post("/api/materials/articles")
+        mockMvc.perform(post("/api/v1/materials/articles/create")
                         .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -131,7 +150,7 @@ class MaterialControllerTest {
         when(materialService.register(any(), anyLong()))
                 .thenReturn(new RegisterMaterialsResponse(List.of(item)));
 
-        mockMvc.perform(post("/api/materials")
+        mockMvc.perform(post("/api/v1/materials/create")
                         .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -150,10 +169,10 @@ class MaterialControllerTest {
 
     @Test
     void list_validationFailure_returns400() throws Exception {
-        when(materialService.list(eq("image"), isNull(), isNull(), anyBoolean(), anyInt(), anyInt()))
+        when(materialService.list(eq("image"), isNull(), isNull(), isNull(), anyBoolean(), anyInt(), anyInt()))
                 .thenThrow(new IllegalArgumentException("page 不能小于 1"));
 
-        mockMvc.perform(get("/api/materials").param("type", "image").param("page", "0"))
+        mockMvc.perform(get("/api/v1/materials/list").param("type", "image").param("page", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.msg").value("page 不能小于 1"));
@@ -167,7 +186,7 @@ class MaterialControllerTest {
         item.setObjectKey("material/image/1_a.jpg");
         when(materialService.rename(eq("m1"), any())).thenReturn(item);
 
-        mockMvc.perform(put("/api/materials/m1")
+        mockMvc.perform(put("/api/v1/materials/rename/m1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"新封面.jpg\"}"))
                 .andExpect(status().isOk())
@@ -180,30 +199,30 @@ class MaterialControllerTest {
     void updateAiAudit_ok() throws Exception {
         MaterialItemResponse item = new MaterialItemResponse();
         item.setId("m1");
-        item.setAiAuditStatus("passed");
+        item.setAiAuditStatus(1);
         when(materialService.updateAiAudit(eq("m1"), any())).thenReturn(item);
 
-        mockMvc.perform(put("/api/materials/m1/ai-audit")
+        mockMvc.perform(put("/api/v1/materials/ai-audit/m1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"passed\"}"))
+                        .content("{\"status\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.aiAuditStatus").value("passed"));
+                .andExpect(jsonPath("$.data.aiAuditStatus").value(1));
     }
 
     @Test
     void updateRiskAudit_ok() throws Exception {
         MaterialItemResponse item = new MaterialItemResponse();
         item.setId("m1");
-        item.setRiskAuditStatus("rejected");
+        item.setRiskAuditStatus(2);
         when(materialService.updateRiskAudit(eq("m1"), any())).thenReturn(item);
 
-        mockMvc.perform(put("/api/materials/m1/risk-audit")
+        mockMvc.perform(put("/api/v1/materials/risk-audit/m1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"rejected\"}"))
+                        .content("{\"status\":2}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.riskAuditStatus").value("rejected"));
+                .andExpect(jsonPath("$.data.riskAuditStatus").value(2));
     }
 
     @Test
@@ -211,7 +230,7 @@ class MaterialControllerTest {
         when(materialService.softDelete("m1"))
                 .thenReturn(new com.zhibo.admin.material.dto.DeleteIdResponse("m1"));
 
-        mockMvc.perform(delete("/api/materials/m1"))
+        mockMvc.perform(delete("/api/v1/materials/delete/m1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value("m1"));

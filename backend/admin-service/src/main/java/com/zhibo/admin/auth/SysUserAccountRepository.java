@@ -16,6 +16,8 @@ public interface SysUserAccountRepository extends JpaRepository<SysUserAccountEn
 
     Optional<SysUserAccountEntity> findByOpenid(String openid);
 
+    List<SysUserAccountEntity> findByUserNameAndRsStatus(String userName, Integer rsStatus);
+
     /** 在职员工（rs_status=1），按姓名包含匹配；keyword 为空则不过滤。 */
     @Query("SELECT u FROM SysUserAccountEntity u WHERE u.rsStatus = 1 "
             + "AND (:keyword IS NULL OR u.userName LIKE CONCAT('%', :keyword, '%')) "

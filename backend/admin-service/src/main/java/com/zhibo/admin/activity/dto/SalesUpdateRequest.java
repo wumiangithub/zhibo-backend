@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-/** PUT /api/activities/{id}/sales */
+/** PUT /api/v1/activities/sales/{id} */
 @Data
 public class SalesUpdateRequest {
 

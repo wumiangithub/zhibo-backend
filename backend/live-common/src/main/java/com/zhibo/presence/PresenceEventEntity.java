@@ -47,8 +47,8 @@ public class PresenceEventEntity {
     private String source;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_time", nullable = false, updatable = false)
+    private LocalDateTime createdTime;
 
     @PrePersist
     void assignIdIfMissing() {

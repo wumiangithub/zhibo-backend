@@ -19,6 +19,7 @@ import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.material.MaterialArticleEntity;
 import com.zhibo.material.MaterialArticleRepository;
+import com.zhibo.material.MaterialAudit;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
@@ -47,8 +48,7 @@ public class MaterialService {
     private static final int ARTICLE_TITLE_MAX = 45;
     private static final int ARTICLE_AUTHOR_MAX = 16;
     private static final int ARTICLE_CONTENT_MAX = 100_000;
-    private static final Set<String> AUDIT_WRITE_STATUSES = Set.of("passed", "rejected");
-    private static final DateTimeFormatter UPLOADED_AT =
+    private static final DateTimeFormatter UPLOADED_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int MAX_BATCH = 100;
 
@@ -59,7 +59,7 @@ public class MaterialService {
 
     public List<MaterialGroupResponse> listGroups(String type) {
         String t = requireType(type);
-        return groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedAtAsc(t)
+        return groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedTimeAsc(t)
                 .stream()
                 .map(this::toGroupResponse)
                 .toList();
@@ -106,7 +106,7 @@ public class MaterialService {
         if (entity.isDefaultGroup()) {
             throw new IllegalArgumentException("默认分组不可删除");
         }
-        long count = materialRepository.countByGroupIdAndDeletedAtIsNull(entity.getId());
+        long count = materialRepository.countByGroupIdAndDeletedTimeIsNull(entity.getId());
         if (count > 0) {
             throw new IllegalArgumentException("分组下仍有素材");
         }
@@ -115,13 +115,16 @@ public class MaterialService {
     }
 
     /**
-     * @param selectableOnly true：仅返回 AI、风控两审都为 passed 的素材（封面/课件选择弹窗）；
-     *                       false：素材中心主列表，不按审核过滤。total/list 均按过滤后分页。
+     * @param auditStatus 联合审核：0 待审核 / 1 已通过 / 2 已驳回；空=不过滤。
+     *                    任一方为 2 算驳回；否则任一方为 0 算待审核；两方都是 1 才算通过。
+     * @param selectableOnly true：仅返回 AI、风控两审都为 1 的素材（封面/课件选择弹窗）；
+     *                       false：素材中心主列表，不按两审均通过过滤。total/list 均按过滤后分页。
      */
     public MaterialListResponse list(
             String type,
             String groupId,
             String keyword,
+            String auditStatus,
             boolean selectableOnly,
             int page,
             int pageSize) {
@@ -140,9 +143,10 @@ public class MaterialService {
             }
         }
         String keywordFilter = blankToNull(keyword);
+        Integer auditFilter = normalizeAuditFilter(auditStatus);
 
         Page<MaterialEntity> result = materialRepository.search(
-                t, groupFilter, keywordFilter, selectableOnly, PageRequest.of(page - 1, pageSize));
+                t, groupFilter, keywordFilter, auditFilter, selectableOnly, PageRequest.of(page - 1, pageSize));
 
         MaterialListResponse response = new MaterialListResponse();
         response.setTotal(result.getTotalElements());
@@ -192,7 +196,7 @@ public class MaterialService {
             if (!keysInBatch.add(objectKey)) {
                 throw new IllegalArgumentException("items 内 objectKey 重复");
             }
-            if (materialRepository.existsByObjectKeyAndDeletedAtIsNull(objectKey)) {
+            if (materialRepository.existsByObjectKeyAndDeletedTimeIsNull(objectKey)) {
                 throw new IllegalArgumentException("objectKey 已存在: " + objectKey);
             }
             Long fileSize = item.getFileSize();
@@ -212,8 +216,8 @@ public class MaterialService {
             entity.setMimeType(mimeType);
             entity.setMeta(meta);
             entity.setStatus("available");
-            entity.setAiAuditStatus("pending");
-            entity.setRiskAuditStatus("pending");
+            entity.setAiAuditStatus(MaterialAudit.PENDING);
+            entity.setRiskAuditStatus(MaterialAudit.PENDING);
             entity.setUploaderId(uploader.getId());
             entity.setUploaderName(uploaderName);
             entity.setDepartmentName(departmentName);
@@ -254,8 +258,8 @@ public class MaterialService {
         entity.setGroupId(groupId);
         entity.setName(title);
         entity.setStatus("available");
-        entity.setAiAuditStatus("pending");
-        entity.setRiskAuditStatus("pending");
+        entity.setAiAuditStatus(MaterialAudit.PENDING);
+        entity.setRiskAuditStatus(MaterialAudit.PENDING);
         entity.setUploaderId(uploader.getId());
         entity.setUploaderName(blankToNull(uploader.getUserName()));
         entity.setDepartmentName(AuthService.resolveDepartmentName(uploader));
@@ -306,7 +310,7 @@ public class MaterialService {
     }
 
     /**
-     * 裁剪后替换图片文件。待审核不可改；成功后两审回到 pending。
+     * 裁剪后替换图片文件。待审核不可改；成功后两审回到 0。
      */
     @Transactional
     public MaterialItemResponse replaceImage(String id, ReplaceImageRequest request) {
@@ -321,7 +325,7 @@ public class MaterialService {
         String url = requireTrimmed(request.getUrl(), "url", 2048);
         String objectKey = requireTrimmed(request.getObjectKey(), "objectKey", 1024);
         if (!objectKey.equals(entity.getObjectKey())
-                && materialRepository.existsByObjectKeyAndDeletedAtIsNull(objectKey)) {
+                && materialRepository.existsByObjectKeyAndDeletedTimeIsNull(objectKey)) {
             throw new IllegalArgumentException("objectKey 已存在: " + objectKey);
         }
         Long fileSize = request.getFileSize();
@@ -351,13 +355,13 @@ public class MaterialService {
         detail.setTitle(entity.getName());
         detail.setAuthor(body.getAuthor());
         detail.setContent(body.getContent());
-        detail.setAiAuditStatus(blankToPending(entity.getAiAuditStatus()));
-        detail.setRiskAuditStatus(blankToPending(entity.getRiskAuditStatus()));
+        detail.setAiAuditStatus(nullToPending(entity.getAiAuditStatus()));
+        detail.setRiskAuditStatus(nullToPending(entity.getRiskAuditStatus()));
         return detail;
     }
 
     /**
-     * 编辑文章。待审核不可改；成功后两审回到 pending。
+     * 编辑文章。待审核不可改；成功后两审回到 0。
      */
     @Transactional
     public MaterialItemResponse updateArticle(String id, CreateArticleRequest request) {
@@ -399,7 +403,7 @@ public class MaterialService {
     @Transactional
     public DeleteIdResponse softDelete(String id) {
         MaterialEntity entity = requireActiveMaterial(id);
-        entity.setDeletedAt(LocalDateTime.now());
+        entity.setDeletedTime(LocalDateTime.now());
         materialRepository.save(entity);
         return new DeleteIdResponse(entity.getId());
     }
@@ -410,14 +414,14 @@ public class MaterialService {
         }
         MaterialEntity entity = materialRepository.findById(id.trim())
                 .orElseThrow(() -> new IllegalArgumentException("素材不存在或已删除"));
-        if (entity.getDeletedAt() != null) {
+        if (entity.getDeletedTime() != null) {
             throw new IllegalArgumentException("素材不存在或已删除");
         }
         return entity;
     }
 
     private MaterialGroupResponse toGroupResponse(MaterialGroupEntity entity) {
-        long count = materialRepository.countByGroupIdAndDeletedAtIsNull(entity.getId());
+        long count = materialRepository.countByGroupIdAndDeletedTimeIsNull(entity.getId());
         return new MaterialGroupResponse(
                 entity.getId(), entity.getName(), count, entity.isDefaultGroup());
     }
@@ -436,34 +440,27 @@ public class MaterialService {
         item.setMeta(entity.getMeta());
         item.setFileSize(entity.getFileSize());
         item.setStatus(entity.getStatus());
-        item.setAiAuditStatus(
-                entity.getAiAuditStatus() == null || entity.getAiAuditStatus().isBlank()
-                        ? "pending"
-                        : entity.getAiAuditStatus());
-        item.setRiskAuditStatus(
-                entity.getRiskAuditStatus() == null || entity.getRiskAuditStatus().isBlank()
-                        ? "pending"
-                        : entity.getRiskAuditStatus());
+        item.setAiAuditStatus(nullToPending(entity.getAiAuditStatus()));
+        item.setRiskAuditStatus(nullToPending(entity.getRiskAuditStatus()));
         if (entity.getUploaderId() != null) {
-            item.setUploaderId(String.valueOf(entity.getUploaderId()));
+            item.setUploaderId(entity.getUploaderId());
         }
         item.setUploaderName(blankToNull(entity.getUploaderName()));
         item.setDepartmentName(blankToNull(entity.getDepartmentName()));
-        if (entity.getCreatedAt() != null) {
-            item.setUploadedAt(entity.getCreatedAt().format(UPLOADED_AT));
+        if (entity.getCreatedTime() != null) {
+            item.setUploadedTime(entity.getCreatedTime().format(UPLOADED_TIME));
         }
         return item;
     }
 
-    private static String requireAuditWriteStatus(UpdateMaterialAuditRequest request) {
+    private static int requireAuditWriteStatus(UpdateMaterialAuditRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
-        String status = request.getStatus() == null
-                ? ""
-                : request.getStatus().trim().toLowerCase(Locale.ROOT);
-        if (!AUDIT_WRITE_STATUSES.contains(status)) {
-            throw new IllegalArgumentException("status 须为 passed / rejected");
+        Integer status = request.getStatus();
+        if (status == null
+                || (status != MaterialAudit.PASSED && status != MaterialAudit.REJECTED)) {
+            throw new IllegalArgumentException("status 须为 1 或 2");
         }
         return status;
     }
@@ -477,7 +474,7 @@ public class MaterialService {
     }
 
     private int nextSortOrder(String type) {
-        return groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedAtAsc(type)
+        return groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedTimeAsc(type)
                 .stream()
                 .mapToInt(MaterialGroupEntity::getSortOrder)
                 .max()
@@ -554,6 +551,25 @@ public class MaterialService {
         return trimmed;
     }
 
+    /** 空=不过滤。仅 0 待审核 / 1 已通过 / 2 已驳回。 */
+    private static Integer normalizeAuditFilter(String auditStatus) {
+        String value = blankToNull(auditStatus);
+        if (value == null) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed == MaterialAudit.PENDING
+                    || parsed == MaterialAudit.PASSED
+                    || parsed == MaterialAudit.REJECTED) {
+                return parsed;
+            }
+        } catch (NumberFormatException ignored) {
+            // 落到下面的统一错误
+        }
+        throw new IllegalArgumentException("auditStatus 仅支持 0、1、2");
+    }
+
     private static String blankToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -563,21 +579,18 @@ public class MaterialService {
 
     /** 任一审还是待审核（空也算）时，禁止改内容。 */
     private static void requireEditable(MaterialEntity entity) {
-        if (isAuditPending(entity.getAiAuditStatus()) || isAuditPending(entity.getRiskAuditStatus())) {
+        if (MaterialAudit.isPending(entity.getAiAuditStatus())
+                || MaterialAudit.isPending(entity.getRiskAuditStatus())) {
             throw new IllegalArgumentException("审核中不可编辑");
         }
     }
 
-    private static boolean isAuditPending(String status) {
-        return status == null || status.isBlank() || "pending".equalsIgnoreCase(status.trim());
-    }
-
     private static void resetAudit(MaterialEntity entity) {
-        entity.setAiAuditStatus("pending");
-        entity.setRiskAuditStatus("pending");
+        entity.setAiAuditStatus(MaterialAudit.PENDING);
+        entity.setRiskAuditStatus(MaterialAudit.PENDING);
     }
 
-    private static String blankToPending(String status) {
-        return isAuditPending(status) ? "pending" : status.trim().toLowerCase(Locale.ROOT);
+    private static int nullToPending(Integer status) {
+        return status == null ? MaterialAudit.PENDING : status;
     }
 }

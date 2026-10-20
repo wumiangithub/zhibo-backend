@@ -26,8 +26,8 @@ public class LiveAccountEntity {
     private Integer enabled;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "updated_time", nullable = false)
+    private LocalDateTime updatedTime;
 
     @Column(name = "updated_by")
     private Long updatedBy;

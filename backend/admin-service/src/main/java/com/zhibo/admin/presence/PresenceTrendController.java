@@ -11,13 +11,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/activities/{id}")
+@RequestMapping("/api/v1/activities")
 @RequiredArgsConstructor
 public class PresenceTrendController {
 
     private final PresenceTrendService presenceTrendService;
 
-    @GetMapping("/presence-trend")
+    @GetMapping("/presence-trend/{id}")
     public ApiResponse<PresenceTrend> trend(
             @PathVariable String id,
             @RequestParam String startTime,

@@ -10,14 +10,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 中控台名单。路径命名 D62：动作在前、单 id 末尾。 */
 @RestController
-@RequestMapping("/api/watch/{id}/attendees")
+@RequestMapping("/api/v1/watch")
 @RequiredArgsConstructor
 public class WatchAttendeeController {
 
     private final AttendeeRoster roster;
 
-    @GetMapping
+    @GetMapping("/attendees/{id}")
     public ApiResponse<AttendeePage> list(
             @PathVariable String id,
             @RequestParam(defaultValue = "all") String tab,

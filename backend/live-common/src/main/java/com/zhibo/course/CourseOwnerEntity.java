@@ -1,4 +1,4 @@
-package com.zhibo.activity;
+package com.zhibo.course;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
@@ -7,15 +7,15 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** 活动主播。姓名不落在这张表，列表时按员工表查。 */
+/** 课程归属人。姓名不落在这张表，列表时按员工表查。 */
 @Entity
-@Table(name = "activity_host")
+@Table(name = "course_owner")
 @Getter
 @Setter
-public class ActivityHostEntity {
+public class CourseOwnerEntity {
 
     @EmbeddedId
-    private ActivityHostId id;
+    private CourseOwnerId id;
 
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;

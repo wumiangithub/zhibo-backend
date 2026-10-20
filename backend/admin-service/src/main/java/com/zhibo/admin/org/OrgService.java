@@ -41,11 +41,11 @@ public class OrgService {
         Map<Long, DeptTreeNode> nodes = new LinkedHashMap<>();
         for (SysUimsbmxxEntity row : rows) {
             DeptTreeNode node = new DeptTreeNode();
-            node.setId(Long.toString(row.getId()));
+            node.setId(row.getId());
             node.setName(row.getBmmc());
             node.setCode(row.getBmbm());
             long parent = row.getFbmid() == null ? 0L : row.getFbmid();
-            node.setParentId(Long.toString(parent));
+            node.setParentId(parent);
             nodes.put(row.getId(), node);
         }
         List<DeptTreeNode> roots = new ArrayList<>();
@@ -133,7 +133,7 @@ public class OrgService {
 
         for (SysUserAccountEntity u : pageRows) {
             OrgEmployeeItem item = new OrgEmployeeItem();
-            item.setId(Long.toString(u.getId()));
+            item.setId(u.getId());
             item.setUserName(u.getUserName());
             if (allDepts) {
                 item.setDepartmentName(deptNameByYhid.getOrDefault(u.getYhid(), ""));
@@ -166,7 +166,7 @@ public class OrgService {
         liveAccountRepository.save(row);
 
         SetLiveEnabledResponse response = new SetLiveEnabledResponse();
-        response.setId(Long.toString(userId));
+        response.setId(userId);
         response.setLiveEnabled(enabled);
         return response;
     }

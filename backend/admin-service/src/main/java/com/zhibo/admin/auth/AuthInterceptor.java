@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * admin 业务 API Bearer 鉴权。白名单：登录流程接口（不含 {@code /api/auth/me}）。
+ * admin 业务 API Bearer 鉴权。白名单：登录流程接口（不含 {@code /api/v1/auth/me}），
+ * 以及对外前缀 {@code /api/v1/outside/**}（当前不鉴权，域名白名单后续再做）。
  */
 @Component
 public class AuthInterceptor implements HandlerInterceptor {
@@ -51,11 +52,16 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (path == null) {
             return false;
         }
-        return path.equals("/api/auth/captcha")
-                || path.equals("/api/auth/login")
-                || path.equals("/api/auth/wechat/callback")
-                || path.equals("/api/auth/login/query")
-                || path.equals("/api/auth/refresh");
+        return path.equals("/api/v1/auth/captcha")
+                || path.equals("/api/v1/auth/login")
+                || path.equals("/api/v1/auth/wechat/callback")
+                || path.equals("/api/v1/auth/login/query")
+                || path.equals("/api/v1/auth/refresh")
+                || isOutsideApi(path);
+    }
+
+    static boolean isOutsideApi(String path) {
+        return "/api/v1/outside".equals(path) || path.startsWith("/api/v1/outside/");
     }
 
     private static String extractBearer(String header) {

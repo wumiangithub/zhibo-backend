@@ -43,7 +43,7 @@ class AuthControllerTest {
     void captcha_ok() throws Exception {
         when(authService.captcha()).thenReturn(new CaptchaResponse("cid", "data:image/png;base64,xx"));
 
-        mockMvc.perform(get("/api/auth/captcha"))
+        mockMvc.perform(get("/api/v1/auth/captcha"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.captchaId").value("cid"));
@@ -53,7 +53,7 @@ class AuthControllerTest {
     void login_ok() throws Exception {
         when(authService.login(any())).thenReturn(new LoginPendingResponse("NCRM_abc", 180));
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -73,7 +73,7 @@ class AuthControllerTest {
     void login_disabled_returns403() throws Exception {
         when(authService.login(any())).thenThrow(new AuthException(403, "账号已停用"));
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -94,7 +94,7 @@ class AuthControllerTest {
         resp.setStatus(0);
         when(authService.query("NCRM_x")).thenReturn(resp);
 
-        mockMvc.perform(get("/api/auth/login/query").param("state", "NCRM_x"))
+        mockMvc.perform(get("/api/v1/auth/login/query").param("state", "NCRM_x"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.status").value(0));
@@ -104,7 +104,7 @@ class AuthControllerTest {
     void wechatCallback_local_returnsHtmlRedirect() throws Exception {
         when(environment.acceptsProfiles(any(Profiles.class))).thenReturn(true);
 
-        mockMvc.perform(get("/api/auth/wechat/callback")
+        mockMvc.perform(get("/api/v1/auth/wechat/callback")
                         .param("code", "c")
                         .param("state", "NCRM_x"))
                 .andExpect(status().isOk())
@@ -117,7 +117,7 @@ class AuthControllerTest {
     void wechatCallback_nonLocal_returnsOkPageWithoutReplace() throws Exception {
         when(environment.acceptsProfiles(any(Profiles.class))).thenReturn(false);
 
-        mockMvc.perform(get("/api/auth/wechat/callback")
+        mockMvc.perform(get("/api/v1/auth/wechat/callback")
                         .param("code", "c")
                         .param("state", "NCRM_x"))
                 .andExpect(status().isOk())
@@ -134,7 +134,7 @@ class AuthControllerTest {
         org.mockito.Mockito.doThrow(new IllegalArgumentException("登录会话无效或已过期"))
                 .when(authService).handleWechatCallback("c", "bad");
 
-        mockMvc.perform(get("/api/auth/wechat/callback")
+        mockMvc.perform(get("/api/v1/auth/wechat/callback")
                         .param("code", "c")
                         .param("state", "bad"))
                 .andExpect(status().isOk())
@@ -148,7 +148,7 @@ class AuthControllerTest {
         org.mockito.Mockito.doThrow(new IllegalArgumentException("登录会话无效或已过期"))
                 .when(authService).handleWechatCallback("c", "bad");
 
-        mockMvc.perform(get("/api/auth/wechat/callback")
+        mockMvc.perform(get("/api/v1/auth/wechat/callback")
                         .param("code", "c")
                         .param("state", "bad"))
                 .andExpect(status().isOk())
@@ -160,7 +160,7 @@ class AuthControllerTest {
 
     @Test
     void me_withoutUserAttr_returns401() throws Exception {
-        mockMvc.perform(get("/api/auth/me"))
+        mockMvc.perform(get("/api/v1/auth/me"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(401));
     }
@@ -170,7 +170,7 @@ class AuthControllerTest {
         when(authService.me(eq(1L)))
                 .thenReturn(new AuthUserResponse(1L, "admin", "张三", null, null));
 
-        mockMvc.perform(get("/api/auth/me").requestAttr(AuthInterceptor.ATTR_USER_ID, 1L))
+        mockMvc.perform(get("/api/v1/auth/me").requestAttr(AuthInterceptor.ATTR_USER_ID, 1L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.userAccount").value("admin"));

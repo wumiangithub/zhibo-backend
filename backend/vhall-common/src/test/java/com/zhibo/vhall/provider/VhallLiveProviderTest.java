@@ -2,8 +2,10 @@ package com.zhibo.vhall.provider;
 
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.vhall.client.VhallClient;
 import com.zhibo.vhall.config.VhallProperties;
+import com.zhibo.vhall.exception.VhallException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -134,7 +137,7 @@ class VhallLiveProviderTest {
         assertEquals("799703", result.list().get(0).id());
         assertEquals("回放A", result.list().get(0).title());
         assertEquals("01:02:03", result.list().get(0).duration());
-        assertEquals("2026-09-01 10:00:00", result.list().get(0).createdAt());
+        assertEquals("2026-09-01 10:00:00", result.list().get(0).createdTime());
         assertEquals("https://cover", result.list().get(0).coverUrl());
 
         @SuppressWarnings("unchecked")
@@ -160,6 +163,67 @@ class VhallLiveProviderTest {
         assertEquals("99", captor.getValue().get("webinar_id"));
         assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_EMAIL, captor.getValue().get("email"));
         assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_NAME, captor.getValue().get("name"));
+    }
+
+    @Test
+    void getPushStream_mapsAddressCodeAndExpire() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_STREAM_PUSH), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "stream_code", "lss_ede878a9?vhost=thirdVhost&token=abc",
+                        "stream_address", "rtmp://rslive.vhall.com:1935/vhallyun/",
+                        "expire_time", "2026-02-15 00:00:01"
+                ));
+
+        PushStreamInfo info = provider.getPushStream("752172335");
+        assertEquals("rtmp://rslive.vhall.com:1935/vhallyun/", info.streamAddress());
+        assertEquals("lss_ede878a9?vhost=thirdVhost&token=abc", info.streamCode());
+        assertEquals("2026-02-15 00:00:01", info.expireTime());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(eq(VhallLiveProvider.PATH_STREAM_PUSH), captor.capture(), eq(Map.class));
+        assertEquals("752172335", captor.getValue().get("webinar_id"));
+        assertEquals(1, captor.getValue().size());
+    }
+
+    @Test
+    void start_callsVhallStartThenReadsState() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_START), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("switch_id", 4240761));
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_state", 1, "subject", "标题"));
+
+        int state = provider.start("752172335");
+        assertEquals(1, state);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_START), captor.capture(), eq(Map.class));
+        assertEquals("752172335", captor.getValue().get("webinar_id"));
+        assertEquals(VhallLiveProvider.START_TYPE_THIRD_PARTY, captor.getValue().get("start_type"));
+        assertEquals(2, captor.getValue().size());
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_INFO), anyMap(), eq(Map.class));
+    }
+
+    @Test
+    void start_propagatesVhallFailure() {
+        VhallException failure = new VhallException(512002, "rid", "活动不存在");
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_START), anyMap(), eq(Map.class)))
+                .thenThrow(failure);
+
+        VhallException thrown = assertThrows(VhallException.class, () -> provider.start("99"));
+        assertEquals(failure, thrown);
+        verify(vhallClient, never()).postForData(eq(VhallLiveProvider.PATH_INFO), anyMap(), eq(Map.class));
+    }
+
+    @Test
+    void getPushStream_propagatesVhallFailure() {
+        VhallException failure = new VhallException(512002, "rid", "活动不存在");
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_STREAM_PUSH), anyMap(), eq(Map.class)))
+                .thenThrow(failure);
+
+        VhallException thrown = assertThrows(VhallException.class, () -> provider.getPushStream("99"));
+        assertEquals(failure, thrown);
     }
 
     @Test

@@ -10,13 +10,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/activities/{id}/attendees")
+@RequestMapping("/api/v1/activities")
 @RequiredArgsConstructor
 public class AttendeeController {
 
     private final AttendeeService attendeeService;
 
-    @GetMapping
+    /** 废弃：新代码用 live GET /api/v1/watch/attendees/{id}。 */
+    @GetMapping("/attendees/{id}")
     public ApiResponse<AttendeeListResponse> list(
             @PathVariable String id,
             @RequestParam(defaultValue = "all") String tab,

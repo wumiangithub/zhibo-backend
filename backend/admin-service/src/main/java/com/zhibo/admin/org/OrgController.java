@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/org")
+@RequestMapping("/api/v1/org")
 @RequiredArgsConstructor
 public class OrgController {
 
@@ -41,7 +41,7 @@ public class OrgController {
         return ApiResponse.ok(orgService.listEmployees(deptId, userName, roleId, page, pageSize));
     }
 
-    @PutMapping("/employees/{id}/live-enabled")
+    @PutMapping("/employees/live-enabled/{id}")
     public ApiResponse<SetLiveEnabledResponse> setLiveEnabled(
             @PathVariable String id,
             @RequestBody SetLiveEnabledRequest request,

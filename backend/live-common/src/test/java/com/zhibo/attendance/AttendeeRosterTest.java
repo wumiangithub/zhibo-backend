@@ -204,7 +204,7 @@ class AttendeeRosterTest {
             String nickname,
             String enterTime,
             String leaveTime,
-            String createdAt) {
+            String createdTime) {
         RoomAttendanceEntity row = new RoomAttendanceEntity();
         row.setId(id);
         row.setRoomId(ROOM_ID);
@@ -214,7 +214,7 @@ class AttendeeRosterTest {
         if (leaveTime != null) {
             row.setLeaveTime(AttendanceTimes.parse(leaveTime, "leaveTime"));
         }
-        row.setCreatedAt(LocalDateTime.parse(createdAt.replace(' ', 'T')));
+        row.setCreatedTime(LocalDateTime.parse(createdTime.replace(' ', 'T')));
         return row;
     }
 }

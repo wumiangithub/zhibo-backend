@@ -39,7 +39,7 @@ class EmployeeServiceTest {
 
         EmployeeListResponse response = employeeService.list("  ");
         assertEquals(1, response.getList().size());
-        assertEquals("10001", response.getList().get(0).getId());
+        assertEquals(10001L, response.getList().get(0).getId());
         assertEquals("余灵巧", response.getList().get(0).getUserName());
         assertEquals("https://wx.example/a.jpg", response.getList().get(0).getAvatar());
         verify(userRepository).searchActive(isNull(), eq(PageRequest.of(0, 20)));

@@ -6,5 +6,5 @@ import java.util.List;
 
 public interface ActivityAuditRepository extends JpaRepository<ActivityAuditEntity, String> {
 
-    List<ActivityAuditEntity> findByActivityIdOrderByCreatedAtDesc(String activityId);
+    List<ActivityAuditEntity> findByActivityIdOrderByCreatedTimeDesc(String activityId);
 }

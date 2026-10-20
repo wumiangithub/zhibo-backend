@@ -47,8 +47,8 @@ public class RoomAttendanceEntity {
 
     /** 首次入库时间。再次进入不改。 */
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_time", nullable = false, updatable = false)
+    private LocalDateTime createdTime;
 
     @PrePersist
     void assignIdIfMissing() {

@@ -69,18 +69,22 @@ public class CreateActivityRequest {
      */
     private Boolean listed;
 
-    /** 主播员工 id（十进制字符串）；去重后 1～20。 */
+    /** 主播员工 id；去重后 1～20。 */
     @NotNull(message = "hostIds 不能为空")
-    private List<String> hostIds;
+    private List<Long> hostIds;
 
     /** 归属人员工 id。 */
-    private List<String> ownerIds;
+    private List<Long> ownerIds;
 
     /** 关联商品快照。 */
     private List<ProductBinding> products;
 
     /** 课件素材 UUID 有序数组；最多 100。 */
     private List<String> coursewareMaterialIds;
+
+    /** 绑定的已通过直播报备 UUID；省略表示不绑定。 */
+    @Size(max = 36, message = "reportId 无效")
+    private String reportId;
 
     @Data
     public static class ProductBinding {

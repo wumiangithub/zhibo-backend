@@ -10,24 +10,24 @@ public final class LiveReportDtos {
     public record PlanTime(@NotBlank String startTime, @NotBlank String endTime) {}
     public record Attachment(@NotBlank String name, @NotBlank String url, @NotBlank String objectKey,
                              @NotNull Long fileSize, String mimeType) {}
-    public record Host(String id, String userName, String avatar) {}
-    public record SaveRequest(@NotBlank String id, @NotBlank @Size(max=64) String title,
+    public record Host(Long id, String userName, String avatar) {}
+    public record SaveRequest(@NotBlank @Size(max=64) String title,
             @NotBlank @Size(max=500) String content, @NotNull @Size(min=1,max=10) List<PlanTime> planTimes,
             @NotBlank String coverUrl, @NotBlank String coverObjectKey, Long coverFileSize,
-            String coverMimeType, String coverMaterialId, @NotBlank String hostId,
+            String coverMimeType, String coverMaterialId, @NotNull Long hostId,
             @NotNull @Size(min=1,max=20) List<Attachment> attachments) {}
     public record UpdateRequest(String title, String content, List<PlanTime> planTimes,
             String coverUrl, String coverObjectKey, Long coverFileSize, String coverMimeType,
-            String coverMaterialId, String hostId, List<Attachment> attachments) {}
+            String coverMaterialId, Long hostId, List<Attachment> attachments) {}
     public record AuditRequest(@NotBlank String result, @Size(max=500) String reason) {}
     public record Result(String id, String status) {}
     public record Detail(String id, String title, String content, List<PlanTime> planTimes,
             String coverUrl, String coverObjectKey, Long coverFileSize, String coverMimeType,
             String coverMaterialId, Host host, List<Attachment> attachments,
-            String status, int boundLiveCount, String submitterId, String submitterName,
-            String departmentName, String submittedAt, String updatedAt) {}
+            String status, int boundLiveCount, Long submitterId, String submitterName,
+            String departmentName, String submittedTime, String updatedTime) {}
     public record ListResult(int page, int pageSize, long total, List<Detail> list) {}
     public record AuditItem(String id, String action, String result, String reason,
-            String operatorId, String operatorName, String createdAt) {}
+            Long operatorId, String operatorName, String createdTime) {}
     public record AuditList(List<AuditItem> list) {}
 }

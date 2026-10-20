@@ -5,6 +5,7 @@ import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
+import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
 import com.zhibo.liveprovider.dto.WatchSdkCommand;
@@ -27,6 +28,13 @@ public interface LiveProvider {
     ProviderRoomSnapshot fetchRoom(String providerRoomId);
 
     void update(String providerRoomId, UpdateRoomCommand command);
+
+    /**
+     * 第三方推流开播（OBS）。浏览器主持人开播不走本方法。
+     *
+     * @return 开播后的新 state（与 {@link #end} 一样，以云侧 info 的 webinar_state 为准）
+     */
+    int start(String providerRoomId);
 
     /** @return 结束后的新 state */
     int end(String providerRoomId);
@@ -61,4 +69,10 @@ public interface LiveProvider {
      * @return 可嵌入的审核页地址
      */
     String buildChatFilterUrl(String providerRoomId, String email, String name);
+
+    /**
+     * 第三方 rtmp 推到本场直播间的服务器与串流密钥。
+     * srt、口令开播不走本方法。
+     */
+    PushStreamInfo getPushStream(String providerRoomId);
 }

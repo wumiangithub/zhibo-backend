@@ -6,7 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class OrgEmployeeItem {
-    private String id;
+    private Long id;
     private String userName;
     private String departmentName;
     /** 在用角色名，多角色顿号；无则为空串 */

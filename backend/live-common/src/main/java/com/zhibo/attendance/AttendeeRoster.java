@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 中控台名单。admin 旧路径和 live {@code /api/watch/{id}/attendees} 共用。
+ * 中控台名单。admin 旧路径和 live {@code /api/v1/watch/attendees/{id}} 共用。
  * <p>
  * 离开时间只是少问一次在线：有 leave_time 直接当离线；空的继续 {@code batchUserOnline}。
  * 前端关掉离开上报后空 leave 会变多，这里不假设人人都有离开时间。结束 / 点播 / 回放全离线，不改库、不问服务商。
@@ -130,13 +130,13 @@ public class AttendeeRoster {
         if (byEnter != 0) {
             return byEnter > 0;
         }
-        if (candidate.getCreatedAt() == null) {
+        if (candidate.getCreatedTime() == null) {
             return false;
         }
-        if (current.getCreatedAt() == null) {
+        if (current.getCreatedTime() == null) {
             return true;
         }
-        return candidate.getCreatedAt().isAfter(current.getCreatedAt());
+        return candidate.getCreatedTime().isAfter(current.getCreatedTime());
     }
 
     private ActivityEntity requireActivity(String id) {

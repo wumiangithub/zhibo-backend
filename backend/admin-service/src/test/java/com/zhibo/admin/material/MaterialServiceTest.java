@@ -65,9 +65,9 @@ class MaterialServiceTest {
     @Test
     void listGroups_returnsCount() {
         MaterialGroupEntity g = group("g1", "image", "默认分组", true);
-        when(groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedAtAsc("image"))
+        when(groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedTimeAsc("image"))
                 .thenReturn(List.of(g));
-        when(materialRepository.countByGroupIdAndDeletedAtIsNull("g1")).thenReturn(3L);
+        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("g1")).thenReturn(3L);
 
         List<MaterialGroupResponse> list = materialService.listGroups("image");
         assertEquals(1, list.size());
@@ -103,7 +103,7 @@ class MaterialServiceTest {
     void deleteGroup_rejectsWhenHasMaterials() {
         MaterialGroupEntity g = group("g2", "image", "宣传", false);
         when(groupRepository.findById("g2")).thenReturn(Optional.of(g));
-        when(materialRepository.countByGroupIdAndDeletedAtIsNull("g2")).thenReturn(1L);
+        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("g2")).thenReturn(1L);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> materialService.deleteGroup("g2"));
@@ -115,7 +115,7 @@ class MaterialServiceTest {
         MaterialGroupEntity g = group("g2", "image", "旧名", false);
         when(groupRepository.findById("g2")).thenReturn(Optional.of(g));
         when(groupRepository.existsByTypeAndName("image", "新名")).thenReturn(false);
-        when(materialRepository.countByGroupIdAndDeletedAtIsNull("g2")).thenReturn(0L);
+        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("g2")).thenReturn(0L);
 
         RenameMaterialGroupRequest req = new RenameMaterialGroupRequest();
         req.setName(" 新名 ");
@@ -127,30 +127,30 @@ class MaterialServiceTest {
     @Test
     void list_rejectsPageZero() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.list("image", null, null, false, 0, 20));
+                () -> materialService.list("image", null, null, null, false, 0, 20));
         assertEquals("page 不能小于 1", ex.getMessage());
     }
 
     @Test
     void list_mapsThumbUrlForImage() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setCreatedAt(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
+        m.setCreatedTime(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
         when(materialRepository.search(
-                        eq("image"), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
+                        eq("image"), isNull(), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(m), PageRequest.of(0, 20), 1));
 
-        MaterialListResponse resp = materialService.list("image", null, null, false, 1, 20);
+        MaterialListResponse resp = materialService.list("image", null, null, null, false, 1, 20);
         assertEquals(1, resp.getTotal());
         assertEquals(1, resp.getPage());
         assertEquals("https://cdn/a.jpg", resp.getList().get(0).getThumbUrl());
-        assertEquals("2026-10-12 14:00:00", resp.getList().get(0).getUploadedAt());
+        assertEquals("2026-10-12 14:00:00", resp.getList().get(0).getUploadedTime());
     }
 
     @Test
     void register_batchPersists() {
         MaterialGroupEntity g = group("g1", "image", "默认分组", true);
         when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
-        when(materialRepository.existsByObjectKeyAndDeletedAtIsNull(any())).thenReturn(false);
+        when(materialRepository.existsByObjectKeyAndDeletedTimeIsNull(any())).thenReturn(false);
         when(materialRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         SysUserAccountEntity user = uploader(10001L, "张三",
                 "[{\"department_id\":10,\"department_name\":\"技术部\"}]");
@@ -171,7 +171,7 @@ class MaterialServiceTest {
         RegisterMaterialsResponse resp = materialService.register(req, 10001L);
         assertEquals(1, resp.getList().size());
         assertEquals("封面.jpg", resp.getList().get(0).getName());
-        assertEquals("10001", resp.getList().get(0).getUploaderId());
+        assertEquals(10001L, resp.getList().get(0).getUploaderId());
         assertEquals("张三", resp.getList().get(0).getUploaderName());
         assertEquals("技术部", resp.getList().get(0).getDepartmentName());
 
@@ -180,42 +180,42 @@ class MaterialServiceTest {
         verify(materialRepository).saveAll(captor.capture());
         assertEquals("material/image/1_封面.jpg", captor.getValue().get(0).getObjectKey());
         assertEquals("available", captor.getValue().get(0).getStatus());
-        assertEquals("pending", captor.getValue().get(0).getAiAuditStatus());
-        assertEquals("pending", captor.getValue().get(0).getRiskAuditStatus());
+        assertEquals(0, captor.getValue().get(0).getAiAuditStatus());
+        assertEquals(0, captor.getValue().get(0).getRiskAuditStatus());
         assertEquals(10001L, captor.getValue().get(0).getUploaderId());
         assertEquals("张三", captor.getValue().get(0).getUploaderName());
         assertEquals("技术部", captor.getValue().get(0).getDepartmentName());
-        assertEquals("pending", resp.getList().get(0).getAiAuditStatus());
-        assertEquals("pending", resp.getList().get(0).getRiskAuditStatus());
+        assertEquals(0, resp.getList().get(0).getAiAuditStatus());
+        assertEquals(0, resp.getList().get(0).getRiskAuditStatus());
     }
 
     @Test
     void updateAiAudit_setsPassed() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setAiAuditStatus("pending");
+        m.setAiAuditStatus(0);
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
-        req.setStatus("passed");
+        req.setStatus(1);
         MaterialItemResponse resp = materialService.updateAiAudit("m1", req);
 
-        assertEquals("passed", resp.getAiAuditStatus());
-        assertEquals("passed", m.getAiAuditStatus());
+        assertEquals(1, resp.getAiAuditStatus());
+        assertEquals(1, m.getAiAuditStatus());
         verify(materialRepository).save(m);
     }
 
     @Test
     void updateRiskAudit_setsRejected() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setRiskAuditStatus("passed");
+        m.setRiskAuditStatus(1);
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
-        req.setStatus("rejected");
+        req.setStatus(2);
         MaterialItemResponse resp = materialService.updateRiskAudit("m1", req);
 
-        assertEquals("rejected", resp.getRiskAuditStatus());
-        assertEquals("rejected", m.getRiskAuditStatus());
+        assertEquals(2, resp.getRiskAuditStatus());
+        assertEquals(2, m.getRiskAuditStatus());
     }
 
     @Test
@@ -224,17 +224,17 @@ class MaterialServiceTest {
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
-        req.setStatus("pending");
+        req.setStatus(0);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> materialService.updateAiAudit("m1", req));
-        assertEquals("status 须为 passed / rejected", ex.getMessage());
+        assertEquals("status 须为 1 或 2", ex.getMessage());
     }
 
     @Test
     void register_rejectsDuplicateObjectKey() {
         MaterialGroupEntity g = group("g1", "image", "默认分组", true);
         when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
-        when(materialRepository.existsByObjectKeyAndDeletedAtIsNull("material/image/1.jpg"))
+        when(materialRepository.existsByObjectKeyAndDeletedTimeIsNull("material/image/1.jpg"))
                 .thenReturn(true);
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
@@ -272,7 +272,7 @@ class MaterialServiceTest {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
         m.setObjectKey("material/image/1_a.jpg");
         m.setUrl("https://cdn/a.jpg");
-        m.setCreatedAt(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
+        m.setCreatedTime(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         RenameMaterialRequest req = new RenameMaterialRequest();
@@ -302,7 +302,7 @@ class MaterialServiceTest {
     @Test
     void rename_rejectsDeleted() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setDeletedAt(LocalDateTime.now());
+        m.setDeletedTime(LocalDateTime.now());
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         RenameMaterialRequest req = new RenameMaterialRequest();
@@ -311,19 +311,19 @@ class MaterialServiceTest {
     }
 
     @Test
-    void softDelete_setsDeletedAt() {
+    void softDelete_setsDeletedTime() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         assertEquals("m1", materialService.softDelete("m1").getId());
-        assertTrue(m.getDeletedAt() != null);
+        assertTrue(m.getDeletedTime() != null);
         verify(materialRepository).save(m);
     }
 
     @Test
     void softDelete_alreadyDeleted_rejects() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setDeletedAt(LocalDateTime.now());
+        m.setDeletedTime(LocalDateTime.now());
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
         assertThrows(IllegalArgumentException.class, () -> materialService.softDelete("m1"));
@@ -348,9 +348,9 @@ class MaterialServiceTest {
         assertEquals("这里是文章的标题", resp.getName());
         assertEquals("article", resp.getType());
         assertEquals("g-article", resp.getGroupId());
-        assertEquals("pending", resp.getAiAuditStatus());
-        assertEquals("pending", resp.getRiskAuditStatus());
-        assertEquals("10001", resp.getUploaderId());
+        assertEquals(0, resp.getAiAuditStatus());
+        assertEquals(0, resp.getRiskAuditStatus());
+        assertEquals(10001L, resp.getUploaderId());
         assertEquals("张三", resp.getUploaderName());
         assertNull(resp.getUrl());
         assertNull(resp.getObjectKey());
@@ -423,18 +423,18 @@ class MaterialServiceTest {
     @Test
     void list_acceptsArticleType() {
         when(materialRepository.search(
-                        eq("article"), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
+                        eq("article"), isNull(), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        MaterialListResponse resp = materialService.list("article", null, null, false, 1, 20);
+        MaterialListResponse resp = materialService.list("article", null, null, null, false, 1, 20);
         assertEquals(0, resp.getTotal());
     }
 
     @Test
     void move_changesGroupWithoutTouchingAudit() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setAiAuditStatus("passed");
-        m.setRiskAuditStatus("rejected");
+        m.setAiAuditStatus(1);
+        m.setRiskAuditStatus(2);
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
         when(groupRepository.findById("g2")).thenReturn(Optional.of(group("g2", "image", "分组2", false)));
 
@@ -443,8 +443,8 @@ class MaterialServiceTest {
         MaterialItemResponse resp = materialService.move("m1", req);
 
         assertEquals("g2", resp.getGroupId());
-        assertEquals("passed", resp.getAiAuditStatus());
-        assertEquals("rejected", resp.getRiskAuditStatus());
+        assertEquals(1, resp.getAiAuditStatus());
+        assertEquals(2, resp.getRiskAuditStatus());
     }
 
     @Test
@@ -477,10 +477,10 @@ class MaterialServiceTest {
     @Test
     void replaceImage_passedResetsAudit() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        m.setAiAuditStatus("passed");
-        m.setRiskAuditStatus("passed");
+        m.setAiAuditStatus(1);
+        m.setRiskAuditStatus(1);
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
-        when(materialRepository.existsByObjectKeyAndDeletedAtIsNull("material/image/2_b.jpg"))
+        when(materialRepository.existsByObjectKeyAndDeletedTimeIsNull("material/image/2_b.jpg"))
                 .thenReturn(false);
 
         ReplaceImageRequest req = new ReplaceImageRequest();
@@ -491,8 +491,8 @@ class MaterialServiceTest {
         MaterialItemResponse resp = materialService.replaceImage("m1", req);
 
         assertEquals("https://cdn/b.jpg", resp.getUrl());
-        assertEquals("pending", resp.getAiAuditStatus());
-        assertEquals("pending", resp.getRiskAuditStatus());
+        assertEquals(0, resp.getAiAuditStatus());
+        assertEquals(0, resp.getRiskAuditStatus());
         assertEquals("100*80", resp.getMeta());
     }
 
@@ -513,8 +513,8 @@ class MaterialServiceTest {
     @Test
     void updateArticle_passedResetsAudit() {
         MaterialEntity m = material("a1", "article", "g-article", "标题");
-        m.setAiAuditStatus("passed");
-        m.setRiskAuditStatus("rejected");
+        m.setAiAuditStatus(1);
+        m.setRiskAuditStatus(2);
         MaterialArticleEntity body = new MaterialArticleEntity();
         body.setId("a1");
         body.setAuthor("旧作者");
@@ -529,8 +529,8 @@ class MaterialServiceTest {
         MaterialItemResponse resp = materialService.updateArticle("a1", req);
 
         assertEquals("新标题", resp.getName());
-        assertEquals("pending", resp.getAiAuditStatus());
-        assertEquals("pending", resp.getRiskAuditStatus());
+        assertEquals(0, resp.getAiAuditStatus());
+        assertEquals(0, resp.getRiskAuditStatus());
         assertEquals("新作者", body.getAuthor());
         assertEquals("<p>新正文</p>", body.getContent());
     }
@@ -538,8 +538,8 @@ class MaterialServiceTest {
     @Test
     void getArticle_returnsBody() {
         MaterialEntity m = material("a1", "article", "g-article", "标题");
-        m.setAiAuditStatus("passed");
-        m.setRiskAuditStatus("passed");
+        m.setAiAuditStatus(1);
+        m.setRiskAuditStatus(1);
         MaterialArticleEntity body = new MaterialArticleEntity();
         body.setId("a1");
         body.setAuthor("作者");
@@ -551,18 +551,18 @@ class MaterialServiceTest {
         assertEquals("标题", detail.getTitle());
         assertEquals("作者", detail.getAuthor());
         assertEquals("<p>正文</p>", detail.getContent());
-        assertEquals("passed", detail.getAiAuditStatus());
+        assertEquals(1, detail.getAiAuditStatus());
     }
 
     @Test
     void toItem_documentOmitsThumb() {
         MaterialEntity m = material("m1", "document", "g1", "a.pdf");
-        m.setCreatedAt(LocalDateTime.now());
+        m.setCreatedTime(LocalDateTime.now());
         when(materialRepository.search(
-                        eq("document"), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
+                        eq("document"), isNull(), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(m), PageRequest.of(0, 20), 1));
 
-        MaterialListResponse resp = materialService.list("document", null, null, false, 1, 20);
+        MaterialListResponse resp = materialService.list("document", null, null, null, false, 1, 20);
         assertNull(resp.getList().get(0).getThumbUrl());
         assertFalse(resp.getList().get(0).getUrl().isBlank());
     }
@@ -570,13 +570,32 @@ class MaterialServiceTest {
     @Test
     void list_selectableOnly_passesFlagToRepository() {
         when(materialRepository.search(
-                        eq("image"), isNull(), isNull(), eq(true), eq(PageRequest.of(0, 20))))
+                        eq("image"), isNull(), isNull(), isNull(), eq(true), eq(PageRequest.of(0, 20))))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        MaterialListResponse resp = materialService.list("image", null, null, true, 1, 20);
+        MaterialListResponse resp = materialService.list("image", null, null, null, true, 1, 20);
         assertEquals(0, resp.getTotal());
         verify(materialRepository).search(
-                eq("image"), isNull(), isNull(), eq(true), eq(PageRequest.of(0, 20)));
+                eq("image"), isNull(), isNull(), isNull(), eq(true), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    void list_passesKeywordAndAuditStatus() {
+        when(materialRepository.search(
+                        eq("image"), isNull(), eq("封面"), eq(0), eq(false), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        materialService.list("image", "  ", " 封面 ", " 0 ", false, 1, 20);
+
+        verify(materialRepository).search(
+                eq("image"), isNull(), eq("封面"), eq(0), eq(false), eq(PageRequest.of(0, 20)));
+    }
+
+    @Test
+    void list_rejectsUnknownAuditStatus() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.list("image", null, null, "approved", false, 1, 20));
+        assertEquals("auditStatus 仅支持 0、1、2", ex.getMessage());
     }
 
     private static MaterialGroupEntity group(String id, String type, String name, boolean def) {
@@ -598,8 +617,8 @@ class MaterialServiceTest {
         m.setUrl("https://cdn/" + name);
         m.setObjectKey("material/" + type + "/1_" + name);
         m.setStatus("available");
-        m.setAiAuditStatus("pending");
-        m.setRiskAuditStatus("pending");
+        m.setAiAuditStatus(0);
+        m.setRiskAuditStatus(0);
         return m;
     }
 

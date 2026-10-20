@@ -4,7 +4,8 @@ info:
   description: |
     钱坤直播观看端 / 中控台 API（live-service :8082）。
     
-    契约来源：`zhibo-shared/docs/API约定.md`。
+    契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。
+    本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。
     
     **通则**
     - 成功：`code === 0`（HTTP 仍多为 200）
@@ -12,7 +13,7 @@ info:
     - 时间：`yyyy-MM-dd HH:mm:ss`
     - JSON 不输出 `null` 字段
     - 观看端不走管理端 JWT
-  version: "2.0.0"
+  version: "2.3.0"
   contact:
     name: zhibo-backend
 servers:
@@ -24,7 +25,7 @@ tags:
   - name: 中控台
   - name: 回调
 paths:
-  /api/watch/activities:
+  /api/v1/watch/activities:
     get:
       tags:
         - 观看
@@ -37,7 +38,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -45,6 +46,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
         - name: state
           in: query
           schema:
@@ -56,7 +58,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchList"
-  /api/watch/{id}:
+  /api/v1/watch/detail/{id}:
     get:
       tags:
         - 观看
@@ -83,7 +85,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchEmbed"
-  /api/watch/{id}/sdk:
+  /api/v1/watch/sdk/{id}:
     get:
       tags:
         - 观看
@@ -110,7 +112,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchSdk"
-  /api/watch/{id}/attendance/enter:
+  /api/v1/watch/attendance/enter/{id}:
     post:
       tags:
         - 进出房
@@ -132,7 +134,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
-  /api/watch/{id}/attendance/leave:
+  /api/v1/watch/attendance/leave/{id}:
     post:
       tags:
         - 进出房
@@ -153,7 +155,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAttendanceLeave"
-  /api/callbacks/vhall/presence:
+  /api/v1/callbacks/vhall/presence:
     post:
       tags:
         - 回调
@@ -169,7 +171,7 @@ paths:
       responses:
         200:
           description: 按微吼约定响应
-  /api/watch/{id}/attendees:
+  /api/v1/watch/attendees/{id}:
     get:
       tags:
         - 中控台
@@ -193,7 +195,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -201,6 +203,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
         - name: keyword
           in: query
           schema:
@@ -212,7 +215,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAttendeeList"
-  /api/watch/{id}/presence-trend:
+  /api/v1/watch/presence-trend/{id}:
     get:
       tags:
         - 中控台
@@ -245,7 +248,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponsePresenceTrend"
-  /api/watch/{id}/chat-filter:
+  /api/v1/watch/chat-filter/{id}:
     get:
       tags:
         - 中控台
@@ -292,9 +295,12 @@ components:
         code:
           type: integer
           example: 0
+          description: 业务码：0 成功；400/401/403/500/501/502…；库：INT
         msg:
           type: string
           example: ok
+          description: 提示文案；成功一般为 ok；库：VARCHAR(256)
+          maxLength: 256
     Provider:
       type: string
       enum:
@@ -309,107 +315,160 @@ components:
         id:
           type: string
           format: uuid
+          description: 本站业务主键（活动/素材等多为 UUID）；库：VARCHAR(36)
+          maxLength: 36
     WatchActivitySummary:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态；库：INT
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         coverUrl:
           type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
     WatchActivityListData:
       type: object
       properties:
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         list:
           type: array
           items:
             $ref: "#/components/schemas/WatchActivitySummary"
+          description: 列表数据
     WatchEmbedData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态；库：INT
         type:
           type: integer
+          description: 活动类型；库：INT
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         guestId:
           type: string
+          description: 本站生成的游客 id；库：VARCHAR(64)
+          maxLength: 64
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         embedUrl:
           type: string
           format: uri
+          description: 嵌入页 URL；库：VARCHAR(1024)
+          maxLength: 1024
     VhallSdkPayload:
       type: object
       properties:
         scriptUrl:
           type: string
           format: uri
+          description: SDK 脚本地址
         jqueryUrl:
           type: string
           nullable: true
+          description: jQuery 脚本地址
         account:
           type: string
           description: 回显用；init 不要传
         email:
           type: string
+          description: 合成邮箱（观看身份）；库：VARCHAR(128)
+          maxLength: 128
         username:
           type: string
+          description: 观看昵称；库：VARCHAR(50)
+          maxLength: 50
         webinarId:
           type: string
+          description: 微吼活动号
         appKey:
           type: string
+          description: 微吼 app_key
         signedAt:
           type: string
+          description: 签名时间戳
         signType:
           type: integer
           example: 0
+          description: 签名类型；库：INT
         sign:
           type: string
+          description: 签名串
     WatchSdkData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         provider:
           $ref: "#/components/schemas/Provider"
+          description: 直播服务商
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态；库：INT
         type:
           type: integer
+          description: 活动类型；库：INT
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         guestId:
           type: string
+          description: 本站生成的游客 id；库：VARCHAR(64)
+          maxLength: 64
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         sdk:
           $ref: "#/components/schemas/VhallSdkPayload"
+          description: 观看 JS SDK 初始化参数
         embedUrl:
           type: string
           format: uri
+          description: 嵌入页 URL；库：VARCHAR(1024)
+          maxLength: 1024
     AttendanceEnterRequest:
       type: object
       required:
@@ -418,15 +477,24 @@ components:
       properties:
         userId:
           type: string
+          description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+          maxLength: 128
         enterTime:
           type: string
           example: "2026-09-30 10:00:00"
+          description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         mid:
           type: string
+          description: 幂等/消息 id；库：VARCHAR(64)
+          maxLength: 64
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         avatarUrl:
           type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
     AttendanceLeaveRequest:
       type: object
       required:
@@ -445,21 +513,31 @@ components:
             properties:
               userId:
                 type: string
+                description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+                maxLength: 128
               enterTime:
                 type: string
+                description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
               leaveTime:
                 type: string
+                description: "离开时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
               mid:
                 type: string
+                description: 幂等/消息 id；库：VARCHAR(64)
+                maxLength: 64
+          description: 条目列表
     AttendanceLeaveData:
       type: object
       properties:
         updated:
           type: integer
+          description: 成功更新条数；库：INT
         skipped:
           type: integer
+          description: 跳过条数；库：INT
         missing:
           type: integer
+          description: 未找到条数；库：INT
     AttendeeItem:
       type: object
       required:
@@ -469,16 +547,25 @@ components:
       properties:
         userId:
           type: string
+          description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+          maxLength: 128
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         avatarUrl:
           type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
         enterTime:
           type: string
+          description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         leaveTime:
           type: string
+          description: "离开时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         online:
           type: boolean
+          description: 是否在线；库：TINYINT(1)
     AttendeeListData:
       type: object
       required:
@@ -490,45 +577,60 @@ components:
       properties:
         activityState:
           type: integer
+          description: 活动状态；库：INT
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         page:
           type: integer
+          description: 页码，从 1 开始（D37）；库：INT
         pageSize:
           type: integer
+          description: 每页条数；库：INT
         list:
           type: array
           items:
             $ref: "#/components/schemas/AttendeeItem"
+          description: 列表数据
     PresenceTrendPoint:
       type: object
       properties:
         time:
           type: string
+          description: 时间点；库：DATETIME(3)
         online:
           type: integer
+          description: 该桶在线人数；库：INT
         enter:
           type: integer
+          description: 进场人数；库：INT
         leave:
           type: integer
+          description: 离场人数；库：INT
     PresenceTrend:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         bucketSeconds:
           type: integer
           example: 60
+          description: 时间桶秒数；库：INT
         points:
           type: array
           items:
             $ref: "#/components/schemas/PresenceTrendPoint"
+          description: 时序点列表
     ChatFilterData:
       type: object
       required:
@@ -537,6 +639,8 @@ components:
         pageUrl:
           type: string
           format: uri
+          description: 页面 URL；库：VARCHAR(2048)
+          maxLength: 2048
     VhallPresenceCallback:
       type: object
       description: 微吼上下线回调 body（字段以微吼文档为准）
@@ -544,35 +648,48 @@ components:
         method_id:
           type: integer
           example: 20
+          description: 微吼回调 method_id；库：INT
         type:
           type: string
           enum:
             - Join
             - Leave
+          description: Join 进房 / Leave 离房；库：INT
         webinar_id:
           type: string
+          description: 微吼活动号
         sender_id:
           type: string
+          description: 发送方/观众 id
         time:
           type: integer
-          description: Unix 秒
+          description: Unix 秒；库：INT
         mid:
           type: string
+          description: 幂等/消息 id；库：VARCHAR(64)
+          maxLength: 64
         signature:
           type: string
+          description: 回调签名
         context:
           type: object
           properties:
             nickname:
               type: string
+              description: 昵称；库：VARCHAR(64)
+              maxLength: 64
             avatar:
               type: string
+              description: 头像 URL；库：VARCHAR(512)
+              maxLength: 512
+          description: 回调上下文
     ApiResponseId:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/IdData"
     ApiResponseWatchList:
       allOf:
@@ -580,6 +697,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchActivityListData"
     ApiResponseWatchEmbed:
       allOf:
@@ -587,6 +705,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchEmbedData"
     ApiResponseWatchSdk:
       allOf:
@@ -594,6 +713,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchSdkData"
     ApiResponseAttendanceLeave:
       allOf:
@@ -601,6 +721,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/AttendanceLeaveData"
     ApiResponseAttendeeList:
       allOf:
@@ -608,6 +729,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/AttendeeListData"
     ApiResponsePresenceTrend:
       allOf:
@@ -615,6 +737,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/PresenceTrend"
     ApiResponseChatFilter:
       allOf:
@@ -622,4 +745,5 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ChatFilterData"

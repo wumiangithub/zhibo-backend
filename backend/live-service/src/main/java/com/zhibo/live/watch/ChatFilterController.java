@@ -9,14 +9,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 聊天审核页 URL。路径命名 D62：动作在前、单 id 末尾。 */
 @RestController
-@RequestMapping("/api/watch/{id}/chat-filter")
+@RequestMapping("/api/v1/watch")
 @RequiredArgsConstructor
 public class ChatFilterController {
 
     private final ChatFilterService chatFilterService;
 
-    @GetMapping
+    @GetMapping("/chat-filter/{id}")
     public ApiResponse<ChatFilterResponse> chatFilter(
             @PathVariable String id,
             @RequestParam(required = false) String email,

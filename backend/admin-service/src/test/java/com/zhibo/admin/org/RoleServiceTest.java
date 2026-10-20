@@ -17,6 +17,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -91,6 +92,16 @@ class RoleServiceTest {
         roleService.saveMenus(1L, List.of("live-manage", "live-manage"), 8L);
         verify(liveRoleMenuRepository).deleteByRoleId(1L);
         verify(liveRoleMenuRepository).save(any(LiveRoleMenuEntity.class));
+    }
+
+    @Test
+    void saveMenus_pairsReportCreateWithReport() {
+        when(roleRepository.findById(1L)).thenReturn(Optional.of(role(1L, "系统管理员", "")));
+        when(liveRoleMenuRepository.findByRoleIdAndRsStatus(1L, 1)).thenReturn(List.of());
+        when(yhidRoleRepository.findActiveAccountIds(1L)).thenReturn(List.of());
+
+        roleService.saveMenus(1L, List.of("live-report"), 8L);
+        verify(liveRoleMenuRepository, times(2)).save(any(LiveRoleMenuEntity.class));
     }
 
     private static SysUimsRoleEntity role(Long id, String name, String remark) {

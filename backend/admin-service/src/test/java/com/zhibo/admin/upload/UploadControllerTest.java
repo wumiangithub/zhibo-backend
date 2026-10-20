@@ -42,7 +42,7 @@ class UploadControllerTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "x.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[]{1, 2});
 
-        mockMvc.perform(multipart("/api/uploads/image").file(file))
+        mockMvc.perform(multipart("/api/v1/uploads/image").file(file))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.url").value("https://cdn.example/x.jpg"));
@@ -56,7 +56,7 @@ class UploadControllerTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "x.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[]{1});
 
-        mockMvc.perform(multipart("/api/uploads/image").file(file))
+        mockMvc.perform(multipart("/api/v1/uploads/image").file(file))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.msg").value("请选择要上传的图片"));
@@ -73,7 +73,7 @@ class UploadControllerTest {
                 "tmp-token",
                 "2026-10-10T06:00:00Z"));
 
-        mockMvc.perform(get("/api/uploads/tos-sts"))
+        mockMvc.perform(get("/api/v1/uploads/tos-sts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.region").value("cn-shanghai"))
@@ -89,7 +89,7 @@ class UploadControllerTest {
         when(tosStsService.issueCredentials())
                 .thenThrow(new IllegalArgumentException("未配置火山 TOS 凭证"));
 
-        mockMvc.perform(get("/api/uploads/tos-sts"))
+        mockMvc.perform(get("/api/v1/uploads/tos-sts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.msg").value("未配置火山 TOS 凭证"));
@@ -100,7 +100,7 @@ class UploadControllerTest {
         when(tosStsService.issueCredentials())
                 .thenThrow(new VolcStsException(502, "火山 STS 调用失败"));
 
-        mockMvc.perform(get("/api/uploads/tos-sts"))
+        mockMvc.perform(get("/api/v1/uploads/tos-sts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(502))
                 .andExpect(jsonPath("$.msg").value("火山 STS 调用失败"));

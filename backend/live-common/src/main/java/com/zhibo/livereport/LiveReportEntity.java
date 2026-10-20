@@ -29,7 +29,7 @@ public class LiveReportEntity {
     @Column(name = "submitter_id", nullable = false) private Long submitterId;
     @Column(name = "submitter_name", nullable = false, length = 50) private String submitterName;
     @Column(name = "department_name", length = 200) private String departmentName;
-    @Column(name = "submitted_at", nullable = false) private LocalDateTime submittedAt;
-    @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private LocalDateTime createdAt;
-    @UpdateTimestamp @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt;
+    @Column(name = "submitted_time", nullable = false) private LocalDateTime submittedTime;
+    @CreationTimestamp @Column(name = "created_time", nullable = false, updatable = false) private LocalDateTime createdTime;
+    @UpdateTimestamp @Column(name = "updated_time", nullable = false) private LocalDateTime updatedTime;
 }

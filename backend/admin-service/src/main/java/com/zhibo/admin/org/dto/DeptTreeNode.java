@@ -9,9 +9,9 @@ import java.util.List;
 @Getter
 @Setter
 public class DeptTreeNode {
-    private String id;
+    private Long id;
     private String name;
     private String code;
-    private String parentId;
+    private Long parentId;
     private List<DeptTreeNode> children = new ArrayList<>();
 }

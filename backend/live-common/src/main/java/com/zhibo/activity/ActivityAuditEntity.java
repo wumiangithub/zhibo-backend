@@ -26,8 +26,12 @@ public class ActivityAuditEntity {
     @Column(name = "activity_id", nullable = false, length = 36)
     private String activityId;
 
-    /** passed / rejected */
+    /** submit 发起申请 / audit 审核 */
     @Column(nullable = false, length = 16)
+    private String action;
+
+    /** passed / rejected；submit 为空 */
+    @Column(length = 16)
     private String result;
 
     @Column(length = 200)
@@ -40,8 +44,8 @@ public class ActivityAuditEntity {
     private String operatorName;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_time", nullable = false, updatable = false)
+    private LocalDateTime createdTime;
 
     @PrePersist
     void assignIdIfMissing() {

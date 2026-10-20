@@ -15,6 +15,6 @@ public class ActivityRecordItem {
     private String id;
     private String title;
     private String duration;
-    private String createdAt;
+    private String createdTime;
     private String coverUrl;
 }

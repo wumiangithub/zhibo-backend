@@ -6,6 +6,8 @@ import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.livereport.LiveReportAuditEntity;
 import com.zhibo.livereport.LiveReportAuditRepository;
 import com.zhibo.livereport.LiveReportEntity;
+import com.zhibo.livereport.LiveReportPlanEntity;
+import com.zhibo.livereport.LiveReportPlanRepository;
 import com.zhibo.livereport.LiveReportRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
@@ -19,10 +21,14 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +43,7 @@ class LiveReportServiceTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 17, 14, 0, 0);
 
     private final LiveReportRepository reports = mock(LiveReportRepository.class);
+    private final LiveReportPlanRepository planRows = mock(LiveReportPlanRepository.class);
     private final LiveReportAuditRepository audits = mock(LiveReportAuditRepository.class);
     private final SysUserAccountRepository users = mock(SysUserAccountRepository.class);
     private final MaterialRepository materials = mock(MaterialRepository.class);
@@ -46,10 +53,11 @@ class LiveReportServiceTest {
     @BeforeEach
     void setUp() {
         Clock fixed = Clock.fixed(NOW.atZone(ZONE).toInstant(), ZONE);
-        service = new LiveReportService(reports, audits, users, materials, mapper, fixed);
+        service = new LiveReportService(reports, planRows, audits, users, materials, mapper, fixed);
         when(users.findById(7L)).thenReturn(Optional.of(user(7L, "审核员")));
         when(users.findById(8L)).thenReturn(Optional.of(user(8L, "张美丽")));
         when(materials.findById(COVER_MATERIAL_ID)).thenReturn(Optional.of(passedImage(1024L)));
+        when(planRows.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     // ---------- 状态编辑门禁 ----------
@@ -91,6 +99,8 @@ class LiveReportServiceTest {
 
         assertEquals("passed", result.status());
         verify(reports).save(report);
+        verify(planRows).deleteByReportId("r1");
+        verify(planRows).saveAll(argThat((List<LiveReportPlanEntity> rows) -> rows.size() == 2));
         // 追加计划时间须留审计记录
         verify(audits).save(argThat((LiveReportAuditEntity a) ->
                 "append".equals(a.getAction()) && a.getReason() != null && a.getReason().contains("1 段")));
@@ -121,11 +131,37 @@ class LiveReportServiceTest {
 
         LiveReportDtos.Result result = service.create(req, 7L);
 
-        assertEquals(REPORT_ID, result.id());
+        assertNotNull(result.id());
+        UUID.fromString(result.id());
         assertEquals("pending", result.status());
         verify(reports).save(argThat((LiveReportEntity e) ->
                 "pending".equals(e.getStatus()) && Long.valueOf(8L).equals(e.getHostId())));
+        verify(planRows).deleteByReportId(eq(result.id()));
+        verify(planRows).saveAll(argThat((List<LiveReportPlanEntity> rows) ->
+                rows.size() == 1
+                        && rows.get(0).getReportId().equals(result.id())
+                        && rows.get(0).getSortOrder() == 0
+                        && LocalDateTime.of(2026, 10, 18, 10, 0).equals(rows.get(0).getStartTime())
+                        && LocalDateTime.of(2026, 10, 24, 23, 59, 59).equals(rows.get(0).getEndTime())));
         verify(audits).save(argThat((LiveReportAuditEntity a) -> "submit".equals(a.getAction())));
+    }
+
+    @Test
+    void createSyncsMultiplePlanRows() {
+        LiveReportDtos.SaveRequest req = validRequestWithTimes(List.of(
+                plan("2026-10-18 10:00:00", "2026-10-19 12:00:00"),
+                plan("2026-10-22 10:00:00", "2026-10-23 12:00:00")));
+
+        LiveReportDtos.Result result = service.create(req, 7L);
+
+        verify(planRows).saveAll(argThat((List<LiveReportPlanEntity> rows) ->
+                rows.size() == 2
+                        && rows.get(0).getSortOrder() == 0
+                        && rows.get(1).getSortOrder() == 1
+                        && rows.get(0).getReportId().equals(result.id())
+                        && rows.get(1).getReportId().equals(result.id())
+                        && LocalDateTime.of(2026, 10, 18, 10, 0).equals(rows.get(0).getStartTime())
+                        && LocalDateTime.of(2026, 10, 22, 10, 0).equals(rows.get(1).getStartTime())));
     }
 
     @Test
@@ -152,14 +188,22 @@ class LiveReportServiceTest {
     }
 
     @Test
-    void createRejectsDuplicateId() {
-        when(reports.existsById(REPORT_ID)).thenReturn(true);
+    void createAssignsServerUuid() {
+        LiveReportDtos.Result result = service.create(validRequest(), 7L);
+
+        UUID.fromString(result.id());
+        verify(reports).save(argThat((LiveReportEntity e) -> result.id().equals(e.getId())));
+    }
+
+    @Test
+    void createRejectsAttachmentKeyedByClientReportId() {
+        LiveReportDtos.Attachment bad = new LiveReportDtos.Attachment(
+                "a.pdf", "https://cdn/a.pdf", "live-report/" + REPORT_ID + "/attachment/a.pdf", 1024L, "application/pdf");
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.create(validRequest(), 7L));
+                () -> service.create(validRequestWithAttachments(List.of(bad)), 7L));
 
-        assertEquals("报备 ID 已存在", error.getMessage());
-        verify(reports, never()).save(org.mockito.ArgumentMatchers.any());
+        assertEquals("材料仅支持 doc/docx/pdf，单份不超过 10MB", error.getMessage());
     }
 
     @Test
@@ -206,7 +250,7 @@ class LiveReportServiceTest {
     @Test
     void createRejectsUnapprovedCover() {
         MaterialEntity pending = passedImage(1024L);
-        pending.setAiAuditStatus("pending");
+        pending.setAiAuditStatus(0);
         when(materials.findById(COVER_MATERIAL_ID)).thenReturn(Optional.of(pending));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
@@ -218,7 +262,7 @@ class LiveReportServiceTest {
     @Test
     void createRejectsBlankCoverUrl() {
         LiveReportDtos.SaveRequest base = validRequest();
-        LiveReportDtos.SaveRequest req = new LiveReportDtos.SaveRequest(base.id(), base.title(),
+        LiveReportDtos.SaveRequest req = new LiveReportDtos.SaveRequest(base.title(),
                 base.content(), base.planTimes(), "  ", base.coverObjectKey(),
                 base.coverFileSize(), base.coverMimeType(), base.coverMaterialId(), base.hostId(),
                 base.attachments());
@@ -227,20 +271,6 @@ class LiveReportServiceTest {
                 () -> service.create(req, 7L));
 
         assertEquals("请选择报备封面", error.getMessage());
-    }
-
-    @Test
-    void createRejectsInvalidUuid() {
-        LiveReportDtos.SaveRequest base = validRequest();
-        LiveReportDtos.SaveRequest req = new LiveReportDtos.SaveRequest("not-a-uuid", base.title(),
-                base.content(), base.planTimes(), base.coverUrl(), base.coverObjectKey(),
-                base.coverFileSize(), base.coverMimeType(), base.coverMaterialId(), base.hostId(),
-                base.attachments());
-
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.create(req, 7L));
-
-        assertEquals("报备 ID 格式错误", error.getMessage());
     }
 
     // ---------- 驳回后重新提交 ----------
@@ -257,7 +287,7 @@ class LiveReportServiceTest {
                 "live-report/r1/attachment/a.pdf", 1024L, "application/pdf");
         LiveReportDtos.Result result = service.update("r1", new LiveReportDtos.UpdateRequest(
                 "标题", "内容", List.of(plan("2026-10-18 10:00:00", "2026-10-18 12:00:00")),
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, "8",
+                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, 8L,
                 List.of(file)), 7L);
 
         assertEquals("pending", result.status());
@@ -265,7 +295,7 @@ class LiveReportServiceTest {
         // 重新提交须刷新提交人快照为当前操作人
         assertEquals(7L, report.getSubmitterId());
         assertEquals("审核员", report.getSubmitterName());
-        assertEquals(NOW, report.getSubmittedAt());
+        assertEquals(NOW, report.getSubmittedTime());
         verify(reports).save(report);
         verify(audits).save(argThat((LiveReportAuditEntity a) -> "resubmit".equals(a.getAction())));
     }
@@ -273,14 +303,27 @@ class LiveReportServiceTest {
     // ---------- 审核 ----------
 
     @Test
-    void auditRejectsNonPendingReport() {
-        LiveReportEntity report = report("passed", 0);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+    void auditAllowsReAuditAfterPassedOrRejected() {
+        LiveReportEntity passed = report("passed", 0);
+        when(reports.findById("r1")).thenReturn(Optional.of(passed));
 
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.audit("r1", new LiveReportDtos.AuditRequest("passed", null), 7L));
+        LiveReportDtos.Result reReject = service.audit("r1",
+                new LiveReportDtos.AuditRequest("rejected", "资料不全"), 7L);
 
-        assertEquals("仅待审核报备可审核", error.getMessage());
+        assertEquals("rejected", reReject.status());
+        assertEquals("rejected", passed.getStatus());
+        verify(audits).save(argThat((LiveReportAuditEntity a) ->
+                "audit".equals(a.getAction()) && "rejected".equals(a.getResult())
+                        && "资料不全".equals(a.getReason())));
+
+        LiveReportEntity rejected = report("rejected", 0);
+        when(reports.findById("r2")).thenReturn(Optional.of(rejected));
+
+        LiveReportDtos.Result rePass = service.audit("r2",
+                new LiveReportDtos.AuditRequest("passed", null), 7L);
+
+        assertEquals("passed", rePass.status());
+        assertEquals("passed", rejected.getStatus());
     }
 
     @Test
@@ -343,8 +386,8 @@ class LiveReportServiceTest {
         m.setObjectKey("material/image/x.jpg");
         m.setFileSize(fileSize);
         m.setMimeType("image/jpeg");
-        m.setAiAuditStatus("passed");
-        m.setRiskAuditStatus("passed");
+        m.setAiAuditStatus(1);
+        m.setRiskAuditStatus(1);
         return m;
     }
 
@@ -354,7 +397,7 @@ class LiveReportServiceTest {
 
     private LiveReportDtos.Attachment attachment(String name, long fileSize) {
         return new LiveReportDtos.Attachment(name, "https://cdn/" + name,
-                "live-report/" + REPORT_ID + "/attachment/" + name, fileSize, "application/pdf");
+                "live-report/attachment/" + name, fileSize, "application/pdf");
     }
 
     private LiveReportDtos.SaveRequest validRequest() {
@@ -362,14 +405,14 @@ class LiveReportServiceTest {
     }
 
     private LiveReportDtos.SaveRequest validRequestWithTimes(List<LiveReportDtos.PlanTime> times) {
-        return new LiveReportDtos.SaveRequest(REPORT_ID, "标题", "内容", times,
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, "8",
+        return new LiveReportDtos.SaveRequest("标题", "内容", times,
+                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, 8L,
                 List.of(attachment("a.pdf", 1024L)));
     }
 
     private LiveReportDtos.SaveRequest validRequestWithAttachments(List<LiveReportDtos.Attachment> files) {
-        return new LiveReportDtos.SaveRequest(REPORT_ID, "标题", "内容",
+        return new LiveReportDtos.SaveRequest("标题", "内容",
                 List.of(plan("2026-10-18 10:00:00", "2026-10-18 12:00:00")),
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, "8", files);
+                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, 8L, files);
     }
 }

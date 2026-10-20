@@ -51,9 +51,10 @@ public class RoleService {
         response.setName(role.getRoleName());
         response.setRemark(role.getRemark() == null ? "" : role.getRemark());
         response.setMenus(LiveMenuCatalog.tree());
-        response.setMenuCodes(liveRoleMenuRepository.findByRoleIdAndRsStatus(roleId, 1).stream()
-                .map(LiveRoleMenuEntity::getMenuCode)
-                .toList());
+        response.setMenuCodes(LiveMenuCatalog.withImplied(
+                liveRoleMenuRepository.findByRoleIdAndRsStatus(roleId, 1).stream()
+                        .map(LiveRoleMenuEntity::getMenuCode)
+                        .toList()));
         response.setMembers(loadMembers(roleId));
         return response;
     }
@@ -71,6 +72,7 @@ public class RoleService {
                 throw new IllegalArgumentException("未知菜单：" + code);
             }
         }
+        codes = LiveMenuCatalog.withImplied(codes);
         liveRoleMenuRepository.deleteByRoleId(roleId);
         liveRoleMenuRepository.flush();
         for (String code : codes) {
@@ -106,7 +108,7 @@ public class RoleService {
         List<RoleMemberItem> members = new ArrayList<>();
         for (SysUserAccountEntity user : users) {
             RoleMemberItem item = new RoleMemberItem();
-            item.setId(Long.toString(user.getId()));
+            item.setId(user.getId());
             item.setUserName(user.getUserName());
             item.setDepartmentName(user.getYhid() == null ? "" : deptByYhid.getOrDefault(user.getYhid(), ""));
             members.add(item);

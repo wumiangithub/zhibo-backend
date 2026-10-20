@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
  * 上传相关：微吼图片代理 + 火山 TOS STS 临时凭证。
  */
 @RestController
-@RequestMapping("/api/uploads")
+@RequestMapping("/api/v1/uploads")
 @RequiredArgsConstructor
 public class UploadController {
 

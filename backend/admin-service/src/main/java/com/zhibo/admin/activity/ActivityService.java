@@ -6,9 +6,10 @@ import com.zhibo.activity.ActivityCoursewareEntity;
 import com.zhibo.activity.ActivityCoursewareId;
 import com.zhibo.activity.ActivityCoursewareRepository;
 import com.zhibo.activity.ActivityEntity;
-import com.zhibo.activity.ActivityHostEntity;
-import com.zhibo.activity.ActivityHostId;
-import com.zhibo.activity.ActivityHostRepository;
+import com.zhibo.activity.ActivityMemberEntity;
+import com.zhibo.activity.ActivityMemberId;
+import com.zhibo.activity.ActivityMemberRepository;
+import com.zhibo.activity.ActivityMemberRole;
 import com.zhibo.activity.ActivityOwnerEntity;
 import com.zhibo.activity.ActivityOwnerId;
 import com.zhibo.activity.ActivityOwnerRepository;
@@ -16,11 +17,17 @@ import com.zhibo.activity.ActivityProductEntity;
 import com.zhibo.activity.ActivityProductId;
 import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
+import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.ActivityCoursewareView;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
+import com.zhibo.admin.activity.dto.ActivityMemberItem;
+import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
 import com.zhibo.admin.activity.dto.ActivityPerson;
 import com.zhibo.admin.activity.dto.ActivityProductView;
+import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
+import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordItem;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.ActivitySummary;
@@ -37,6 +44,7 @@ import com.zhibo.admin.activity.dto.SalesUpdateRequest;
 import com.zhibo.admin.activity.dto.SalesUpdateResponse;
 import com.zhibo.admin.activity.dto.ShelfRequest;
 import com.zhibo.admin.activity.dto.ShelfResponse;
+import com.zhibo.admin.activity.dto.StartActivityResponse;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
@@ -48,7 +56,10 @@ import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
+import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
+import com.zhibo.livereport.LiveReportEntity;
+import com.zhibo.livereport.LiveReportRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
 import com.zhibo.vhall.provider.VhallLiveProvider;
@@ -69,6 +80,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -80,7 +92,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ActivityService {
 
-    private static final DateTimeFormatter CREATED_AT =
+    private static final DateTimeFormatter CREATED_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter DAY =
             DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -97,14 +109,15 @@ public class ActivityService {
     private final ActivityOwnerRepository ownerRepository;
     private final ActivityProductRepository productRepository;
     private final ActivityAuditRepository auditRepository;
-    private final ActivityHostRepository hostRepository;
+    private final ActivityMemberRepository memberRepository;
     private final ActivityCoursewareRepository coursewareRepository;
     private final MaterialRepository materialRepository;
     private final SysUserAccountRepository userRepository;
     private final SellPasswordCryptoService sellPasswordCrypto;
+    private final LiveReportRepository liveReportRepository;
 
     @Transactional
-    public CreateActivityResponse create(CreateActivityRequest request) {
+    public CreateActivityResponse create(CreateActivityRequest request, long operatorId) {
         if (request.getListed() != null) {
             throw new IllegalArgumentException("请改用 autoList，不再支持 listed");
         }
@@ -139,6 +152,13 @@ public class ActivityService {
         List<Long> ownerIds = parseEmployeeIds(request.getOwnerIds(), "归属人", false);
         List<ProductSnap> products = parseProducts(request.getProducts());
         List<CoursewareSnap> coursewares = parseCoursewares(request.getCoursewareMaterialIds());
+        String reportId = trimToNull(request.getReportId());
+        LiveReportEntity boundReport = null;
+        if (reportId != null) {
+            boundReport = requirePassedReport(reportId);
+            assertHostMatchesReport(boundReport, hostIds);
+        }
+        SysUserAccountEntity operator = requireOperator(operatorId);
 
         CreateRoomResult room = liveProvider.create(new CreateRoomCommand(
                 title,
@@ -152,6 +172,7 @@ public class ActivityService {
 
         ActivityEntity entity = new ActivityEntity();
         entity.setId(UUID.randomUUID().toString());
+        entity.setReportId(reportId);
         entity.setProvider(provider);
         entity.setProviderRoomId(room.providerRoomId());
         entity.setTitle(title);
@@ -197,11 +218,16 @@ public class ActivityService {
             // 创建已成功；拉详情失败不挡落库
         }
 
-        activityRepository.save(entity);
+        // 必须先落库再写关联表；成员删除用 bulk @Modifying，不能 clear 掉未 flush 的活动
+        activityRepository.saveAndFlush(entity);
         replaceHosts(entity.getId(), hostIds);
         replaceOwners(entity.getId(), ownerIds);
         replaceProducts(entity.getId(), products);
         replaceCoursewares(entity.getId(), coursewares);
+        if (boundReport != null) {
+            bumpBoundCount(boundReport, 1);
+        }
+        addAudit(entity.getId(), "submit", null, null, operator);
         return new CreateActivityResponse(entity.getId());
     }
 
@@ -240,7 +266,7 @@ public class ActivityService {
                 PageRequest.of(page - 1, pageSize));
 
         List<ActivityEntity> visible = result.getContent().stream()
-                .filter(activity -> activity.getDeletedAt() == null)
+                .filter(activity -> activity.getDeletedTime() == null)
                 .toList();
         List<ActivitySummary> summaries = visible.stream().map(this::toSummary).toList();
         attachOwnersAndProducts(summaries);
@@ -276,11 +302,12 @@ public class ActivityService {
     }
 
     @Transactional
-    public CreateActivityResponse update(String id, UpdateActivityRequest request) {
+    public CreateActivityResponse update(String id, UpdateActivityRequest request, long operatorId) {
         ActivityEntity entity = requireActivity(id);
         if (isRiskPending(entity.getRiskStatus())) {
             throw new IllegalArgumentException("审核中不可编辑");
         }
+        boolean reapply = isRiskReapply(entity.getRiskStatus());
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
@@ -357,7 +384,14 @@ public class ActivityService {
         activityRepository.save(entity);
 
         if (hasHosts) {
-            replaceHosts(entity.getId(), parseEmployeeIds(request.getHostIds(), "主播", true));
+            List<Long> hostIds = parseEmployeeIds(request.getHostIds(), "主播", true);
+            String boundReportId = trimToNull(entity.getReportId());
+            if (boundReportId != null) {
+                LiveReportEntity report = liveReportRepository.findById(boundReportId)
+                        .orElseThrow(() -> new IllegalArgumentException("直播报备不存在"));
+                assertHostMatchesReport(report, hostIds);
+            }
+            replaceHosts(entity.getId(), hostIds);
         }
         if (hasOwners) {
             replaceOwners(entity.getId(), parseEmployeeIds(request.getOwnerIds(), "归属人", false));
@@ -367,6 +401,9 @@ public class ActivityService {
         }
         if (hasCoursewares) {
             replaceCoursewares(entity.getId(), parseCoursewares(request.getCoursewareMaterialIds()));
+        }
+        if (reapply) {
+            addAudit(entity.getId(), "submit", null, null, requireOperator(operatorId));
         }
         return new CreateActivityResponse(entity.getId());
     }
@@ -496,6 +533,20 @@ public class ActivityService {
         return new SalesUpdateResponse(entity.getId(), entity.getSellType(), entity.getValidityLabel());
     }
 
+    /**
+     * 第三方推流开始直播。已软删由 {@link #requireActivity} 抛 400；未接入服务商由注册表抛 501。
+     * 微吼失败原样向上抛。成功后把 info 的 webinar_state 写回本站 state，与结束直播同一做法。
+     */
+    @Transactional
+    public StartActivityResponse startLive(String id) {
+        ActivityEntity entity = requireActivity(id);
+        LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+        int state = liveProvider.start(entity.getProviderRoomId());
+        entity.setState(state);
+        activityRepository.save(entity);
+        return new StartActivityResponse(entity.getId(), state);
+    }
+
     @Transactional
     public EndActivityResponse end(String id) {
         ActivityEntity entity = requireActivity(id);
@@ -511,8 +562,12 @@ public class ActivityService {
         ActivityEntity entity = requireActivity(id);
         LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
         liveProvider.delete(entity.getProviderRoomId());
-        entity.setDeletedAt(LocalDateTime.now());
+        entity.setDeletedTime(LocalDateTime.now());
         activityRepository.save(entity);
+        if (entity.getReportId() != null && !entity.getReportId().isBlank()) {
+            liveReportRepository.findById(entity.getReportId())
+                    .ifPresent(report -> bumpBoundCount(report, -1));
+        }
         return new DeleteActivityResponse(entity.getId());
     }
 
@@ -548,19 +603,16 @@ public class ActivityService {
         ActivityEntity entity = requireActivity(id);
         AuditListResponse response = new AuditListResponse();
         List<AuditRecordItem> list = new ArrayList<>();
-        for (ActivityAuditEntity row : auditRepository.findByActivityIdOrderByCreatedAtDesc(entity.getId())) {
-            AuditRecordItem item = new AuditRecordItem();
-            item.setId(row.getId());
-            item.setResult(row.getResult());
-            if ("rejected".equals(row.getResult())) {
-                item.setReason(row.getReason());
-            }
-            item.setOperatorId(row.getOperatorId() == null ? null : Long.toString(row.getOperatorId()));
-            item.setOperatorName(row.getOperatorName());
-            if (row.getCreatedAt() != null) {
-                item.setCreatedAt(row.getCreatedAt().format(CREATED_AT));
+        boolean hasSubmit = false;
+        for (ActivityAuditEntity row : auditRepository.findByActivityIdOrderByCreatedTimeDesc(entity.getId())) {
+            AuditRecordItem item = toAuditItem(row);
+            if ("submit".equals(item.getAction())) {
+                hasSubmit = true;
             }
             list.add(item);
+        }
+        if (!hasSubmit) {
+            list.add(syntheticSubmit(entity));
         }
         response.setList(list);
         return response;
@@ -586,8 +638,7 @@ public class ActivityService {
         }
 
         ActivityEntity entity = requireActivity(id);
-        SysUserAccountEntity operator = userRepository.findById(operatorId)
-                .orElseThrow(() -> new IllegalArgumentException("当前员工不存在"));
+        SysUserAccountEntity operator = requireOperator(operatorId);
 
         if ("rejected".equals(result)) {
             entity.setRiskStatus("rejected");
@@ -601,14 +652,7 @@ public class ActivityService {
             }
         }
         activityRepository.save(entity);
-
-        ActivityAuditEntity row = new ActivityAuditEntity();
-        row.setActivityId(entity.getId());
-        row.setResult(result);
-        row.setReason(reason);
-        row.setOperatorId(operator.getId());
-        row.setOperatorName(operator.getUserName() == null ? "" : operator.getUserName());
-        auditRepository.save(row);
+        addAudit(entity.getId(), "audit", result, reason, operator);
         return new AuditResultResponse(entity.getId(), entity.getRiskStatus(), entity.getShelfStatus());
     }
 
@@ -627,7 +671,7 @@ public class ActivityService {
                     item.id(),
                     item.title(),
                     item.duration(),
-                    item.createdAt(),
+                    item.createdTime(),
                     item.coverUrl()
             ));
         }
@@ -635,14 +679,88 @@ public class ActivityService {
         return response;
     }
 
+    /**
+     * 某场本站活动的 rtmp 推流信息。srt 与口令开播不走本方法。
+     * 已软删由 {@link #requireActivity} 抛 400；未接入服务商由注册表抛 501。
+     * 微吼失败原样向上抛，不吞掉。
+     */
+    public ActivityPushStreamResponse pushStream(String id) {
+        ActivityEntity entity = requireActivity(id);
+        LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+        PushStreamInfo info = liveProvider.getPushStream(entity.getProviderRoomId());
+        ActivityPushStreamResponse response = new ActivityPushStreamResponse();
+        response.setStreamAddress(info.streamAddress());
+        response.setStreamCode(info.streamCode());
+        response.setExpireTime(info.expireTime());
+        return response;
+    }
+
     public ActivityEntity requireActivity(String id) {
         String uuid = ActivityIds.requireUuid(id);
         ActivityEntity entity = activityRepository.findById(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
-        if (entity.getDeletedAt() != null) {
+        if (entity.getDeletedTime() != null) {
             throw new IllegalArgumentException("直播不存在");
         }
         return entity;
+    }
+
+    private SysUserAccountEntity requireOperator(long operatorId) {
+        return userRepository.findById(operatorId)
+                .orElseThrow(() -> new IllegalArgumentException("当前员工不存在"));
+    }
+
+    private void addAudit(String activityId, String action, String result, String reason,
+            SysUserAccountEntity operator) {
+        ActivityAuditEntity row = new ActivityAuditEntity();
+        row.setActivityId(activityId);
+        row.setAction(action);
+        row.setResult(result);
+        row.setReason(reason);
+        row.setOperatorId(operator.getId());
+        row.setOperatorName(operator.getUserName() == null ? "" : operator.getUserName());
+        auditRepository.save(row);
+    }
+
+    private AuditRecordItem toAuditItem(ActivityAuditEntity row) {
+        AuditRecordItem item = new AuditRecordItem();
+        item.setId(row.getId());
+        String action = row.getAction();
+        if (action == null || action.isBlank()) {
+            action = "audit";
+        }
+        item.setAction(action);
+        if ("submit".equals(action)) {
+            item.setOperatorId(row.getOperatorId());
+            item.setOperatorName(row.getOperatorName());
+            if (row.getCreatedTime() != null) {
+                item.setCreatedTime(row.getCreatedTime().format(CREATED_TIME));
+            }
+            return item;
+        }
+        item.setResult(row.getResult());
+        if ("rejected".equals(row.getResult())) {
+            item.setReason(row.getReason());
+        }
+        item.setOperatorId(row.getOperatorId());
+        item.setOperatorName(row.getOperatorName());
+        if (row.getCreatedTime() != null) {
+            item.setCreatedTime(row.getCreatedTime().format(CREATED_TIME));
+        }
+        return item;
+    }
+
+    /** 历史活动没有 submit 时，按创建时间补一条「发起申请」，不落库。 */
+    private AuditRecordItem syntheticSubmit(ActivityEntity entity) {
+        AuditRecordItem item = new AuditRecordItem();
+        item.setId("synthetic-submit-" + entity.getId());
+        item.setAction("submit");
+        item.setOperatorId(0L);
+        item.setOperatorName("系统");
+        if (entity.getCreatedTime() != null) {
+            item.setCreatedTime(entity.getCreatedTime().format(CREATED_TIME));
+        }
+        return item;
     }
 
     private ActivitySummary toSummary(ActivityEntity entity) {
@@ -656,8 +774,8 @@ public class ActivityService {
         summary.setType(entity.getType());
         summary.setViewerStyle(entity.getViewerStyle());
         summary.setShareLink(entity.getShareLink());
-        if (entity.getCreatedAt() != null) {
-            summary.setCreatedAt(entity.getCreatedAt().format(CREATED_AT));
+        if (entity.getCreatedTime() != null) {
+            summary.setCreatedTime(entity.getCreatedTime().format(CREATED_TIME));
         }
         summary.setShelfStatus(entity.getShelfStatus());
         summary.setRiskStatus(entity.getRiskStatus());
@@ -680,7 +798,7 @@ public class ActivityService {
         detail.setType(base.getType());
         detail.setViewerStyle(base.getViewerStyle());
         detail.setShareLink(base.getShareLink());
-        detail.setCreatedAt(base.getCreatedAt());
+        detail.setCreatedTime(base.getCreatedTime());
         detail.setShelfStatus(base.getShelfStatus());
         detail.setRiskStatus(base.getRiskStatus());
         detail.setSellType(base.getSellType());
@@ -722,6 +840,7 @@ public class ActivityService {
         }
         detail.setPlaybackSpeedAllow(entity.getPlaybackSpeedAllow());
         detail.setPlaybackFastForwardAllow(entity.getPlaybackFastForwardAllow());
+        attachReport(detail, entity);
         attachOwnersAndProducts(List.of(detail));
         attachHostsAndCoursewares(detail);
         return detail;
@@ -791,6 +910,15 @@ public class ActivityService {
         return status == null || status.isBlank() || "pending".equalsIgnoreCase(status.trim());
     }
 
+    /** 已通过或已驳回后再保存，视为重新发起申请。 */
+    private static boolean isRiskReapply(String status) {
+        if (status == null) {
+            return false;
+        }
+        String value = status.trim();
+        return "passed".equalsIgnoreCase(value) || "rejected".equalsIgnoreCase(value);
+    }
+
     private static String trimToNull(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -798,7 +926,7 @@ public class ActivityService {
         return value.trim();
     }
 
-    private List<Long> parseEmployeeIds(List<String> rawIds, String label, boolean required) {
+    private List<Long> parseEmployeeIds(List<Long> rawIds, String label, boolean required) {
         if (rawIds == null || rawIds.isEmpty()) {
             if (required) {
                 throw new IllegalArgumentException(label + "至少选择1人");
@@ -806,8 +934,11 @@ public class ActivityService {
             return List.of();
         }
         LinkedHashSet<Long> ids = new LinkedHashSet<>();
-        for (String raw : rawIds) {
-            ids.add(parseUserId(raw, label));
+        for (Long raw : rawIds) {
+            if (raw == null || raw <= 0L) {
+                throw new IllegalArgumentException(label + "无效");
+            }
+            ids.add(raw);
         }
         if (required && ids.isEmpty()) {
             throw new IllegalArgumentException(label + "至少选择1人");
@@ -824,18 +955,6 @@ public class ActivityService {
             }
         }
         return List.copyOf(ids);
-    }
-
-    private static long parseUserId(String raw, String label) {
-        String text = raw == null ? "" : raw.trim();
-        if (!text.matches("[1-9]\\d{0,18}")) {
-            throw new IllegalArgumentException(label + "无效");
-        }
-        try {
-            return Long.parseLong(text);
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException(label + "无效");
-        }
     }
 
     private static List<ProductSnap> parseProducts(List<CreateActivityRequest.ProductBinding> rawProducts) {
@@ -888,7 +1007,7 @@ public class ActivityService {
         List<CoursewareSnap> snaps = new ArrayList<>();
         for (String id : ids) {
             MaterialEntity material = found.get(id);
-            if (material == null || material.getDeletedAt() != null) {
+            if (material == null || material.getDeletedTime() != null) {
                 throw new IllegalArgumentException("课件无效");
             }
             snaps.add(new CoursewareSnap(
@@ -900,20 +1019,249 @@ public class ActivityService {
         return snaps;
     }
 
+    /**
+     * 只全量覆盖主播行（{@link ActivityMemberRole#HOST}），不删助理 / 嘉宾。
+     * 默认标签「讲师」，与角色设置里添加主播一致。
+     */
     private void replaceHosts(String activityId, List<Long> hostIds) {
-        hostRepository.deleteByIdActivityId(activityId);
+        memberRepository.deleteByActivityIdAndRole(activityId, ActivityMemberRole.HOST.getCode());
         if (hostIds.isEmpty()) {
             return;
         }
-        List<ActivityHostEntity> rows = new ArrayList<>();
+        List<ActivityMemberEntity> rows = new ArrayList<>();
         int order = 0;
         for (Long userId : hostIds) {
-            ActivityHostEntity row = new ActivityHostEntity();
-            row.setId(new ActivityHostId(activityId, userId));
+            ActivityMemberEntity row = new ActivityMemberEntity();
+            row.setId(new ActivityMemberId(activityId, userId));
+            row.setRole(ActivityMemberRole.HOST.getCode());
             row.setSortOrder(order++);
+            row.setTag(ActivityMemberRole.HOST.getDefaultTag());
             rows.add(row);
         }
-        hostRepository.saveAll(rows);
+        memberRepository.saveAll(rows);
+    }
+
+    @Transactional(readOnly = true)
+    public ActivityMemberListResponse listMembers(String activityId) {
+        ActivityEntity entity = requireActivity(activityId);
+        return toMemberList(memberRepository.findByActivityIds(List.of(entity.getId())));
+    }
+
+    /**
+     * 全量覆盖开播成员（主播 / 助理 / 嘉宾）。不改 {@code activity_owner}，不触发风控回 pending。
+     */
+    @Transactional
+    public ActivityMemberListResponse replaceMembers(String activityId, UpdateActivityMembersRequest request) {
+        ActivityEntity entity = requireActivity(activityId);
+        List<ParsedMember> parsed = parseMembers(request == null ? null : request.getMembers());
+        List<Long> hostIds = parsed.stream()
+                .filter(m -> ActivityMemberRole.isHost(m.role()))
+                .map(ParsedMember::userId)
+                .toList();
+        String boundReportId = trimToNull(entity.getReportId());
+        if (boundReportId != null) {
+            LiveReportEntity report = liveReportRepository.findById(boundReportId)
+                    .orElseThrow(() -> new IllegalArgumentException("直播报备不存在"));
+            assertHostMatchesReport(report, hostIds);
+        }
+        memberRepository.deleteByIdActivityId(activityId);
+        List<ActivityMemberEntity> rows = new ArrayList<>();
+        int[] orderByRole = new int[4];
+        for (ParsedMember item : parsed) {
+            ActivityMemberEntity row = new ActivityMemberEntity();
+            row.setId(new ActivityMemberId(activityId, item.userId()));
+            row.setRole(item.role());
+            row.setSortOrder(orderByRole[item.role()]++);
+            row.setNickname(item.nickname());
+            row.setAvatarUrl(item.avatarUrl());
+            String tag = item.tag();
+            if (tag == null) {
+                tag = ActivityMemberRole.requireCode(item.role()).getDefaultTag();
+            }
+            row.setTag(tag);
+            rows.add(row);
+        }
+        memberRepository.saveAll(rows);
+        return toMemberList(memberRepository.findByActivityIds(List.of(activityId)));
+    }
+
+    /**
+     * 打开角色邀约链接：把当前登录员工加入本场 {@code activity_member}。
+     * 邀约人只校验并回显，不写入成员表。同一人同一角色再次打开视为已加入。
+     */
+    @Transactional
+    public AcceptActivityMemberResponse acceptMemberInvite(
+            String activityId,
+            long userId,
+            AcceptActivityMemberRequest request) {
+        ActivityEntity entity = requireActivity(activityId);
+        if (request == null || request.getRole() == null || request.getInviterId() == null) {
+            throw new IllegalArgumentException("邀约信息不完整");
+        }
+        ActivityMemberRole role = ActivityMemberRole.requireCode(request.getRole());
+        if (request.getInviterId() <= 0L || userId <= 0L) {
+            throw new IllegalArgumentException("邀约人无效");
+        }
+        SysUserAccountEntity invitee = requireActiveUser(userId, "成员无效");
+        SysUserAccountEntity inviter = requireActiveUser(request.getInviterId(), "邀约人无效");
+
+        List<ActivityMemberEntity> rows = memberRepository.findByActivityIds(List.of(entity.getId()));
+        ActivityMemberEntity mine = null;
+        int roleCount = 0;
+        int nextOrder = 0;
+        for (ActivityMemberEntity row : rows) {
+            if (userId == row.getId().getUserId()) {
+                mine = row;
+            }
+            if (row.getRole() == role.getCode()) {
+                roleCount++;
+                nextOrder = Math.max(nextOrder, row.getSortOrder() + 1);
+            }
+        }
+        if (mine != null) {
+            if (mine.getRole() == role.getCode()) {
+                return acceptResponse(invitee, role, true, inviter);
+            }
+            String current = ActivityMemberRole.requireCode(mine.getRole()).getLabel();
+            throw new IllegalArgumentException("你已是本场的" + current + "，不能再加入为" + role.getLabel());
+        }
+        if (role == ActivityMemberRole.HOST && trimToNull(entity.getReportId()) != null) {
+            throw new IllegalArgumentException("已绑定直播报备，主播不能通过邀约加入");
+        }
+        if (roleCount >= RELATION_LIMIT) {
+            throw new IllegalArgumentException(role.getLabel() + "不能超过" + RELATION_LIMIT + "个");
+        }
+        ActivityMemberEntity row = new ActivityMemberEntity();
+        row.setId(new ActivityMemberId(entity.getId(), userId));
+        row.setRole(role.getCode());
+        row.setSortOrder(nextOrder);
+        row.setTag(role.getDefaultTag());
+        memberRepository.save(row);
+        return acceptResponse(invitee, role, false, inviter);
+    }
+
+    private AcceptActivityMemberResponse acceptResponse(
+            SysUserAccountEntity invitee,
+            ActivityMemberRole role,
+            boolean alreadyMember,
+            SysUserAccountEntity inviter) {
+        AcceptActivityMemberResponse response = new AcceptActivityMemberResponse();
+        response.setId(invitee.getId());
+        response.setUserName(invitee.getUserName());
+        response.setRole(role.getCode());
+        response.setAlreadyMember(alreadyMember);
+        response.setInviterName(inviter.getUserName());
+        return response;
+    }
+
+    private SysUserAccountEntity requireActiveUser(long userId, String message) {
+        return userRepository.findById(userId)
+                .filter(user -> user.getRsStatus() != null && user.getRsStatus() == 1)
+                .orElseThrow(() -> new IllegalArgumentException(message));
+    }
+
+    private List<ParsedMember> parseMembers(List<UpdateActivityMembersRequest.MemberBinding> raw) {
+        if (raw == null) {
+            throw new IllegalArgumentException("members 不能为空");
+        }
+        LinkedHashMap<Long, ParsedMember> byUser = new LinkedHashMap<>();
+        int hostCount = 0;
+        int assistantCount = 0;
+        int guestCount = 0;
+        for (UpdateActivityMembersRequest.MemberBinding item : raw) {
+            if (item == null || item.getId() == null || item.getId() <= 0L) {
+                throw new IllegalArgumentException("成员无效");
+            }
+            ActivityMemberRole role = ActivityMemberRole.requireCode(item.getRole());
+            if (byUser.containsKey(item.getId())) {
+                throw new IllegalArgumentException("同一员工不能重复担任开播角色");
+            }
+            if (role == ActivityMemberRole.HOST) {
+                hostCount++;
+            } else if (role == ActivityMemberRole.ASSISTANT) {
+                assistantCount++;
+            } else {
+                guestCount++;
+            }
+            byUser.put(item.getId(), new ParsedMember(
+                    item.getId(),
+                    role.getCode(),
+                    trimToNullLimited(item.getNickname(), 10, "本场昵称"),
+                    trimToNullLimited(item.getAvatarUrl(), 512, "本场头像"),
+                    trimToNullLimited(item.getTag(), 32, "标签")));
+        }
+        if (hostCount < 1) {
+            throw new IllegalArgumentException("主播至少选择1人");
+        }
+        if (hostCount > RELATION_LIMIT) {
+            throw new IllegalArgumentException("主播不能超过" + RELATION_LIMIT + "个");
+        }
+        if (assistantCount > RELATION_LIMIT) {
+            throw new IllegalArgumentException("助理不能超过" + RELATION_LIMIT + "个");
+        }
+        if (guestCount > RELATION_LIMIT) {
+            throw new IllegalArgumentException("嘉宾不能超过" + RELATION_LIMIT + "个");
+        }
+        Map<Long, SysUserAccountEntity> found = userRepository.findAllById(byUser.keySet()).stream()
+                .collect(Collectors.toMap(SysUserAccountEntity::getId, user -> user, (a, b) -> a));
+        for (Long id : byUser.keySet()) {
+            SysUserAccountEntity user = found.get(id);
+            if (user == null || user.getRsStatus() == null || user.getRsStatus() != 1) {
+                throw new IllegalArgumentException("成员无效");
+            }
+        }
+        return List.copyOf(byUser.values());
+    }
+
+    private ActivityMemberListResponse toMemberList(List<ActivityMemberEntity> rows) {
+        Set<Long> userIds = rows.stream().map(row -> row.getId().getUserId()).collect(Collectors.toSet());
+        Map<Long, SysUserAccountEntity> users = userIds.isEmpty()
+                ? Map.of()
+                : userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(SysUserAccountEntity::getId, u -> u, (a, b) -> a));
+        ActivityMemberListResponse response = new ActivityMemberListResponse();
+        List<ActivityMemberItem> list = new ArrayList<>();
+        for (ActivityMemberEntity row : rows) {
+            SysUserAccountEntity user = users.get(row.getId().getUserId());
+            if (user == null) {
+                continue;
+            }
+            ActivityMemberItem item = new ActivityMemberItem();
+            item.setId(user.getId());
+            item.setUserName(user.getUserName());
+            String dept = AuthService.resolveDepartmentName(user);
+            item.setDepartmentName(dept == null ? "" : dept);
+            item.setRole(row.getRole());
+            String nick = trimToNull(row.getNickname());
+            item.setNickname(nick != null ? nick : user.getUserName());
+            String avatar = trimToNull(row.getAvatarUrl());
+            if (avatar != null) {
+                item.setAvatarUrl(avatar);
+            }
+            String tag = trimToNull(row.getTag());
+            if (tag == null && ActivityMemberRole.isHost(row.getRole())) {
+                // 旧数据从 activity_host 迁入时 tag 为空，展示与新建默认一致
+                tag = ActivityMemberRole.HOST.getDefaultTag();
+            }
+            item.setTag(tag == null ? "" : tag);
+            list.add(item);
+        }
+        response.setList(list);
+        return response;
+    }
+
+    private static String trimToNullLimited(String raw, int max, String label) {
+        String value = trimToNull(raw);
+        if (value == null) {
+            return null;
+        }
+        if (value.length() > max) {
+            throw new IllegalArgumentException(label + "不能超过" + max + "字");
+        }
+        return value;
+    }
+
+    private record ParsedMember(Long userId, int role, String nickname, String avatarUrl, String tag) {
     }
 
     private void replaceOwners(String activityId, List<Long> ownerIds) {
@@ -1010,14 +1358,16 @@ public class ActivityService {
     }
 
     private void attachHostsAndCoursewares(ActivityDetailResponse detail) {
-        List<ActivityHostEntity> hosts = hostRepository.findByActivityIds(List.of(detail.getId()));
+        List<ActivityMemberEntity> hosts = memberRepository.findByActivityIds(List.of(detail.getId())).stream()
+                .filter(row -> ActivityMemberRole.isHost(row.getRole()))
+                .toList();
         Set<Long> userIds = hosts.stream().map(row -> row.getId().getUserId()).collect(Collectors.toSet());
         Map<Long, SysUserAccountEntity> users = userIds.isEmpty()
                 ? Map.of()
                 : userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(SysUserAccountEntity::getId, u -> u, (a, b) -> a));
         List<ActivityPerson> people = new ArrayList<>();
-        for (ActivityHostEntity row : hosts) {
+        for (ActivityMemberEntity row : hosts) {
             SysUserAccountEntity user = users.get(row.getId().getUserId());
             if (user == null) {
                 continue;
@@ -1035,7 +1385,7 @@ public class ActivityService {
         List<ActivityCoursewareView> views = new ArrayList<>();
         for (ActivityCoursewareEntity row : rows) {
             MaterialEntity material = materials.get(row.getId().getMaterialId());
-            if (material == null || material.getDeletedAt() != null) {
+            if (material == null || material.getDeletedTime() != null) {
                 continue;
             }
             ActivityCoursewareView view = new ActivityCoursewareView();
@@ -1050,7 +1400,7 @@ public class ActivityService {
 
     private static ActivityPerson toPerson(SysUserAccountEntity user) {
         ActivityPerson person = new ActivityPerson();
-        person.setId(Long.toString(user.getId()));
+        person.setId(user.getId());
         person.setUserName(user.getUserName());
         person.setAvatar(AuthService.resolveAvatar(user));
         person.setDepartmentName(AuthService.resolveDepartmentName(user));
@@ -1118,6 +1468,46 @@ public class ActivityService {
         } catch (DateTimeParseException ex) {
             throw new IllegalArgumentException(field + " 格式须为 yyyy-MM-dd");
         }
+    }
+
+    private void attachReport(ActivityDetailResponse detail, ActivityEntity entity) {
+        String reportId = trimToNull(entity.getReportId());
+        if (reportId == null) {
+            return;
+        }
+        detail.setReportId(reportId);
+        liveReportRepository.findById(reportId).ifPresent(report -> detail.setReportTitle(report.getTitle()));
+    }
+
+    private LiveReportEntity requirePassedReport(String reportId) {
+        String id = reportId.trim();
+        try {
+            UUID.fromString(id);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("reportId 无效");
+        }
+        LiveReportEntity report = liveReportRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("直播报备不存在"));
+        if (!"passed".equals(report.getStatus())) {
+            throw new IllegalArgumentException("只能绑定已通过的直播报备");
+        }
+        return report;
+    }
+
+    private void assertHostMatchesReport(LiveReportEntity report, List<Long> hostIds) {
+        if (hostIds.size() != 1 || !report.getHostId().equals(hostIds.get(0))) {
+            throw new IllegalArgumentException("已绑定直播报备不可修改");
+        }
+    }
+
+    private void bumpBoundCount(LiveReportEntity report, int delta) {
+        int current = report.getBoundLiveCount() == null ? 0 : report.getBoundLiveCount();
+        int next = current + delta;
+        if (next < 0) {
+            next = 0;
+        }
+        report.setBoundLiveCount(next);
+        liveReportRepository.save(report);
     }
 
     private record ProductSnap(String spuId, String productName) {

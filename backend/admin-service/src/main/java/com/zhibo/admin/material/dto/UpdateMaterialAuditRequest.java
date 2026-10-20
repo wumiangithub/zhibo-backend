@@ -4,6 +4,6 @@ import lombok.Data;
 
 @Data
 public class UpdateMaterialAuditRequest {
-    /** passed / rejected */
-    private String status;
+    /** 1 已通过 / 2 已驳回 */
+    private Integer status;
 }

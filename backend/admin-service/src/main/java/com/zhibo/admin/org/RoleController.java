@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("/api/v1/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
@@ -37,8 +37,8 @@ public class RoleController {
         return ApiResponse.ok(roleService.detail(id));
     }
 
-    @PostMapping("/save")
-    public ApiResponse<RoleDetailResponse> save(
+    @PostMapping("/save-menus")
+    public ApiResponse<RoleDetailResponse> saveMenus(
             @RequestBody SaveRoleMenusRequest request,
             HttpServletRequest httpRequest) {
         Long id = request.getId();

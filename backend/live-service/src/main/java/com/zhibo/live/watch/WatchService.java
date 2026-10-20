@@ -37,7 +37,7 @@ public class WatchService {
         WatchActivityListResponse response = new WatchActivityListResponse();
         response.setTotal(result.getTotalElements());
         response.setList(result.getContent().stream()
-                .filter(activity -> activity.getDeletedAt() == null)
+                .filter(activity -> activity.getDeletedTime() == null)
                 .map(this::toItem)
                 .toList());
         return response;
@@ -82,7 +82,7 @@ public class WatchService {
             throw new IllegalArgumentException("活动 id 须为本站 UUID");
         }
         return activityRepository.findById(uuid)
-                .filter(activity -> activity.getDeletedAt() == null)
+                .filter(activity -> activity.getDeletedTime() == null)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
     }
 

@@ -78,7 +78,7 @@ class WatchServiceTest {
     void watch_softDeleted_isMissing() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
-        entity.setDeletedAt(LocalDateTime.now());
+        entity.setDeletedTime(LocalDateTime.now());
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
@@ -92,7 +92,7 @@ class WatchServiceTest {
         ActivityEntity dead = new ActivityEntity();
         dead.setId(ID);
         dead.setTitle("已删");
-        dead.setDeletedAt(LocalDateTime.now());
+        dead.setDeletedTime(LocalDateTime.now());
         when(activityRepository.search(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(dead)));
 

@@ -6,7 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class RoleMemberItem {
-    private String id;
+    private Long id;
     private String userName;
     private String departmentName;
 }

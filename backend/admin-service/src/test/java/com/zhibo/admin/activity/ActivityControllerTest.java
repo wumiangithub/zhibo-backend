@@ -8,7 +8,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import com.zhibo.admin.auth.AuthInterceptor;
+
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -39,12 +42,13 @@ class ActivityControllerTest {
 
     @Test
     void create_returnsApiResponse() throws Exception {
-        when(activityService.create(any())).thenReturn(new CreateActivityResponse(UUID));
+        when(activityService.create(any(), anyLong())).thenReturn(new CreateActivityResponse(UUID));
 
-        mockMvc.perform(post("/api/activities")
+        mockMvc.perform(post("/api/v1/activities/create")
+                        .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"provider":"vhall","title":"活动A","startTime":"2026-10-01 20:00:00","type":2,"autoList":true,"hostIds":["10001"]}
+                                {"provider":"vhall","title":"活动A","startTime":"2026-10-01 20:00:00","type":2,"autoList":true,"hostIds":[10001]}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
@@ -53,7 +57,7 @@ class ActivityControllerTest {
 
     @Test
     void create_validationFailure_returns400() throws Exception {
-        mockMvc.perform(post("/api/activities")
+        mockMvc.perform(post("/api/v1/activities/create")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"provider":"vhall","title":"","startTime":"2026-10-01 20:00:00","type":2}
@@ -64,7 +68,7 @@ class ActivityControllerTest {
 
     @Test
     void create_requiresProvider() throws Exception {
-        mockMvc.perform(post("/api/activities")
+        mockMvc.perform(post("/api/v1/activities/create")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"title":"活动","startTime":"2026-10-01 20:00:00","type":2}
@@ -76,7 +80,7 @@ class ActivityControllerTest {
     @Test
     void create_rejectsTitleOver64() throws Exception {
         String title = "a".repeat(65);
-        mockMvc.perform(post("/api/activities")
+        mockMvc.perform(post("/api/v1/activities/create")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"provider":"vhall","title":"%s","startTime":"2026-10-01 20:00:00","type":2}
@@ -95,7 +99,7 @@ class ActivityControllerTest {
             return detail;
         });
 
-        mockMvc.perform(get("/api/activities/" + UUID).accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/activities/detail/" + UUID).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(UUID))
@@ -109,7 +113,7 @@ class ActivityControllerTest {
         host.setHostUrl("https://host.example/page");
         when(hostService.host(eq(UUID))).thenReturn(host);
 
-        mockMvc.perform(get("/api/activities/" + UUID + "/host").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/activities/host/" + UUID).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.provider").value("vhall"))
@@ -122,7 +126,7 @@ class ActivityControllerTest {
         embed.setEmbedUrl("https://e.vhall.com/v3/embed/live/detail/9?token=t");
         when(embedService.embed(eq(UUID))).thenReturn(embed);
 
-        mockMvc.perform(get("/api/activities/" + UUID + "/embed").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/activities/embed/" + UUID).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.embedUrl")
@@ -138,7 +142,7 @@ class ActivityControllerTest {
                         "799703", "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover")));
         when(activityService.listRecords(eq(UUID))).thenReturn(response);
 
-        mockMvc.perform(get("/api/activities/" + UUID + "/records").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/activities/records/" + UUID).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))

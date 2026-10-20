@@ -15,7 +15,7 @@ import java.util.Map;
  * 微吼上下线回调入口。成功须返回纯文本 {@code success}（微吼约定）。
  */
 @RestController
-@RequestMapping("/api/callbacks/vhall")
+@RequestMapping("/api/v1/callbacks/vhall")
 @RequiredArgsConstructor
 public class VhallPresenceCallbackController {
 

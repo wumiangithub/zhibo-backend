@@ -39,12 +39,12 @@ public class MaterialGroupEntity {
     private int sortOrder;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "created_time", nullable = false, updatable = false)
+    private LocalDateTime createdTime;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "updated_time", nullable = false)
+    private LocalDateTime updatedTime;
 
     @PrePersist
     void assignIdIfMissing() {

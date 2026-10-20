@@ -1,4 +1,4 @@
-package com.zhibo.activity;
+package com.zhibo.course;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
@@ -10,17 +10,17 @@ import lombok.Setter;
 
 import java.io.Serializable;
 
-/** {@code activity_host} 联合主键。 */
+/** {@code course_owner} 联合主键。 */
 @Embeddable
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class ActivityHostId implements Serializable {
+public class CourseOwnerId implements Serializable {
 
-    @Column(name = "activity_id", length = 36)
-    private String activityId;
+    @Column(name = "course_id", length = 36)
+    private String courseId;
 
     @Column(name = "user_id")
     private Long userId;

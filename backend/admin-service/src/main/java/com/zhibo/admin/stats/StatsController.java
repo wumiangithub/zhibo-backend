@@ -11,18 +11,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/activities/{id}/stats")
+@RequestMapping("/api/v1/activities")
 @RequiredArgsConstructor
 public class StatsController {
 
     private final StatsService statsService;
 
-    @GetMapping
+    @GetMapping("/stats/{id}")
     public ApiResponse<ActivityStatsResponse> summary(@PathVariable String id) {
         return ApiResponse.ok(statsService.summary(id));
     }
 
-    @GetMapping("/online")
+    @GetMapping("/stats/online/{id}")
     public ApiResponse<OnlineTrendResponse> online(
             @PathVariable String id,
             @RequestParam String startTime,

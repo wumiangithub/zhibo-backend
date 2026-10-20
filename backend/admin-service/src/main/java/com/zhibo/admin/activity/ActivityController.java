@@ -1,9 +1,13 @@
 package com.zhibo.admin.activity;
 
+import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
+import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityEmbedResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
+import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
+import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.AuditListResponse;
 import com.zhibo.admin.activity.dto.AuditRequest;
@@ -17,6 +21,8 @@ import com.zhibo.admin.activity.dto.SalesUpdateRequest;
 import com.zhibo.admin.activity.dto.SalesUpdateResponse;
 import com.zhibo.admin.activity.dto.ShelfRequest;
 import com.zhibo.admin.activity.dto.ShelfResponse;
+import com.zhibo.admin.activity.dto.StartActivityResponse;
+import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
@@ -35,7 +41,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/activities")
+@RequestMapping("/api/v1/activities")
 @RequiredArgsConstructor
 public class ActivityController {
 
@@ -43,12 +49,14 @@ public class ActivityController {
     private final HostService hostService;
     private final EmbedService embedService;
 
-    @PostMapping
-    public ApiResponse<CreateActivityResponse> create(@Valid @RequestBody CreateActivityRequest request) {
-        return ApiResponse.ok(activityService.create(request));
+    @PostMapping("/create")
+    public ApiResponse<CreateActivityResponse> create(
+            @Valid @RequestBody CreateActivityRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(activityService.create(request, currentUserId(httpRequest)));
     }
 
-    @GetMapping
+    @GetMapping("/list")
     public ApiResponse<ActivityListResponse> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
@@ -62,59 +70,72 @@ public class ActivityController {
                 page, pageSize, keyword, state, provider, shelfStatus, startFrom, startTo));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/detail/{id}")
     public ApiResponse<ActivityDetailResponse> detail(@PathVariable String id) {
         return ApiResponse.ok(activityService.detail(id));
     }
 
     /** 某场活动的回放列表；list[].id = create-demand 的 record_id。 */
-    @GetMapping("/{id}/records")
+    @GetMapping("/records/{id}")
     public ApiResponse<ActivityRecordListResponse> records(@PathVariable String id) {
         return ApiResponse.ok(activityService.listRecords(id));
     }
 
-    @PutMapping("/{id}")
-    public ApiResponse<CreateActivityResponse> update(
-            @PathVariable String id,
-            @RequestBody UpdateActivityRequest request) {
-        return ApiResponse.ok(activityService.update(id, request));
+    /** 某场活动的 rtmp 推流地址与串流密钥。只读，当前登录员工可查。 */
+    @GetMapping("/push-stream/{id}")
+    public ApiResponse<ActivityPushStreamResponse> pushStream(@PathVariable String id) {
+        return ApiResponse.ok(activityService.pushStream(id));
     }
 
-    @PutMapping("/{id}/playback")
+    /** 第三方推流开始直播。当前登录员工可调。不是结束直播 {@code /end/{id}}。 */
+    @PostMapping("/live/start/{id}")
+    public ApiResponse<StartActivityResponse> startLive(@PathVariable String id) {
+        return ApiResponse.ok(activityService.startLive(id));
+    }
+
+    @PutMapping("/update/{id}")
+    public ApiResponse<CreateActivityResponse> update(
+            @PathVariable String id,
+            @RequestBody UpdateActivityRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(activityService.update(id, request, currentUserId(httpRequest)));
+    }
+
+    @PutMapping("/playback/{id}")
     public ApiResponse<CreateActivityResponse> updatePlayback(
             @PathVariable String id,
             @Valid @RequestBody PlaybackUpdateRequest request) {
         return ApiResponse.ok(activityService.updatePlayback(id, request));
     }
 
-    @PutMapping("/{id}/sales")
+    @PutMapping("/sales/{id}")
     public ApiResponse<SalesUpdateResponse> updateSales(
             @PathVariable String id,
             @Valid @RequestBody SalesUpdateRequest request) {
         return ApiResponse.ok(activityService.updateSales(id, request));
     }
 
-    @PostMapping("/{id}/end")
+    @PostMapping("/end/{id}")
     public ApiResponse<EndActivityResponse> end(@PathVariable String id) {
         return ApiResponse.ok(activityService.end(id));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/delete/{id}")
     public ApiResponse<DeleteActivityResponse> delete(@PathVariable String id) {
         return ApiResponse.ok(activityService.delete(id));
     }
 
-    @PostMapping("/{id}/shelf")
+    @PostMapping("/shelf/{id}")
     public ApiResponse<ShelfResponse> shelf(@PathVariable String id, @Valid @RequestBody ShelfRequest request) {
         return ApiResponse.ok(activityService.shelf(id, request));
     }
 
-    @GetMapping("/{id}/audits")
+    @GetMapping("/audits/{id}")
     public ApiResponse<AuditListResponse> audits(@PathVariable String id) {
         return ApiResponse.ok(activityService.audits(id));
     }
 
-    @PostMapping("/{id}/audit")
+    @PostMapping("/audit/{id}")
     public ApiResponse<AuditResultResponse> audit(
             @PathVariable String id,
             @Valid @RequestBody AuditRequest request,
@@ -130,12 +151,33 @@ public class ActivityController {
         throw new AuthException(401, "未登录");
     }
 
-    @GetMapping("/{id}/host")
+    @GetMapping("/members/list/{id}")
+    public ApiResponse<ActivityMemberListResponse> members(@PathVariable String id) {
+        return ApiResponse.ok(activityService.listMembers(id));
+    }
+
+    @PutMapping("/members/save/{id}")
+    public ApiResponse<ActivityMemberListResponse> replaceMembers(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateActivityMembersRequest request) {
+        return ApiResponse.ok(activityService.replaceMembers(id, request));
+    }
+
+    /** 打开角色邀约链接：当前登录员工加入本场指定开播角色。 */
+    @PostMapping("/members/accept/{id}")
+    public ApiResponse<AcceptActivityMemberResponse> acceptMember(
+            @PathVariable String id,
+            @Valid @RequestBody AcceptActivityMemberRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(activityService.acceptMemberInvite(id, currentUserId(httpRequest), request));
+    }
+
+    @GetMapping("/host/{id}")
     public ApiResponse<ActivityHostResponse> host(@PathVariable String id) {
         return ApiResponse.ok(hostService.host(id));
     }
 
-    @GetMapping("/{id}/embed")
+    @GetMapping("/embed/{id}")
     public ApiResponse<ActivityEmbedResponse> embed(@PathVariable String id) {
         return ApiResponse.ok(embedService.embed(id));
     }

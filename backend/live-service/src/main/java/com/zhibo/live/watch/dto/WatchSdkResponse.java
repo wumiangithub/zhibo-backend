@@ -3,7 +3,7 @@ package com.zhibo.live.watch.dto;
 import lombok.Data;
 
 /**
- * {@code GET /api/watch/{id}/sdk} 响应：SDK 初始化载荷 + 旧嵌入地址兜底。
+ * {@code GET /api/v1/watch/sdk/{id}} 响应：SDK 初始化载荷 + 旧嵌入地址兜底。
  */
 @Data
 public class WatchSdkResponse {

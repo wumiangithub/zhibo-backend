@@ -7,11 +7,12 @@ info:
     - admin-service：`http://127.0.0.1:8081`
     - live-service：`http://127.0.0.1:8082`
     
-    契约：`zhibo-shared/docs/API约定.md`。
+    契约：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。
+    本文件亦是正式后端按文档反向实现接口与建表/校验的权威输入之一。
     分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。
     
     导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。
-  version: "2.0.0"
+  version: "2.3.0"
   contact:
     name: zhibo
 servers:
@@ -24,6 +25,9 @@ tags:
   - name: admin/图片上传
   - name: admin/素材中心
   - name: admin/活动管理
+  - name: admin/直播报备
+  - name: admin/课程
+  - name: admin/对外课程
   - name: admin/统计
   - name: admin/中控台
   - name: admin/员工组织
@@ -32,7 +36,7 @@ tags:
   - name: live/中控台
   - name: live/回调
 paths:
-  /api/auth/captcha:
+  /api/v1/auth/captcha:
     get:
       tags:
         - admin/登录鉴权
@@ -46,7 +50,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseCaptcha"
-  /api/auth/login:
+  /api/v1/auth/login:
     post:
       tags:
         - admin/登录鉴权
@@ -66,7 +70,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseLoginPending"
-  /api/auth/wechat/callback:
+  /api/v1/auth/wechat/callback:
     get:
       tags:
         - admin/登录鉴权
@@ -104,7 +108,7 @@ paths:
       responses:
         200:
           description: HTML 或业务结果
-  /api/auth/login/query:
+  /api/v1/auth/login/query:
     get:
       tags:
         - admin/登录鉴权
@@ -124,7 +128,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseLoginQuery"
-  /api/auth/refresh:
+  /api/v1/auth/refresh:
     post:
       tags:
         - admin/登录鉴权
@@ -144,7 +148,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseTokenPair"
-  /api/auth/me:
+  /api/v1/auth/me:
     get:
       tags:
         - admin/登录鉴权
@@ -160,7 +164,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMe"
-  /api/uploads/image:
+  /api/v1/uploads/image:
     post:
       tags:
         - admin/图片上传
@@ -189,7 +193,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseUploadImage"
-  /api/uploads/tos-sts:
+  /api/v1/uploads/tos-sts:
     get:
       tags:
         - admin/图片上传
@@ -205,7 +209,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseTosSts"
-  /api/materials/groups:
+  /api/v1/materials/groups/list:
     get:
       tags:
         - admin/素材中心
@@ -227,6 +231,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialGroups"
+  /api/v1/materials/groups/create:
     post:
       tags:
         - admin/素材中心
@@ -257,7 +262,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialGroup"
-  /api/materials/groups/{id}:
+  /api/v1/materials/groups/rename/{id}:
     put:
       tags:
         - admin/素材中心
@@ -287,6 +292,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialGroup"
+  /api/v1/materials/groups/delete/{id}:
     delete:
       tags:
         - admin/素材中心
@@ -304,7 +310,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
-  /api/materials:
+  /api/v1/materials/list:
     get:
       tags:
         - admin/素材中心
@@ -328,19 +334,24 @@ paths:
           in: query
           schema:
             type: string
+        - name: auditStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaterialAuditStatus"
+          description: 联合审核：任一方驳回算驳回，否则任一方待审核算待审核，两方都通过才算通过。不传不过滤
         - name: selectableOnly
           in: query
           schema:
             type: boolean
             default: false
-          description: true 时仅两审均为 passed
+          description: true 时仅两审均为 1（已通过）
         - name: page
           in: query
           schema:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -348,6 +359,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -355,6 +367,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialList"
+  /api/v1/materials/create:
     post:
       tags:
         - admin/素材中心
@@ -376,7 +389,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialRegister"
-  /api/materials/articles:
+  /api/v1/materials/articles/create:
     post:
       tags:
         - admin/素材中心
@@ -398,7 +411,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
-  /api/materials/articles/{id}:
+  /api/v1/materials/articles/detail/{id}:
     get:
       tags:
         - admin/素材中心
@@ -416,11 +429,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseArticleDetail"
+  /api/v1/materials/articles/update/{id}:
     put:
       tags:
         - admin/素材中心
       summary: 编辑文章
-      description: 待审核不可编辑；成功后两审回 pending
+      description: 待审核不可编辑；成功后两审回到 0
       operationId: admin_updateArticle
       security:
         - BearerAuth:
@@ -432,21 +446,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - title
-                - author
-                - content
-              properties:
-                title:
-                  type: string
-                  maxLength: 45
-                author:
-                  type: string
-                  maxLength: 16
-                content:
-                  type: string
-                  maxLength: 100000
+              $ref: "#/components/schemas/ArticleUpdateRequest"
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -454,7 +454,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
-  /api/materials/{id}:
+  /api/v1/materials/rename/{id}:
     put:
       tags:
         - admin/素材中心
@@ -484,6 +484,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
+  /api/v1/materials/delete/{id}:
     delete:
       tags:
         - admin/素材中心
@@ -501,7 +502,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
-  /api/materials/{id}/group:
+  /api/v1/materials/group/{id}:
     put:
       tags:
         - admin/素材中心
@@ -531,7 +532,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
-  /api/materials/{id}/image:
+  /api/v1/materials/image/{id}:
     put:
       tags:
         - admin/素材中心
@@ -567,7 +568,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
-  /api/materials/{id}/ai-audit:
+  /api/v1/materials/ai-audit/{id}:
     put:
       tags:
         - admin/素材中心
@@ -596,7 +597,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
-  /api/materials/{id}/risk-audit:
+  /api/v1/materials/risk-audit/{id}:
     put:
       tags:
         - admin/素材中心
@@ -625,7 +626,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseMaterialItem"
-  /api/activities:
+  /api/v1/activities/create:
     post:
       tags:
         - admin/活动管理
@@ -654,9 +655,9 @@ paths:
                   ultraLowLatency: false
                   autoList: true
                   hostIds:
-                    - "10001"
+                    - 10001
                   ownerIds:
-                    - "10001"
+                    - 10001
                   products: []
                   coursewareMaterialIds: []
       responses:
@@ -666,6 +667,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/activities/list:
     get:
       tags:
         - admin/活动管理
@@ -681,7 +683,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -689,6 +691,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
         - name: keyword
           in: query
           schema:
@@ -725,7 +728,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseActivityList"
-  /api/activities/{id}:
+  /api/v1/activities/detail/{id}:
     get:
       tags:
         - admin/活动管理
@@ -743,6 +746,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseActivityDetail"
+  /api/v1/activities/update/{id}:
     put:
       tags:
         - admin/活动管理
@@ -766,6 +770,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/activities/delete/{id}:
     delete:
       tags:
         - admin/活动管理
@@ -783,7 +788,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
-  /api/activities/{id}/playback:
+  /api/v1/activities/playback/{id}:
     put:
       tags:
         - admin/活动管理
@@ -807,7 +812,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
-  /api/activities/{id}/sales:
+  /api/v1/activities/sales/{id}:
     put:
       tags:
         - admin/活动管理
@@ -831,7 +836,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseSales"
-  /api/activities/{id}/end:
+  /api/v1/activities/end/{id}:
     post:
       tags:
         - admin/活动管理
@@ -849,7 +854,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseEndActivity"
-  /api/activities/{id}/shelf:
+  /api/v1/activities/shelf/{id}:
     post:
       tags:
         - admin/活动管理
@@ -873,7 +878,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseShelf"
-  /api/activities/{id}/audits:
+  /api/v1/activities/audits/{id}:
     get:
       tags:
         - admin/活动管理
@@ -891,7 +896,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAudits"
-  /api/activities/{id}/audit:
+  /api/v1/activities/audit/{id}:
     post:
       tags:
         - admin/活动管理
@@ -915,7 +920,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAuditSubmit"
-  /api/activities/{id}/records:
+  /api/v1/activities/records/{id}:
     get:
       tags:
         - admin/活动管理
@@ -933,7 +938,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseRecordList"
-  /api/activities/{id}/host:
+  /api/v1/activities/host/{id}:
     get:
       tags:
         - admin/活动管理
@@ -952,7 +957,124 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseHost"
-  /api/activities/{id}/embed:
+  /api/v1/activities/members/list/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 开播成员名单
+      description: 主播/助理/嘉宾（D57）。按 role 升序，同角色内按 sort_order。已软删 → 400。
+      operationId: admin_listActivityMembers
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseMembers"
+  /api/v1/activities/members/save/{id}:
+    put:
+      tags:
+        - admin/活动管理
+      summary: 全量覆盖开播成员
+      description: "全量覆盖 activity_member；至少 1 名主播。不改归属人、不触发风控回 pending、不同步微吼。传 [] → 400。有 reportId 时主播须恰为报备主播 1 人。"
+      operationId: admin_replaceActivityMembers
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateActivityMembersRequest"
+            example:
+              members:
+                - id: 10001
+                  role: 1
+                  nickname: 云奎
+                  avatarUrl: "https://cdn.example/a.jpg"
+                  tag: 讲师
+                - id: 10002
+                  role: 2
+                  tag: 助理
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseMembers"
+  /api/v1/activities/members/accept/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 接受角色邀约
+      description: 微信邀约：当前登录员工加入本场指定开播角色；邀约人只校验不落库。
+      operationId: admin_acceptActivityMember
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptActivityMemberRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseAcceptMember"
+  /api/v1/activities/push-stream/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 第三方 rtmp 推流地址
+      description: 只读。选中 rtmp 时使用。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。
+      operationId: admin_getActivityPushStream
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePushStream"
+  /api/v1/activities/live/start/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 第三方推流开始直播
+      description: "无 body。OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。"
+      operationId: admin_startActivityLivePush
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveStart"
+  /api/v1/activities/embed/{id}:
     get:
       tags:
         - admin/活动管理
@@ -970,7 +1092,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseEmbed"
-  /api/activities/{id}/stats:
+  /api/v1/activities/stats/{id}:
     get:
       tags:
         - admin/统计
@@ -988,7 +1110,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseStats"
-  /api/activities/{id}/stats/online:
+  /api/v1/activities/stats/online/{id}:
     get:
       tags:
         - admin/统计
@@ -1019,12 +1141,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOnlineTrend"
-  /api/activities/{id}/presence-trend:
+  /api/v1/activities/presence-trend/{id}:
     get:
       tags:
         - admin/统计
       summary: 进出三线走势（管理端）
-      description: "与 live GET /api/watch/{id}/presence-trend 同形。"
+      description: "与 live GET /api/v1/watch/presence-trend/{id} 同形。"
       operationId: admin_getActivityPresenceTrend
       security:
         - BearerAuth:
@@ -1055,12 +1177,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponsePresenceTrend"
-  /api/activities/{id}/attendees:
+  /api/v1/activities/attendees/{id}:
     get:
       tags:
         - admin/中控台
       summary: 中控台进出名单（废弃）
-      description: "废弃：新代码一律用 live GET /api/watch/{id}/attendees。实现可暂时保留。"
+      description: "废弃：新代码一律用 live GET /api/v1/watch/attendees/{id}。实现可暂时保留。"
       deprecated: true
       operationId: admin_listActivityAttendeesDeprecated
       security:
@@ -1083,7 +1205,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -1091,6 +1213,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
         - name: keyword
           in: query
           schema:
@@ -1102,7 +1225,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAttendeeList"
-  /api/employees:
+  /api/v1/employees:
     get:
       tags:
         - admin/员工组织
@@ -1124,7 +1247,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseEmployees"
-  /api/org/departments/tree:
+  /api/v1/org/departments/tree:
     get:
       tags:
         - admin/员工组织
@@ -1140,7 +1263,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOrgDeptTree"
-  /api/org/employees:
+  /api/v1/org/employees:
     get:
       tags:
         - admin/员工组织
@@ -1153,8 +1276,9 @@ paths:
         - name: deptId
           in: query
           schema:
-            type: string
-          description: "不传=全部；有值不含下级"
+            type: integer
+            format: int64
+          description: "部门 id；不传=全部；有值不含下级"
         - name: userName
           in: query
           schema:
@@ -1162,14 +1286,16 @@ paths:
         - name: roleId
           in: query
           schema:
-            type: string
+            type: integer
+            format: int64
+          description: 角色 id；不传不过滤；≤0 → 400
         - name: page
           in: query
           schema:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -1177,6 +1303,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -1184,7 +1311,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOrgEmployees"
-  /api/org/employees/{id}/live-enabled:
+  /api/v1/org/employees/live-enabled/{id}:
     put:
       tags:
         - admin/员工组织
@@ -1198,8 +1325,9 @@ paths:
           in: path
           required: true
           schema:
-            type: string
-          description: 账号 rs_mainkey_id
+            type: integer
+            format: int64
+          description: 账号 rs_mainkey_id（路径文本，语义为数字）
       requestBody:
         required: true
         content:
@@ -1213,7 +1341,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseLiveEnabled"
-  /api/roles/list:
+  /api/v1/roles/list:
     get:
       tags:
         - admin/员工组织
@@ -1229,7 +1357,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOrgRoles"
-  /api/roles/detail/{id}:
+  /api/v1/roles/detail/{id}:
     get:
       tags:
         - admin/员工组织
@@ -1253,7 +1381,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOrgRoleDetail"
-  /api/roles/save:
+  /api/v1/roles/save-menus:
     post:
       tags:
         - admin/员工组织
@@ -1276,7 +1404,404 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOrgRoleDetail"
-  /api/watch/activities:
+  /api/v1/live-reports/create:
+    post:
+      tags:
+        - admin/直播报备
+      summary: 新建并提交报备
+      description: 报备 ID 由服务端生成，请求体不含 id。成功返回 id 与 status。
+      operationId: admin_createLiveReport
+      security:
+        - BearerAuth:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiveReportSaveRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveReportResult"
+  /api/v1/live-reports/list:
+    get:
+      tags:
+        - admin/直播报备
+      summary: 报备列表
+      description: 返回计划时间与查询区间有交集的数据。
+      operationId: admin_listLiveReports
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: title
+          in: query
+          schema:
+            type: string
+        - name: hostName
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/LiveReportStatus"
+        - name: startFrom
+          in: query
+          schema:
+            type: string
+          description: "计划时间筛选起点，yyyy-MM-dd HH:mm:ss；与 startTo 组成区间，命中条件为任一段 planTimes 与区间相交（非外包 min/max）"
+        - name: startTo
+          in: query
+          schema:
+            type: string
+          description: "计划时间筛选终点，yyyy-MM-dd HH:mm:ss；与 startFrom 组成区间，命中条件为任一段 planTimes 与区间相交（非外包 min/max）"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveReportList"
+  /api/v1/live-reports/detail/{id}:
+    get:
+      tags:
+        - admin/直播报备
+      summary: 报备详情
+      operationId: admin_getLiveReport
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/LiveReportId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveReportDetail"
+  /api/v1/live-reports/update/{id}:
+    put:
+      tags:
+        - admin/直播报备
+      summary: 修改报备
+      description: 驳回态提交完整字段并回到 pending。已通过且未绑定直播时只允许在 planTimes 尾部追加。其他状态 400。
+      operationId: admin_updateLiveReport
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/LiveReportId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiveReportUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveReportResult"
+  /api/v1/live-reports/audit/{id}:
+    post:
+      tags:
+        - admin/直播报备
+      summary: 审核报备
+      description: pending / passed / rejected 均可审，可反复改结论（只追加记录）。驳回 reason 必填，最多 500 字。
+      operationId: admin_auditLiveReport
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/LiveReportId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LiveReportAuditRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveReportResult"
+  /api/v1/live-reports/audits/{id}:
+    get:
+      tags:
+        - admin/直播报备
+      summary: 报备审核记录
+      description: 按时间倒序。action 为 submit / resubmit / audit / append。
+      operationId: admin_listLiveReportAudits
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/LiveReportId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseLiveReportAudits"
+  /api/v1/courses/create:
+    post:
+      tags:
+        - admin/课程
+      summary: 新建课程
+      description: "成功后 riskStatus 与 shelfStatus 均为 pending，并写一条 action=submit。"
+      operationId: admin_createCourse
+      security:
+        - BearerAuth:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCourseRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/courses/list:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程列表
+      operationId: admin_listCourses
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 标题模糊
+        - name: shelfStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/ShelfStatus"
+        - name: ownerName
+          in: query
+          schema:
+            type: string
+          description: 归属人姓名精确，命中任一在职归属人
+        - name: riskStatus
+          in: query
+          schema:
+            $ref: "#/components/schemas/RiskStatus"
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum:
+              - entitledUserCount
+              - totalUserCount
+              - salesCount
+              - updatedTime
+            default: updatedTime
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseList"
+  /api/v1/courses/detail/{id}:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程详情
+      description: 不存在或已软删 → 400。
+      operationId: admin_getCourse
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseDetail"
+  /api/v1/courses/delete/{id}:
+    delete:
+      tags:
+        - admin/课程
+      summary: 软删课程
+      description: 仅内容数与总销量均为 0，否则 400。
+      operationId: admin_deleteCourse
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/courses/shelf/{id}:
+    post:
+      tags:
+        - admin/课程
+      summary: 课程上架 / 下架
+      description: 上架要求风控已通过且当前为待上架或已下架，并更新 listedTime。下架仅已上架。强制封禁不可上下架。
+      operationId: admin_shelfCourse
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShelfRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseShelf"
+  /api/v1/courses/audits/{id}:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程审核记录
+      description: 按时间倒序。action 为 submit 或 audit。submit 不返回 result / reason。
+      operationId: admin_listCourseAudits
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseAudits"
+  /api/v1/courses/audit/{id}:
+    post:
+      tags:
+        - admin/课程
+      summary: 审核课程
+      description: "通过不要理由。驳回把上架改为 banned。autoList=true 且通过则上架改为 on 并写 listedTime；autoList=false 且当前为 banned 时回到 pending。"
+      operationId: admin_auditCourse
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuditSubmitRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseAuditSubmit"
+  /api/v1/outside/courses/list:
+    get:
+      tags:
+        - admin/对外课程
+      summary: 对外课程列表
+      description: 当前不鉴权。只返回已上架且风控已通过、未软删的课程。默认按 listedTime 倒序。
+      operationId: admin_listOutsideCourses
+      security: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 课程名称模糊
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseOutsideCourseList"
+  /api/v1/watch/activities:
     get:
       tags:
         - live/观看
@@ -1289,7 +1814,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -1297,6 +1822,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
         - name: state
           in: query
           schema:
@@ -1308,7 +1834,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchList"
-  /api/watch/{id}:
+  /api/v1/watch/detail/{id}:
     get:
       tags:
         - live/观看
@@ -1335,7 +1861,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchEmbed"
-  /api/watch/{id}/sdk:
+  /api/v1/watch/sdk/{id}:
     get:
       tags:
         - live/观看
@@ -1362,7 +1888,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchSdk"
-  /api/watch/{id}/attendance/enter:
+  /api/v1/watch/attendance/enter/{id}:
     post:
       tags:
         - live/进出房
@@ -1384,7 +1910,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
-  /api/watch/{id}/attendance/leave:
+  /api/v1/watch/attendance/leave/{id}:
     post:
       tags:
         - live/进出房
@@ -1405,7 +1931,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAttendanceLeave"
-  /api/callbacks/vhall/presence:
+  /api/v1/callbacks/vhall/presence:
     post:
       tags:
         - live/回调
@@ -1421,7 +1947,7 @@ paths:
       responses:
         200:
           description: 按微吼约定响应
-  /api/watch/{id}/attendees:
+  /api/v1/watch/attendees/{id}:
     get:
       tags:
         - live/中控台
@@ -1445,7 +1971,7 @@ paths:
             type: integer
             default: 1
             minimum: 1
-          description: 从 1 起（D37）
+          description: 页码，从 1 起（D37）；默认 1
         - name: pageSize
           in: query
           schema:
@@ -1453,6 +1979,7 @@ paths:
             default: 20
             minimum: 1
             maximum: 100
+          description: 每页条数；默认 20，最大 100
         - name: keyword
           in: query
           schema:
@@ -1464,7 +1991,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAttendeeList"
-  /api/watch/{id}/presence-trend:
+  /api/v1/watch/presence-trend/{id}:
     get:
       tags:
         - live/中控台
@@ -1497,7 +2024,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponsePresenceTrend"
-  /api/watch/{id}/chat-filter:
+  /api/v1/watch/chat-filter/{id}:
     get:
       tags:
         - live/中控台
@@ -1548,6 +2075,22 @@ components:
         type: string
         format: uuid
       description: 素材 / 分组 UUID
+    CourseId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 本站课程 UUID
+    LiveReportId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 直播报备 UUID
     WatchActivityId:
       name: id
       in: path
@@ -1566,18 +2109,20 @@ components:
       properties:
         code:
           type: integer
-          description: "0 成功；400/401/403/500/501/502…"
+          description: "0 成功；400/401/403/500/501/502…；库：INT"
           example: 0
         msg:
           type: string
           example: ok
+          description: 提示文案；成功一般为 ok；库：VARCHAR(256)
+          maxLength: 256
     Provider:
       type: string
       enum:
         - vhall
         - aliyun
         - tencent
-      description: 直播服务商；创建后不可改
+      description: 直播服务商；创建后不可改；库：VARCHAR(16)
     ActivityType:
       type: integer
       enum:
@@ -1585,7 +2130,7 @@ components:
         - 2
         - 3
         - 4
-      description: "1音频 / 2视频 / 3互动 / 4录播"
+      description: "1音频 / 2视频 / 3互动 / 4录播；库：INT"
     ActivityState:
       type: integer
       enum:
@@ -1595,17 +2140,19 @@ components:
         - 3
         - 4
         - 5
-      description: "0全部(列表筛) / 1直播 / 2预告 / 3结束 / 4点播 / 5回放"
+      description: "0全部(列表筛) / 1直播 / 2预告 / 3结束 / 4点播 / 5回放；库：INT"
     ViewerStyle:
       type: string
       enum:
         - traditional
         - immersive
+      description: traditional 传统直播间 / immersive 沉浸直播间；库：VARCHAR(16)
     WarmupType:
       type: string
       enum:
         - image
         - video
+      description: image 暖场图 / video 暖场视频；库：VARCHAR(16)
     ShelfStatus:
       type: string
       enum:
@@ -1613,12 +2160,14 @@ components:
         - "on"
         - "off"
         - banned
+      description: pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁；库：VARCHAR(16)
     RiskStatus:
       type: string
       enum:
         - pending
         - passed
         - rejected
+      description: pending 待审核 / passed 已通过 / rejected 已驳回；库：VARCHAR(16)
     SellType:
       type: string
       enum:
@@ -1626,16 +2175,19 @@ components:
         - paid
         - encrypted
         - specified
+      description: free 免费 / paid 付费 / encrypted 加密 / specified 指定学员；库：VARCHAR(16)
     AccessValidityType:
       type: string
       enum:
         - long
         - days
+      description: long 长期有效 / days 购买后 N 天有效；库：VARCHAR(16)
     PlaybackValidityType:
       type: string
       enum:
         - forever
         - days
+      description: forever 永久有效 / days 直播结束后 N 天有效；库：VARCHAR(16)
     MaterialType:
       type: string
       enum:
@@ -1643,24 +2195,39 @@ components:
         - video
         - document
         - article
+      description: image 图片 / video 视频 / document 文档 / article 文章；库：VARCHAR(16)
     MaterialFileType:
       type: string
       enum:
         - image
         - video
         - document
-      description: 批量登记仅接受文件类型，不含 article
+      description: 批量登记仅接受文件类型，不含 article；库：VARCHAR(16)
     AuditWriteStatus:
-      type: string
+      type: integer
       enum:
-        - passed
-        - rejected
+        - 1
+        - 2
+      description: "1 已通过 / 2 已驳回。不接受 0；库：INT"
     MaterialAuditStatus:
-      type: string
+      type: integer
       enum:
-        - pending
-        - passed
-        - rejected
+        - 0
+        - 1
+        - 2
+      description: "0 待审核 / 1 已通过 / 2 已驳回；库：INT"
+    ActivityMemberRole:
+      type: integer
+      enum:
+        - 1
+        - 2
+        - 3
+      description: "1 主播 / 2 助理 / 3 嘉宾（D57；JSON 只传数字）；库：INT"
+    EmployeeId:
+      type: integer
+      format: int64
+      description: 员工 rs_mainkey_id（JSON 数字，D56）；库：BIGINT
+      example: 10001
     IdData:
       type: object
       required:
@@ -1669,18 +2236,30 @@ components:
         id:
           type: string
           format: uuid
+          description: 本站业务主键（活动/素材等多为 UUID）；库：VARCHAR(36)
+          maxLength: 36
     EmployeeBrief:
       type: object
       properties:
         id:
-          type: string
-          description: rs_mainkey_id 十进制字符串
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
         userName:
           type: string
+          description: 员工姓名；库：VARCHAR(50)
+          maxLength: 50
         avatar:
           type: string
+          description: 头像 URL；没有则不返回；库：VARCHAR(512)
+          maxLength: 512
         userAccount:
           type: string
+          description: 登录账号；候选接口可不返回；库：VARCHAR(64)
+          maxLength: 64
+        departmentName:
+          type: string
+          description: 员工候选：qw_bmxx，多部门用顿号连接；没有则不返回；库：VARCHAR(256)
+          maxLength: 256
     ProductRef:
       type: object
       required:
@@ -1689,23 +2268,32 @@ components:
       properties:
         spuId:
           type: string
-          description: 十进制字符串
+          description: 订单中心商品 id；可能超过 JS 安全整数，故用十进制字符串（D56 例外）；库：VARCHAR(64)
+          maxLength: 64
         productName:
           type: string
           minLength: 1
           maxLength: 128
+          description: 商品名称；库：VARCHAR(128)
     CoursewareItem:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 素材 UUID；库：VARCHAR(36)
+          maxLength: 36
         name:
           type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
         type:
           $ref: "#/components/schemas/MaterialType"
+          description: 类型
         url:
           type: string
+          description: URL 地址；库：VARCHAR(2048)
+          maxLength: 2048
     CaptchaData:
       type: object
       required:
@@ -1715,6 +2303,8 @@ components:
         captchaId:
           type: string
           format: uuid
+          description: 验证码 id；库：VARCHAR(36)
+          maxLength: 36
         imageBase64:
           type: string
           description: "data:image/png;base64,... 可直接作 img src"
@@ -1728,14 +2318,20 @@ components:
       properties:
         userAccount:
           type: string
+          description: 登录账号；库：VARCHAR(64)
+          maxLength: 64
         password:
           type: string
-          description: AES-256-GCM：IV(12)+ciphertext+tag → Base64
+          description: AES-256-GCM：IV(12)+ciphertext+tag → Base64；库：VARCHAR(64)
+          maxLength: 64
         captchaId:
           type: string
           format: uuid
+          description: 验证码 id；库：VARCHAR(36)
+          maxLength: 36
         captchaCode:
           type: string
+          description: 图形验证码内容
     LoginPendingData:
       type: object
       required:
@@ -1744,10 +2340,10 @@ components:
       properties:
         state:
           type: string
-          description: 微信 qrconnect state
+          description: 微信 qrconnect state；库：INT
         expiresIn:
           type: integer
-          description: 秒；建议 120～180
+          description: 秒；建议 120～180；库：INT
     LoginQueryData:
       type: object
       properties:
@@ -1758,21 +2354,25 @@ components:
             - 1
             - 2
             - 3
-          description: "0 pending / 1 success / 2 failed / 3 expired"
+          description: "0 pending / 1 success / 2 failed / 3 expired；库：VARCHAR(16)"
         errorMsg:
           type: string
+          description: 错误说明
         accessToken:
           type: string
+          description: access JWT
         expiresIn:
           type: integer
-          description: access 秒数，默认 7200
+          description: access 秒数，默认 7200；库：INT
         refreshToken:
           type: string
+          description: refresh JWT
         refreshExpiresIn:
           type: integer
-          description: refresh 秒数，默认 604800
+          description: refresh 秒数，默认 604800；库：INT
         user:
           $ref: "#/components/schemas/EmployeeBrief"
+          description: 扫码成功后的员工信息
     RefreshRequest:
       type: object
       required:
@@ -1784,6 +2384,7 @@ components:
           description: 旧 access，过期也要原样带上
         refreshToken:
           type: string
+          description: refresh JWT
     TokenPairData:
       type: object
       required:
@@ -1794,14 +2395,18 @@ components:
       properties:
         accessToken:
           type: string
+          description: access JWT
         expiresIn:
           type: integer
           example: 7200
+          description: access 有效秒数；库：INT
         refreshToken:
           type: string
+          description: refresh JWT
         refreshExpiresIn:
           type: integer
           example: 604800
+          description: refresh 有效秒数；库：INT
     UploadImageData:
       type: object
       required:
@@ -1810,7 +2415,8 @@ components:
         url:
           type: string
           format: uri
-          description: 微吼 domain_url
+          description: 微吼 domain_url；库：VARCHAR(2048)
+          maxLength: 2048
     TosStsData:
       type: object
       required:
@@ -1825,21 +2431,26 @@ components:
         region:
           type: string
           example: cn-shanghai
+          description: 云厂商 region
         endpoint:
           type: string
           example: tos-cn-shanghai.volces.com
           description: "主机名，无 https://"
         bucketName:
           type: string
+          description: 桶名
         accessKeyId:
           type: string
+          description: 临时 AccessKeyId
         secretAccessKey:
           type: string
+          description: 临时 SecretAccessKey
         sessionToken:
           type: string
+          description: 临时 SessionToken
         expiredTime:
           type: string
-          description: ISO-8601 UTC（带 Z）
+          description: ISO-8601 UTC（带 Z）；库：DATETIME(3)
           example: "2026-10-10T06:00:00Z"
     MaterialGroup:
       type: object
@@ -1847,69 +2458,102 @@ components:
         id:
           type: string
           format: uuid
+          description: 素材分组 UUID；库：VARCHAR(36)
+          maxLength: 36
         name:
           type: string
           maxLength: 64
+          description: 名称；库：VARCHAR(64)
         count:
           type: integer
+          description: 数量；库：INT
         isDefault:
           type: boolean
+          description: 是否默认分组；库：TINYINT(1)
     MaterialItem:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 素材 UUID；库：VARCHAR(36)
+          maxLength: 36
         type:
           $ref: "#/components/schemas/MaterialType"
+          description: 类型
         groupId:
           type: string
           format: uuid
+          description: 分组 UUID；库：VARCHAR(36)
+          maxLength: 36
         name:
           type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
         url:
           type: string
-          description: 文章省略
+          description: 文章省略；库：VARCHAR(2048)
+          maxLength: 2048
         objectKey:
           type: string
-          description: 文章省略
+          description: 文章省略；库：VARCHAR(1024)
+          maxLength: 1024
         thumbUrl:
           type: string
+          description: 缩略图 URL；库：VARCHAR(2048)
+          maxLength: 2048
         meta:
           type: string
+          description: 扩展元信息（如宽高、时长文案）；库：VARCHAR(128)
+          maxLength: 128
         fileSize:
           type: integer
           format: int64
+          description: 文件大小（字节）；库：BIGINT
         status:
           type: string
           example: available
+          description: 素材状态，如 available；库：VARCHAR(16)
+          maxLength: 16
         aiAuditStatus:
           $ref: "#/components/schemas/MaterialAuditStatus"
+          description: AI 审核状态
         riskAuditStatus:
           $ref: "#/components/schemas/MaterialAuditStatus"
+          description: 风控合规审核状态
         uploaderId:
-          type: string
+          $ref: "#/components/schemas/EmployeeId"
+          description: 上传人 rs_mainkey_id
         uploaderName:
           type: string
+          description: 上传人姓名快照；库：VARCHAR(50)
+          maxLength: 50
         departmentName:
           type: string
-        uploadedAt:
+          description: 上传人部门快照；库：VARCHAR(256)
+          maxLength: 256
+        uploadedTime:
           type: string
           example: "2026-10-12 14:00:00"
+          description: "上传时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
     MaterialListData:
       type: object
       properties:
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         page:
           type: integer
+          description: 页码，从 1 开始（D37）；库：INT
         pageSize:
           type: integer
+          description: 每页条数；库：INT
         list:
           type: array
           items:
             $ref: "#/components/schemas/MaterialItem"
+          description: 列表数据
     MaterialRegisterRequest:
       type: object
       required:
@@ -1919,9 +2563,12 @@ components:
       properties:
         type:
           $ref: "#/components/schemas/MaterialFileType"
+          description: 类型
         groupId:
           type: string
           format: uuid
+          description: 分组 UUID；库：VARCHAR(36)
+          maxLength: 36
         items:
           type: array
           minItems: 1
@@ -1936,21 +2583,29 @@ components:
               name:
                 type: string
                 maxLength: 256
+                description: 名称；库：VARCHAR(256)
               url:
                 type: string
                 maxLength: 2048
+                description: URL 地址；库：VARCHAR(2048)
               objectKey:
                 type: string
                 maxLength: 1024
+                description: 对象存储 key；库：VARCHAR(1024)
               fileSize:
                 type: integer
                 minimum: 0
+                description: 文件大小（字节）；库：BIGINT
+                format: int64
               mimeType:
                 type: string
                 maxLength: 128
+                description: MIME 类型；库：VARCHAR(128)
               meta:
                 type: string
                 maxLength: 128
+                description: 扩展元信息（如宽高、时长文案）；库：VARCHAR(128)
+          description: 条目列表
     MaterialRegisterData:
       type: object
       properties:
@@ -1958,6 +2613,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MaterialItem"
+          description: 列表数据
     ArticleCreateRequest:
       type: object
       required:
@@ -1969,34 +2625,70 @@ components:
         groupId:
           type: string
           format: uuid
+          description: 分组 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
           maxLength: 45
+          description: 标题；库：VARCHAR(45)
         author:
           type: string
           maxLength: 16
+          description: 作者；库：VARCHAR(16)
         content:
           type: string
           maxLength: 100000
+          description: 正文内容；库：MEDIUMTEXT
+    ArticleUpdateRequest:
+      type: object
+      required:
+        - title
+        - author
+        - content
+      properties:
+        title:
+          type: string
+          maxLength: 45
+          description: 标题；库：VARCHAR(45)
+        author:
+          type: string
+          maxLength: 16
+          description: 作者；库：VARCHAR(16)
+        content:
+          type: string
+          maxLength: 100000
+          description: 正文内容；库：MEDIUMTEXT
     ArticleDetail:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 文章素材 UUID；库：VARCHAR(36)
+          maxLength: 36
         groupId:
           type: string
           format: uuid
+          description: 分组 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
+          maxLength: 45
+          description: 标题；库：VARCHAR(45)
         author:
           type: string
+          maxLength: 16
+          description: 作者；库：VARCHAR(16)
         content:
           type: string
+          maxLength: 100000
+          description: 正文内容；库：MEDIUMTEXT
         aiAuditStatus:
           $ref: "#/components/schemas/MaterialAuditStatus"
+          description: AI 审核状态
         riskAuditStatus:
           $ref: "#/components/schemas/MaterialAuditStatus"
+          description: 风控合规审核状态
     CreateActivityRequest:
       type: object
       required:
@@ -2009,60 +2701,76 @@ components:
       properties:
         provider:
           $ref: "#/components/schemas/Provider"
+          description: 直播服务商
         title:
           type: string
           maxLength: 64
+          description: 标题；库：VARCHAR(64)
         startTime:
           type: string
-          description: "yyyy-MM-dd HH:mm:ss"
+          description: "yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
           example: "2026-10-01 20:00:00"
         endTime:
           type: string
-          description: 须晚于 startTime；只落本站库
+          description: 须晚于 startTime；只落本站库；库：DATETIME(3)
         type:
           $ref: "#/components/schemas/ActivityType"
+          description: 类型
         recordId:
           type: string
           description: "type=4 且 provider=vhall 时必填"
         introduction:
           type: string
           maxLength: 256
+          description: 简介；库：VARCHAR(256)
         viewerStyle:
           $ref: "#/components/schemas/ViewerStyle"
+          description: 观看端样式
         ultraLowLatency:
           type: boolean
-          description: 创建后不可改
+          description: 创建后不可改；库：TINYINT(1)
         coverUrl:
           type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
         detailHtml:
           type: string
           maxLength: 100000
+          description: 富文本详情 HTML；库：TEXT
         autoList:
           type: boolean
-          description: 风控通过后是否自动上架；创建时 shelfStatus 一律 pending
+          description: 风控通过后是否自动上架；创建时 shelfStatus 一律 pending；库：TINYINT(1)
         hostIds:
           type: array
           minItems: 1
           maxItems: 20
           items:
-            type: string
-          description: 主播员工 id
+            $ref: "#/components/schemas/EmployeeId"
+          description: "主播员工 id（写入 activity_member role=1）"
         ownerIds:
           type: array
           maxItems: 20
           items:
-            type: string
+            $ref: "#/components/schemas/EmployeeId"
+          description: "归属人员工 id（activity_owner）；省略或 [] 表示无"
         products:
           type: array
           maxItems: 20
           items:
             $ref: "#/components/schemas/ProductRef"
+          description: 关联商品列表
         coursewareMaterialIds:
           type: array
           maxItems: 100
           items:
             type: string
             format: uuid
+          description: 课件素材 UUID 有序数组
+        reportId:
+          type: string
+          format: uuid
+          description: 绑定已通过直播报备。省略表示不绑定。hostIds 须恰好为该报备主播 1 人。创建后不可改绑；库：VARCHAR(36)
+          maxLength: 36
     UpdateActivityRequest:
       type: object
       description: 至少填一个字段；未出现的关联字段不改
@@ -2070,42 +2778,54 @@ components:
         title:
           type: string
           maxLength: 64
+          description: 标题；库：VARCHAR(64)
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         introduction:
           type: string
           maxLength: 256
+          description: 简介；库：VARCHAR(256)
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         coverUrl:
           type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
         detailHtml:
           type: string
           maxLength: 100000
+          description: 富文本详情 HTML；库：TEXT
         autoList:
           type: boolean
+          description: 风控通过后是否自动上架；库：TINYINT(1)
         hostIds:
           type: array
           minItems: 1
           maxItems: 20
           items:
-            type: string
+            $ref: "#/components/schemas/EmployeeId"
+          description: "全量覆盖主播（role=1）；不删助理/嘉宾"
         ownerIds:
           type: array
           maxItems: 20
           items:
-            type: string
+            $ref: "#/components/schemas/EmployeeId"
+          description: 全量覆盖归属人
         products:
           type: array
           maxItems: 20
           items:
             $ref: "#/components/schemas/ProductRef"
+          description: 关联商品列表
         coursewareMaterialIds:
           type: array
           maxItems: 100
           items:
             type: string
             format: uuid
+          description: 课件素材 UUID 有序数组
     PlaybackSettingsRequest:
       type: object
       required:
@@ -2113,15 +2833,20 @@ components:
       properties:
         playbackEnabled:
           type: boolean
+          description: 是否开启回放；库：TINYINT(1)
         playbackValidityType:
           $ref: "#/components/schemas/PlaybackValidityType"
+          description: 回放有效期类型
         playbackValidityDays:
           type: integer
           minimum: 1
+          description: 回放有效天数；库：INT
         playbackSpeedAllow:
           type: boolean
+          description: 是否允许倍速；库：TINYINT(1)
         playbackFastForwardAllow:
           type: boolean
+          description: 是否允许快进；库：TINYINT(1)
     SalesSettingsRequest:
       type: object
       required:
@@ -2130,31 +2855,45 @@ components:
       properties:
         sellAlone:
           type: boolean
+          description: 是否单独售卖；库：TINYINT(1)
         sellType:
           $ref: "#/components/schemas/SellType"
+          description: 售卖方式
         price:
-          description: paid 时必填；元，最多 2 位小数
+          type: number
+          multipleOf: 0.01
+          description: "paid 时必填；元，最多 2 位小数；库：DECIMAL(10,2)"
         linePrice:
-          description: "须 > price；非 paid 忽略"
+          type: number
+          multipleOf: 0.01
+          description: "须 > price；非 paid 忽略；库：DECIMAL(10,2)"
         password:
           type: string
           pattern: "^\\d{6}$"
-          description: encrypted 时必填；明文 6 位数字
+          description: encrypted 时必填；明文 6 位数字；库：VARCHAR(64)
+          maxLength: 64
         accessValidityType:
           $ref: "#/components/schemas/AccessValidityType"
+          description: 访问有效期类型
         accessValidityDays:
           type: integer
           minimum: 1
+          description: 购买后有效天数；库：INT
     SalesSettingsData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         sellType:
           $ref: "#/components/schemas/SellType"
+          description: 售卖方式
         validityLabel:
           type: string
+          description: 有效期展示文案；库：VARCHAR(64)
+          maxLength: 64
     ShelfRequest:
       type: object
       required:
@@ -2162,15 +2901,18 @@ components:
       properties:
         listed:
           type: boolean
-          description: true 上架 / false 下架
+          description: true 上架 / false 下架；库：TINYINT(1)
     ShelfData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         shelfStatus:
           $ref: "#/components/schemas/ShelfStatus"
+          description: 上架状态
     AuditSubmitRequest:
       type: object
       required:
@@ -2181,82 +2923,127 @@ components:
           enum:
             - passed
             - rejected
+          description: passed 通过 / rejected 驳回；库：VARCHAR(16)
+          maxLength: 16
         reason:
           type: string
           minLength: 1
           maxLength: 200
-          description: 仅驳回必填
+          description: 仅驳回必填；库：VARCHAR(200)
     AuditSubmitData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         riskStatus:
           $ref: "#/components/schemas/RiskStatus"
+          description: 风控审核状态
         shelfStatus:
           $ref: "#/components/schemas/ShelfStatus"
+          description: 上架状态
     AuditRecord:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 审核记录 UUID；库：VARCHAR(36)
+          maxLength: 36
+        action:
+          type: string
+          enum:
+            - submit
+            - audit
+          description: submit 发起申请不返回 result/reason；audit 为通过或驳回；库：VARCHAR(16)
+          maxLength: 16
         result:
           type: string
           enum:
             - passed
             - rejected
+          description: "仅 action=audit 时返回；库：VARCHAR(16)"
+          maxLength: 16
         reason:
           type: string
+          description: 仅驳回时返回；库：VARCHAR(500)
+          maxLength: 500
         operatorId:
-          type: string
+          $ref: "#/components/schemas/EmployeeId"
+          description: 操作人员工 id
         operatorName:
           type: string
-        createdAt:
+          description: 操作人姓名；库：VARCHAR(50)
+          maxLength: 50
+        createdTime:
           type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
     ActivitySummary:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         provider:
           $ref: "#/components/schemas/Provider"
+          description: 直播服务商
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         coverUrl:
           type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
         state:
           $ref: "#/components/schemas/ActivityState"
+          description: 状态
         type:
           $ref: "#/components/schemas/ActivityType"
+          description: 类型
         viewerStyle:
           $ref: "#/components/schemas/ViewerStyle"
+          description: 观看端样式
         shareLink:
           type: string
-        createdAt:
+          description: 本站观看页分享链接；库：VARCHAR(512)
+          maxLength: 512
+        createdTime:
           type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         shelfStatus:
           $ref: "#/components/schemas/ShelfStatus"
+          description: 上架状态
         riskStatus:
           $ref: "#/components/schemas/RiskStatus"
+          description: 风控审核状态
         sellType:
           $ref: "#/components/schemas/SellType"
+          description: 售卖方式
         validityLabel:
           type: string
+          description: 有效期展示文案；库：VARCHAR(64)
+          maxLength: 64
         canBroadcast:
           type: boolean
+          description: 当前是否允许开播；库：TINYINT(1)
         owners:
           type: array
           items:
             $ref: "#/components/schemas/EmployeeBrief"
+          description: 归属人列表
         products:
           type: array
           items:
             $ref: "#/components/schemas/ProductRef"
+          description: 关联商品列表
     ActivityDetail:
       allOf:
         - $ref: "#/components/schemas/ActivitySummary"
@@ -2264,64 +3051,104 @@ components:
           properties:
             providerRoomId:
               type: string
+              description: 第三方房间号（如微吼 webinar id）；库：VARCHAR(64)
+              maxLength: 64
             vhallWebinarId:
               type: string
               description: 兼容字段；仅 vhall 时等于 providerRoomId
             introduction:
               type: string
+              description: 简介；库：VARCHAR(256)
+              maxLength: 256
             endTime:
               type: string
+              description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
             verify:
               type: integer
+              description: 观看验证方式（微吼 verify）；库：INT
             pv:
               type: integer
+              description: 累计观看 PV；库：INT
             fullEmbedShareLink:
               type: string
+              description: 全屏嵌入分享链接；库：VARCHAR(512)
+              maxLength: 512
             ultraLowLatency:
               type: boolean
+              description: 是否超低延迟；库：TINYINT(1)
             detailHtml:
               type: string
+              description: 富文本详情 HTML；库：TEXT
+              maxLength: 100000
             autoList:
               type: boolean
+              description: 风控通过后是否自动上架；库：TINYINT(1)
+            reportId:
+              type: string
+              format: uuid
+              description: 绑定的直播报备；未绑定不输出；库：VARCHAR(36)
+              maxLength: 36
+            reportTitle:
+              type: string
+              description: 报备标题；未绑定不输出
             hosts:
               type: array
               items:
                 $ref: "#/components/schemas/EmployeeBrief"
+              description: 主播列表
             coursewares:
               type: array
               items:
                 $ref: "#/components/schemas/CoursewareItem"
+              description: 课件列表
             sellAlone:
               type: boolean
-            price: {}
-            linePrice: {}
+              description: 是否单独售卖；库：TINYINT(1)
+            price:
+              type: number
+              description: "售价（元）；非付费可不返回；库：DECIMAL(10,2)"
+              multipleOf: 0.01
+            linePrice:
+              type: number
+              description: "划线价（元）；无则可不返回；库：DECIMAL(10,2)"
+              multipleOf: 0.01
             accessValidityType:
               $ref: "#/components/schemas/AccessValidityType"
+              description: 访问有效期类型
             accessValidityDays:
               type: integer
+              description: 购买后有效天数；库：INT
             password:
               type: string
-              description: 仅 encrypted 时回显明文；勿给观看端
+              description: 仅 encrypted 时回显明文；勿给观看端；库：VARCHAR(64)
+              maxLength: 64
             playbackEnabled:
               type: boolean
+              description: 是否开启回放；库：TINYINT(1)
             playbackValidityType:
               $ref: "#/components/schemas/PlaybackValidityType"
+              description: 回放有效期类型
             playbackValidityDays:
               type: integer
+              description: 回放有效天数；库：INT
             playbackSpeedAllow:
               type: boolean
+              description: 是否允许倍速；库：TINYINT(1)
             playbackFastForwardAllow:
               type: boolean
+              description: 是否允许快进；库：TINYINT(1)
     ActivityListData:
       type: object
       properties:
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         list:
           type: array
           items:
             $ref: "#/components/schemas/ActivitySummary"
+          description: 列表数据
     ActivityRecordItem:
       type: object
       required:
@@ -2329,37 +3156,164 @@ components:
       properties:
         id:
           type: string
-          description: create-demand 的 record_id
+          description: create-demand 的 record_id；库：VARCHAR(64)
+          maxLength: 64
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         duration:
           type: string
           example: "01:02:03"
-        createdAt:
+          description: 时长
+        createdTime:
           type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         coverUrl:
           type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
     ActivityRecordListData:
       type: object
       properties:
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         list:
           type: array
           items:
             $ref: "#/components/schemas/ActivityRecordItem"
+          description: 列表数据
     EndActivityData:
       type: object
       required:
         - id
+        - state
+      description: 结束直播 / 第三方推流开始直播（live/start）共用：返回本站活动 id 与写回后的 state
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         state:
-          type: integer
-          example: 3
+          $ref: "#/components/schemas/ActivityState"
+          description: 本站写回后的活动状态；结束多为 3，live/start 成功多为 1
+    ActivityMemberItem:
+      type: object
+      required:
+        - id
+        - userName
+        - role
+        - nickname
+        - tag
+      properties:
+        id:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
+        userName:
+          type: string
+          description: 员工姓名（实时查员工表，不落成员表）；库：VARCHAR(50)
+          maxLength: 50
+        departmentName:
+          type: string
+          description: "任职部门展示名；无则 \"\" 或不返回；库：VARCHAR(256)"
+          maxLength: 256
+        role:
+          $ref: "#/components/schemas/ActivityMemberRole"
+          description: 开播角色
+        nickname:
+          type: string
+          description: 本场昵称；库空时回 userName；库：VARCHAR(64)
+          maxLength: 64
+        avatarUrl:
+          type: string
+          description: 本场头像；库空时可不返回；库：VARCHAR(512)
+          maxLength: 512
+        tag:
+          type: string
+          description: "标签；库空时回 \"\"；库：VARCHAR(32)"
+          maxLength: 32
+    ActivityMemberListData:
+      type: object
+      required:
+        - list
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityMemberItem"
+          description: 按 role 升序，同角色内按 sort_order 升序
+    UpdateActivityMembersRequest:
+      type: object
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          minItems: 1
+          description: "全量覆盖；至少 1 名主播（role=1）。同 id 不可重复；role=1 为 1～20，role=2/3 各 0～20"
+          items:
+            type: object
+            required:
+              - id
+              - role
+            properties:
+              id:
+                $ref: "#/components/schemas/EmployeeId"
+                description: 主键 id
+              role:
+                $ref: "#/components/schemas/ActivityMemberRole"
+                description: 开播角色
+              nickname:
+                type: string
+                maxLength: 10
+                description: 本场昵称 ≤10；省略或空 → 库存 NULL（读时回员工姓名）；库：VARCHAR(64)
+              avatarUrl:
+                type: string
+                maxLength: 512
+                description: 省略或空 → NULL；库：VARCHAR(512)
+              tag:
+                type: string
+                maxLength: 32
+                description: 省略或空 → NULL；库：VARCHAR(32)
+    AcceptActivityMemberRequest:
+      type: object
+      required:
+        - role
+        - inviterId
+      properties:
+        role:
+          $ref: "#/components/schemas/ActivityMemberRole"
+          description: 开播角色
+        inviterId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 员工 rs_mainkey_id（JSON 数字，D56）
+    AcceptActivityMemberData:
+      type: object
+      required:
+        - id
+        - userName
+        - role
+        - alreadyMember
+      properties:
+        id:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
+        userName:
+          type: string
+          description: 员工姓名；库：VARCHAR(50)
+          maxLength: 50
+        role:
+          $ref: "#/components/schemas/ActivityMemberRole"
+          description: 开播角色
+        alreadyMember:
+          type: boolean
+          description: 打开前已经是该角色则为 true；库：TINYINT(1)
+        inviterName:
+          type: string
+          description: 邀约人姓名
     HostData:
       type: object
       required:
@@ -2368,9 +3322,29 @@ components:
       properties:
         provider:
           $ref: "#/components/schemas/Provider"
+          description: 直播服务商
         hostUrl:
           type: string
           format: uri
+          description: 第三方主持人/开播页 URL；库：VARCHAR(1024)
+          maxLength: 1024
+    PushStreamData:
+      type: object
+      required:
+        - streamAddress
+        - streamCode
+      properties:
+        streamAddress:
+          type: string
+          description: 推流服务器，对应微吼 stream_address
+          example: "rtmp://rslive.vhall.com:1935/vhallyun/"
+        streamCode:
+          type: string
+          description: 串流密钥，对应微吼 stream_code
+        expireTime:
+          type: string
+          description: 有效期，对应微吼 expire_time；没有则不返回；库：DATETIME(3)
+          example: "2026-02-15 00:00:01"
     EmbedData:
       type: object
       required:
@@ -2379,71 +3353,98 @@ components:
         embedUrl:
           type: string
           format: uri
+          description: 嵌入页 URL；库：VARCHAR(1024)
+          maxLength: 1024
     ActivityStats:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态：1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放；库：INT
         type:
           type: integer
+          description: 活动类型：1 音频 / 2 视频 / 3 互动 / 4 录播；库：INT
         pv:
           type: integer
+          description: 累计观看 PV；库：INT
         onlineCount:
           type: integer
+          description: 当前在线人数；库：INT
     OnlinePoint:
       type: object
       properties:
         time:
           type: string
+          description: 时间点；库：DATETIME(3)
         count:
           type: integer
+          description: 数量；库：INT
     OnlineTrend:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         points:
           type: array
           items:
             $ref: "#/components/schemas/OnlinePoint"
+          description: 时序点列表
     PresenceTrendPoint:
       type: object
       properties:
         time:
           type: string
+          description: 时间点；库：DATETIME(3)
         online:
           type: integer
+          description: 该桶在线人数；库：INT
         enter:
           type: integer
+          description: 进场人数；库：INT
         leave:
           type: integer
+          description: 离场人数；库：INT
     PresenceTrend:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         bucketSeconds:
           type: integer
           example: 60
+          description: 时间桶秒数；库：INT
         points:
           type: array
           items:
             $ref: "#/components/schemas/PresenceTrendPoint"
+          description: 时序点列表
     AttendeeItem:
       type: object
       required:
@@ -2453,16 +3454,25 @@ components:
       properties:
         userId:
           type: string
+          description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+          maxLength: 128
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         avatarUrl:
           type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
         enterTime:
           type: string
+          description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         leaveTime:
           type: string
+          description: "离开时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         online:
           type: boolean
+          description: 是否在线；库：TINYINT(1)
     AttendeeListData:
       type: object
       required:
@@ -2474,65 +3484,91 @@ components:
       properties:
         activityState:
           type: integer
+          description: 活动状态；库：INT
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         page:
           type: integer
+          description: 页码，从 1 开始（D37）；库：INT
         pageSize:
           type: integer
+          description: 每页条数；库：INT
         list:
           type: array
           items:
             $ref: "#/components/schemas/AttendeeItem"
+          description: 列表数据
     OrgDeptNode:
       type: object
       properties:
         id:
-          type: string
+          type: integer
+          format: int64
+          description: 部门 rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(36)
         name:
           type: string
+          description: 部门名称 bmmc；库：VARCHAR(256)
+          maxLength: 256
         code:
           type: string
+          description: 部门编码 bmbm；库：INT
         parentId:
-          type: string
+          type: integer
+          format: int64
+          description: 上级部门 id；根为 0；库：BIGINT
         children:
           type: array
           items:
             $ref: "#/components/schemas/OrgDeptNode"
+          description: 子节点列表
     OrgEmployeeItem:
       type: object
       properties:
         id:
-          type: string
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
         userName:
           type: string
+          description: 员工姓名；库：VARCHAR(50)
+          maxLength: 50
         departmentName:
           type: string
+          description: 部门展示名；库：VARCHAR(256)
+          maxLength: 256
         roleNames:
           type: string
+          description: 角色名，多角色顿号连接；库：VARCHAR(256)
+          maxLength: 256
         liveEnabled:
           type: boolean
+          description: 本站直播账号是否启用；库：TINYINT(1)
         hqStatus:
           type: string
           enum:
             - normal
             - disabled
             - unknown
+          description: normal 总部正常 / disabled 总部禁用 / unknown 未知
     OrgEmployeeListData:
       type: object
       properties:
         page:
           type: integer
+          description: 页码，从 1 开始（D37）；库：INT
         pageSize:
           type: integer
+          description: 每页条数；库：INT
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         list:
           type: array
           items:
             $ref: "#/components/schemas/OrgEmployeeItem"
+          description: 列表数据
     LiveEnabledRequest:
       type: object
       required:
@@ -2540,49 +3576,69 @@ components:
       properties:
         enabled:
           type: boolean
+          description: 是否启用；库：TINYINT(1)
     LiveEnabledData:
       type: object
       properties:
         id:
-          type: string
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
         liveEnabled:
           type: boolean
+          description: 更新后的启停状态；库：TINYINT(1)
     OrgRoleBrief:
       type: object
       properties:
         id:
-          type: string
-          description: sys_uimsrole.rs_mainkey_id
+          type: integer
+          format: int64
+          description: 角色 sys_uimsrole.rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(36)
         name:
           type: string
+          description: 角色名称；库：VARCHAR(256)
+          maxLength: 256
     OrgRoleDetail:
       type: object
       properties:
         id:
-          type: string
+          type: integer
+          format: int64
+          description: 角色 rs_mainkey_id；库：VARCHAR(36)
         name:
           type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
         remark:
           type: string
+          description: 备注；库：VARCHAR(256)
+          maxLength: 256
         members:
           type: array
           items:
             type: object
             properties:
               id:
-                type: string
+                $ref: "#/components/schemas/EmployeeId"
+                description: 主键 id
               userName:
                 type: string
+                description: 姓名；库：VARCHAR(50)
+                maxLength: 50
               departmentName:
                 type: string
+                description: 部门展示名；库：VARCHAR(256)
+                maxLength: 256
+          description: 成员列表
         menus:
           type: array
           items:
             type: object
+          description: 菜单树/菜单项
         menuCodes:
           type: array
           items:
             type: string
+          description: 本站菜单 code 列表
     RoleMenusRequest:
       type: object
       required:
@@ -2592,19 +3648,599 @@ components:
         id:
           type: integer
           format: int64
-          description: 角色 rs_mainkey_id
+          description: 角色 rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(36)
         menuCodes:
           type: array
           items:
             type: string
           example:
             - live-manage
+          description: 本站菜单 code 列表
+    LiveReportStatus:
+      type: string
+      enum:
+        - pending
+        - passed
+        - rejected
+    LiveReportPlanTime:
+      type: object
+      required:
+        - startTime
+        - endTime
+      properties:
+        startTime:
+          type: string
+          example: "2026-10-20 20:00:00"
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        endTime:
+          type: string
+          description: 须晚于开始；日期不得晚于服务端当天加 7 天；库：DATETIME(3)
+    LiveReportAttachment:
+      type: object
+      required:
+        - name
+        - url
+        - objectKey
+        - fileSize
+      properties:
+        name:
+          type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
+        url:
+          type: string
+          description: URL 地址；库：VARCHAR(2048)
+          maxLength: 2048
+        objectKey:
+          type: string
+          description: "新建须以 live-report/attachment/ 开头；驳回后重提交还接受 live-report/{id}/attachment/。仅 doc/docx/pdf，每份 ≤10MB；库：VARCHAR(1024)"
+          maxLength: 1024
+        fileSize:
+          type: integer
+          format: int64
+          description: 文件大小（字节）；库：BIGINT
+        mimeType:
+          type: string
+          description: MIME 类型；库：VARCHAR(128)
+          maxLength: 128
+    LiveReportHost:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
+        userName:
+          type: string
+          description: 主播姓名；库：VARCHAR(50)
+          maxLength: 50
+        avatar:
+          type: string
+          description: 主播头像；没有则不返回；库：VARCHAR(512)
+          maxLength: 512
+    LiveReportSaveRequest:
+      type: object
+      required:
+        - title
+        - content
+        - planTimes
+        - coverUrl
+        - coverObjectKey
+        - hostId
+        - attachments
+      properties:
+        title:
+          type: string
+          maxLength: 64
+          description: 标题；库：VARCHAR(64)
+        content:
+          type: string
+          maxLength: 500
+          description: 正文内容；库：VARCHAR(500)
+        planTimes:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/LiveReportPlanTime"
+          description: 计划时间段列表
+        coverUrl:
+          type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
+        coverObjectKey:
+          type: string
+          description: material/image/ 开头时必须带 coverMaterialId；库：VARCHAR(1024)
+          maxLength: 1024
+        coverFileSize:
+          type: integer
+          format: int64
+          description: 封面文件大小（字节）；库：BIGINT
+        coverMimeType:
+          type: string
+          description: 封面 MIME 类型；库：VARCHAR(128)
+          maxLength: 128
+        coverMaterialId:
+          type: string
+          format: uuid
+          description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
+          maxLength: 36
+        hostId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主播员工 id
+        attachments:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/LiveReportAttachment"
+          description: 附件列表
+    LiveReportUpdateRequest:
+      type: object
+      description: 驳回态提交完整字段并回到 pending。已通过且未绑定直播时只允许 planTimes，且只能在原数组尾部追加
+      properties:
+        title:
+          type: string
+          maxLength: 64
+          description: 标题；库：VARCHAR(64)
+        content:
+          type: string
+          maxLength: 500
+          description: 正文内容；库：VARCHAR(500)
+        planTimes:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/LiveReportPlanTime"
+          description: 计划时间段列表
+        coverUrl:
+          type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
+        coverObjectKey:
+          type: string
+          description: 封面对象存储 key；库：VARCHAR(1024)
+          maxLength: 1024
+        coverFileSize:
+          type: integer
+          format: int64
+          description: 封面文件大小（字节）；库：BIGINT
+        coverMimeType:
+          type: string
+          description: 封面 MIME 类型；库：VARCHAR(128)
+          maxLength: 128
+        coverMaterialId:
+          type: string
+          format: uuid
+          description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
+          maxLength: 36
+        hostId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主播员工 id
+        attachments:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/LiveReportAttachment"
+          description: 附件列表
+    LiveReportAuditRequest:
+      type: object
+      required:
+        - result
+      properties:
+        result:
+          type: string
+          enum:
+            - passed
+            - rejected
+          description: passed 通过 / rejected 驳回；库：VARCHAR(16)
+          maxLength: 16
+        reason:
+          type: string
+          maxLength: 500
+          description: 驳回必填，去空白后 1～500 字；库：VARCHAR(500)
+    LiveReportResult:
+      type: object
+      required:
+        - id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 报备单 UUID；库：VARCHAR(36)
+          maxLength: 36
+        status:
+          $ref: "#/components/schemas/LiveReportStatus"
+          description: 报备审核状态
+    LiveReportDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 报备单 UUID；库：VARCHAR(36)
+          maxLength: 36
+        title:
+          type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
+        content:
+          type: string
+          description: 正文内容；库：VARCHAR(500)
+          maxLength: 500
+        planTimes:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveReportPlanTime"
+          description: 计划时间段列表
+        coverUrl:
+          type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
+        coverObjectKey:
+          type: string
+          description: 封面对象存储 key；库：VARCHAR(1024)
+          maxLength: 1024
+        coverFileSize:
+          type: integer
+          format: int64
+          description: 封面文件大小（字节）；库：BIGINT
+        coverMimeType:
+          type: string
+          description: 封面 MIME 类型；库：VARCHAR(128)
+          maxLength: 128
+        coverMaterialId:
+          type: string
+          format: uuid
+          description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
+          maxLength: 36
+        host:
+          $ref: "#/components/schemas/LiveReportHost"
+          description: 报备主播
+        attachments:
+          type: array
+          description: 列表项可省略
+          items:
+            $ref: "#/components/schemas/LiveReportAttachment"
+        status:
+          $ref: "#/components/schemas/LiveReportStatus"
+          description: 报备审核状态
+        boundLiveCount:
+          type: integer
+          description: 已绑定直播场次数；库：INT
+        submitterId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 提交人员工 id
+        submitterName:
+          type: string
+          description: 提交人姓名快照；库：VARCHAR(50)
+          maxLength: 50
+        departmentName:
+          type: string
+          description: 提交人部门快照；库：VARCHAR(256)
+          maxLength: 256
+        submittedTime:
+          type: string
+          description: "提交时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        updatedTime:
+          type: string
+          description: "最近更新时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    LiveReportListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveReportDetail"
+          description: 列表数据
+    LiveReportAuditItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 审核记录 UUID；库：VARCHAR(36)
+          maxLength: 36
+        action:
+          type: string
+          enum:
+            - submit
+            - resubmit
+            - audit
+            - append
+          description: submit 提交 / resubmit 重新提交 / audit 审核 / append 追加计划时间；库：VARCHAR(16)
+          maxLength: 16
+        result:
+          type: string
+          enum:
+            - passed
+            - rejected
+          description: passed 通过 / rejected 驳回；非审核动作可不返回；库：VARCHAR(16)
+          maxLength: 16
+        reason:
+          type: string
+          description: 原因/驳回理由；库：VARCHAR(500)
+          maxLength: 500
+        operatorId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 操作人员工 id
+        operatorName:
+          type: string
+          description: 操作人姓名；库：VARCHAR(50)
+          maxLength: 50
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    LiveReportAuditList:
+      type: object
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/LiveReportAuditItem"
+          description: 列表数据
+    CoursePerson:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
+        userName:
+          type: string
+          description: 员工姓名；库：VARCHAR(50)
+          maxLength: 50
+        avatar:
+          type: string
+          description: 头像；没有则不返回；库：VARCHAR(512)
+          maxLength: 512
+    CourseMaterial:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 素材 UUID；库：VARCHAR(36)
+          maxLength: 36
+        name:
+          type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
+        url:
+          type: string
+          description: URL 地址；库：VARCHAR(2048)
+          maxLength: 2048
+        type:
+          $ref: "#/components/schemas/MaterialFileType"
+          description: 类型
+        fileSize:
+          type: integer
+          format: int64
+          description: 文件大小（字节）；库：BIGINT
+        mimeType:
+          type: string
+          description: MIME 类型；库：VARCHAR(128)
+          maxLength: 128
+    CreateCourseRequest:
+      type: object
+      required:
+        - title
+        - coverMaterialId
+        - autoList
+        - ownerIds
+      properties:
+        title:
+          type: string
+          maxLength: 45
+          description: 标题；库：VARCHAR(45)
+        introduction:
+          type: string
+          maxLength: 256
+          description: 简介；库：VARCHAR(256)
+        detailHtml:
+          type: string
+          maxLength: 200000
+          description: 可见文字 ≤10000，原文 ≤200000；库：MEDIUMTEXT
+        coverMaterialId:
+          type: string
+          format: uuid
+          description: 两审通过的 JPG/PNG 图片素材，≤5MB；库：VARCHAR(36)
+          maxLength: 36
+        autoList:
+          type: boolean
+          description: 风控通过后是否自动上架；库：TINYINT(1)
+        ownerIds:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/EmployeeId"
+          description: 在职员工 id（JSON 数字，D56）
+        materialIds:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            format: uuid
+          description: 课件：两审通过的 image/video/document，不含 article
+    CourseSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 课程 UUID；库：VARCHAR(36)
+          maxLength: 36
+        title:
+          type: string
+          description: 标题；库：VARCHAR(45)
+          maxLength: 45
+        coverUrl:
+          type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
+        shelfStatus:
+          $ref: "#/components/schemas/ShelfStatus"
+          description: 上架状态
+        riskStatus:
+          $ref: "#/components/schemas/RiskStatus"
+          description: 风控审核状态
+        autoList:
+          type: boolean
+          description: 风控通过后是否自动上架；库：TINYINT(1)
+        listedTime:
+          type: string
+          description: 无则不返回；库：DATETIME(3)
+        owners:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoursePerson"
+          description: 归属人列表
+        contentCount:
+          type: integer
+          description: 本轮恒为 0；库：INT
+        entitledUserCount:
+          type: integer
+          description: 本轮恒为 0；库：INT
+        totalUserCount:
+          type: integer
+          description: 本轮恒为 0；库：INT
+        salesCount:
+          type: integer
+          description: 本轮恒为 0；库：INT
+        updatedTime:
+          type: string
+          description: "最近更新时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        canList:
+          type: boolean
+          description: 风控已通过且上架为待上架或已下架；库：TINYINT(1)
+        canUnlist:
+          type: boolean
+          description: 已上架；库：TINYINT(1)
+        canDelete:
+          type: boolean
+          description: 内容数与总销量均为 0；库：TINYINT(1)
+    CourseDetail:
+      allOf:
+        - $ref: "#/components/schemas/CourseSummary"
+        - type: object
+          properties:
+            introduction:
+              type: string
+              description: 简介；库：VARCHAR(256)
+              maxLength: 256
+            detailHtml:
+              type: string
+              description: 富文本详情 HTML；库：MEDIUMTEXT
+              maxLength: 200000
+            coverMaterialId:
+              type: string
+              format: uuid
+              description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
+              maxLength: 36
+            materials:
+              type: array
+              items:
+                $ref: "#/components/schemas/CourseMaterial"
+              description: 课件/素材列表
+    CourseListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseSummary"
+          description: 列表数据
+    OutsideCourseOwner:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 主键 id
+        userName:
+          type: string
+          description: 员工姓名；库：VARCHAR(50)
+          maxLength: 50
+    OutsideCourseItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 课程 UUID；库：VARCHAR(36)
+          maxLength: 36
+        title:
+          type: string
+          description: 标题；库：VARCHAR(45)
+          maxLength: 45
+        coverUrl:
+          type: string
+          description: 空则不返回；库：VARCHAR(2048)
+          maxLength: 2048
+        introduction:
+          type: string
+          description: 空则不返回；库：VARCHAR(256)
+          maxLength: 256
+        listedTime:
+          type: string
+          description: 空则不返回；库：DATETIME(3)
+        updatedTime:
+          type: string
+          description: "最近更新时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        owners:
+          type: array
+          description: "没有时为 []，不省略"
+          items:
+            $ref: "#/components/schemas/OutsideCourseOwner"
+    OutsideCourseListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/OutsideCourseItem"
+          description: 列表数据
     ApiResponseId:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/IdData"
     ApiResponseCaptcha:
       allOf:
@@ -2612,6 +4248,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/CaptchaData"
     ApiResponseLoginPending:
       allOf:
@@ -2619,6 +4256,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/LoginPendingData"
     ApiResponseLoginQuery:
       allOf:
@@ -2626,6 +4264,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/LoginQueryData"
     ApiResponseTokenPair:
       allOf:
@@ -2633,6 +4272,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/TokenPairData"
     ApiResponseMe:
       allOf:
@@ -2640,6 +4280,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/EmployeeBrief"
     ApiResponseUploadImage:
       allOf:
@@ -2647,6 +4288,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/UploadImageData"
     ApiResponseTosSts:
       allOf:
@@ -2654,6 +4296,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/TosStsData"
     ApiResponseMaterialGroups:
       allOf:
@@ -2661,6 +4304,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               type: array
               items:
                 $ref: "#/components/schemas/MaterialGroup"
@@ -2670,6 +4314,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/MaterialGroup"
     ApiResponseMaterialList:
       allOf:
@@ -2677,6 +4322,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/MaterialListData"
     ApiResponseMaterialItem:
       allOf:
@@ -2684,6 +4330,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/MaterialItem"
     ApiResponseMaterialRegister:
       allOf:
@@ -2691,6 +4338,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/MaterialRegisterData"
     ApiResponseArticleDetail:
       allOf:
@@ -2698,6 +4346,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ArticleDetail"
     ApiResponseActivityList:
       allOf:
@@ -2705,6 +4354,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ActivityListData"
     ApiResponseActivityDetail:
       allOf:
@@ -2712,6 +4362,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ActivityDetail"
     ApiResponseRecordList:
       allOf:
@@ -2719,6 +4370,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ActivityRecordListData"
     ApiResponseEndActivity:
       allOf:
@@ -2726,20 +4378,55 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/EndActivityData"
+    ApiResponseLiveStart:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/EndActivityData"
+    ApiResponseMembers:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityMemberListData"
+    ApiResponseAcceptMember:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/AcceptActivityMemberData"
     ApiResponseHost:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/HostData"
+    ApiResponsePushStream:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/PushStreamData"
     ApiResponseEmbed:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/EmbedData"
     ApiResponseStats:
       allOf:
@@ -2747,6 +4434,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ActivityStats"
     ApiResponseOnlineTrend:
       allOf:
@@ -2754,6 +4442,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/OnlineTrend"
     ApiResponsePresenceTrend:
       allOf:
@@ -2761,6 +4450,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/PresenceTrend"
     ApiResponseAttendeeList:
       allOf:
@@ -2768,6 +4458,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/AttendeeListData"
     ApiResponseSales:
       allOf:
@@ -2775,6 +4466,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/SalesSettingsData"
     ApiResponseShelf:
       allOf:
@@ -2782,6 +4474,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ShelfData"
     ApiResponseAuditSubmit:
       allOf:
@@ -2789,6 +4482,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/AuditSubmitData"
     ApiResponseAudits:
       allOf:
@@ -2796,30 +4490,35 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               type: object
               properties:
                 list:
                   type: array
                   items:
                     $ref: "#/components/schemas/AuditRecord"
+                  description: 列表数据
     ApiResponseEmployees:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               type: object
               properties:
                 list:
                   type: array
                   items:
                     $ref: "#/components/schemas/EmployeeBrief"
+                  description: 列表数据
     ApiResponseOrgDeptTree:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               type: array
               items:
                 $ref: "#/components/schemas/OrgDeptNode"
@@ -2829,6 +4528,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/OrgEmployeeListData"
     ApiResponseLiveEnabled:
       allOf:
@@ -2836,6 +4536,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/LiveEnabledData"
     ApiResponseOrgRoles:
       allOf:
@@ -2843,6 +4544,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               type: array
               items:
                 $ref: "#/components/schemas/OrgRoleBrief"
@@ -2852,108 +4554,216 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/OrgRoleDetail"
+    ApiResponseLiveReportResult:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/LiveReportResult"
+    ApiResponseLiveReportDetail:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/LiveReportDetail"
+    ApiResponseLiveReportList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/LiveReportListData"
+    ApiResponseLiveReportAudits:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/LiveReportAuditList"
+    ApiResponseCourseList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseListData"
+    ApiResponseCourseDetail:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseDetail"
+    ApiResponseOutsideCourseList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/OutsideCourseListData"
     WatchActivitySummary:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态；库：INT
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         coverUrl:
           type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
     WatchActivityListData:
       type: object
       properties:
         total:
           type: integer
           format: int64
+          description: 总条数；库：BIGINT
         list:
           type: array
           items:
             $ref: "#/components/schemas/WatchActivitySummary"
+          description: 列表数据
     WatchEmbedData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态；库：INT
         type:
           type: integer
+          description: 活动类型；库：INT
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         guestId:
           type: string
+          description: 本站生成的游客 id；库：VARCHAR(64)
+          maxLength: 64
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         embedUrl:
           type: string
           format: uri
+          description: 嵌入页 URL；库：VARCHAR(1024)
+          maxLength: 1024
     VhallSdkPayload:
       type: object
       properties:
         scriptUrl:
           type: string
           format: uri
+          description: SDK 脚本地址
         jqueryUrl:
           type: string
           nullable: true
+          description: jQuery 脚本地址
         account:
           type: string
           description: 回显用；init 不要传
         email:
           type: string
+          description: 合成邮箱（观看身份）；库：VARCHAR(128)
+          maxLength: 128
         username:
           type: string
+          description: 观看昵称；库：VARCHAR(50)
+          maxLength: 50
         webinarId:
           type: string
+          description: 微吼活动号
         appKey:
           type: string
+          description: 微吼 app_key
         signedAt:
           type: string
+          description: 签名时间戳
         signType:
           type: integer
           example: 0
+          description: 签名类型；库：INT
         sign:
           type: string
+          description: 签名串
     WatchSdkData:
       type: object
       properties:
         id:
           type: string
           format: uuid
+          description: 本站活动 UUID；库：VARCHAR(36)
+          maxLength: 36
         provider:
           $ref: "#/components/schemas/Provider"
+          description: 直播服务商
         title:
           type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
         state:
           type: integer
+          description: 活动状态；库：INT
         type:
           type: integer
+          description: 活动类型；库：INT
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         guestId:
           type: string
+          description: 本站生成的游客 id；库：VARCHAR(64)
+          maxLength: 64
         startTime:
           type: string
+          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         endTime:
           type: string
+          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         sdk:
           $ref: "#/components/schemas/VhallSdkPayload"
+          description: 观看 JS SDK 初始化参数
         embedUrl:
           type: string
           format: uri
+          description: 嵌入页 URL；库：VARCHAR(1024)
+          maxLength: 1024
     AttendanceEnterRequest:
       type: object
       required:
@@ -2962,15 +4772,24 @@ components:
       properties:
         userId:
           type: string
+          description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+          maxLength: 128
         enterTime:
           type: string
           example: "2026-09-30 10:00:00"
+          description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
         mid:
           type: string
+          description: 幂等/消息 id；库：VARCHAR(64)
+          maxLength: 64
         nickname:
           type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
         avatarUrl:
           type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
     AttendanceLeaveRequest:
       type: object
       required:
@@ -2989,21 +4808,31 @@ components:
             properties:
               userId:
                 type: string
+                description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+                maxLength: 128
               enterTime:
                 type: string
+                description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
               leaveTime:
                 type: string
+                description: "离开时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
               mid:
                 type: string
+                description: 幂等/消息 id；库：VARCHAR(64)
+                maxLength: 64
+          description: 条目列表
     AttendanceLeaveData:
       type: object
       properties:
         updated:
           type: integer
+          description: 成功更新条数；库：INT
         skipped:
           type: integer
+          description: 跳过条数；库：INT
         missing:
           type: integer
+          description: 未找到条数；库：INT
     ChatFilterData:
       type: object
       required:
@@ -3012,6 +4841,8 @@ components:
         pageUrl:
           type: string
           format: uri
+          description: 页面 URL；库：VARCHAR(2048)
+          maxLength: 2048
     VhallPresenceCallback:
       type: object
       description: 微吼上下线回调 body（字段以微吼文档为准）
@@ -3019,35 +4850,48 @@ components:
         method_id:
           type: integer
           example: 20
+          description: 微吼回调 method_id；库：INT
         type:
           type: string
           enum:
             - Join
             - Leave
+          description: Join 进房 / Leave 离房；库：INT
         webinar_id:
           type: string
+          description: 微吼活动号
         sender_id:
           type: string
+          description: 发送方/观众 id
         time:
           type: integer
-          description: Unix 秒
+          description: Unix 秒；库：INT
         mid:
           type: string
+          description: 幂等/消息 id；库：VARCHAR(64)
+          maxLength: 64
         signature:
           type: string
+          description: 回调签名
         context:
           type: object
           properties:
             nickname:
               type: string
+              description: 昵称；库：VARCHAR(64)
+              maxLength: 64
             avatar:
               type: string
+              description: 头像 URL；库：VARCHAR(512)
+              maxLength: 512
+          description: 回调上下文
     ApiResponseWatchList:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchActivityListData"
     ApiResponseWatchEmbed:
       allOf:
@@ -3055,6 +4899,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchEmbedData"
     ApiResponseWatchSdk:
       allOf:
@@ -3062,6 +4907,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchSdkData"
     ApiResponseAttendanceLeave:
       allOf:
@@ -3069,6 +4915,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/AttendanceLeaveData"
     ApiResponseChatFilter:
       allOf:
@@ -3076,6 +4923,7 @@ components:
         - type: object
           properties:
             data:
+              description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ChatFilterData"
 security:
   - BearerAuth:

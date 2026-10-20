@@ -1,16 +1,20 @@
 package com.zhibo.admin.activity.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 @Data
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AuditRecordItem {
 
     private String id;
-    /** passed / rejected */
+    /** submit / audit */
+    private String action;
+    /** passed / rejected；submit 不输出 */
     private String result;
-    /** 通过时不输出。 */
+    /** 驳回意见；通过与发起申请不输出。 */
     private String reason;
-    private String operatorId;
+    private Long operatorId;
     private String operatorName;
-    private String createdAt;
+    private String createdTime;
 }

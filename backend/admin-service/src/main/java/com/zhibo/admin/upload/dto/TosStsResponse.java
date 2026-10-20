@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * {@code GET /api/uploads/tos-sts} 响应；字段对齐前端 {@code tosConfig}。
+ * {@code GET /api/v1/uploads/tos-sts} 响应；字段对齐前端 {@code tosConfig}。
  */
 @Data
 @NoArgsConstructor

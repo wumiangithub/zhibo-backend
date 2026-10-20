@@ -16,6 +16,6 @@ public class LiveReportAuditEntity {
     @Column(length = 500) private String reason;
     @Column(name = "operator_id", nullable = false) private Long operatorId;
     @Column(name = "operator_name", nullable = false, length = 50) private String operatorName;
-    @CreationTimestamp @Column(name = "created_at", nullable = false, updatable = false) private LocalDateTime createdAt;
+    @CreationTimestamp @Column(name = "created_time", nullable = false, updatable = false) private LocalDateTime createdTime;
     @PrePersist void assignId() { if (id == null) id = UUID.randomUUID().toString(); }
 }

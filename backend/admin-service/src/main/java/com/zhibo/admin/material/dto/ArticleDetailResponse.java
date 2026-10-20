@@ -10,6 +10,8 @@ public class ArticleDetailResponse {
     private String title;
     private String author;
     private String content;
-    private String aiAuditStatus;
-    private String riskAuditStatus;
+    /** 0 待审核 / 1 已通过 / 2 已驳回 */
+    private Integer aiAuditStatus;
+    /** 0 待审核 / 1 已通过 / 2 已驳回 */
+    private Integer riskAuditStatus;
 }

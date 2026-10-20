@@ -7,6 +7,7 @@ import com.zhibo.liveprovider.dto.OnlinePoint;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
+import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
 import com.zhibo.liveprovider.dto.WatchSdkCommand;
@@ -34,6 +35,10 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_CREATE_DEMAND = "/v3/webinars/webinar/create-demand";
     static final String PATH_INFO = "/v3/webinars/webinar/info";
     static final String PATH_EDIT = "/v3/webinars/webinar/edit";
+    /** 开始直播。三方推流必须 {@code start_type=4}，否则微吼侧会黑屏 */
+    static final String PATH_START = "/v3/webinars/live/start";
+    /** 推流方式：4 = 三方推拉流（OBS）。1 是浏览器主持人开播，不要用 */
+    static final String START_TYPE_THIRD_PARTY = "4";
     static final String PATH_END = "/v3/webinars/live/end";
     static final String PATH_DELETE = "/v3/webinars/webinar/delete";
     static final String PATH_ROLE_URL = "/v3/webinars/live/get-role-url";
@@ -44,6 +49,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_RECORD_LIST = "/v3/webinars/record/get-list";
     /** 聊天审核页（中控台 iframe） */
     static final String PATH_CHAT_FILTER = "/v3/webinars/manage/chat-filter";
+    /** 当前活动的 rtmp 推流地址；业务参数仅 webinar_id */
+    static final String PATH_STREAM_PUSH = "/v3/webinars/live/get-stream-push-address";
     static final String EMBED_BASE = "https://e.vhall.com/v3/embed/live/detail/";
     static final String SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
     static final int ROLE_HOST = 1;
@@ -185,6 +192,17 @@ public class VhallLiveProvider implements LiveProvider {
             params.put("img_url", cover);
         }
         vhallClient.postForData(PATH_EDIT, params, Map.class);
+    }
+
+    @Override
+    public int start(String providerRoomId) {
+        requireRoomId(providerRoomId);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("webinar_id", providerRoomId);
+        params.put("start_type", START_TYPE_THIRD_PARTY);
+        vhallClient.postForData(PATH_START, params, Map.class);
+        ProviderRoomSnapshot info = fetchRoom(providerRoomId);
+        return info.state() != null ? info.state() : 1;
     }
 
     @Override
@@ -340,6 +358,24 @@ public class VhallLiveProvider implements LiveProvider {
             total = list.size();
         }
         return new ProviderRecordList(total, list);
+    }
+
+    @Override
+    public PushStreamInfo getPushStream(String providerRoomId) {
+        requireRoomId(providerRoomId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.getForData(
+                PATH_STREAM_PUSH, Map.of("webinar_id", providerRoomId), Map.class);
+        if (data == null) {
+            throw new IllegalStateException("微吼未返回推流地址");
+        }
+        String streamAddress = asString(data.get("stream_address"));
+        String streamCode = asString(data.get("stream_code"));
+        if (streamAddress == null || streamAddress.isBlank()
+                || streamCode == null || streamCode.isBlank()) {
+            throw new IllegalStateException("微吼未返回推流地址");
+        }
+        return new PushStreamInfo(streamAddress.trim(), streamCode.trim(), trimToNull(asString(data.get("expire_time"))));
     }
 
     @Override
