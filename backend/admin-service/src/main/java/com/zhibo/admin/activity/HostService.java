@@ -15,7 +15,8 @@ public class HostService {
 
     public ActivityHostResponse host(String activityId) {
         ActivityEntity entity = activityService.requireActivity(activityId);
-        if (!BroadcastRules.canBroadcast(entity.getRiskStatus(), entity.getShelfStatus(), entity.getState())) {
+        if (!BroadcastRules.canBroadcast(
+                entity.getReady(), entity.getRiskStatus(), entity.getShelfStatus(), entity.getState())) {
             throw new IllegalArgumentException("当前状态不可开播");
         }
         String hostUrl = providerRegistry.require(entity.getProvider())

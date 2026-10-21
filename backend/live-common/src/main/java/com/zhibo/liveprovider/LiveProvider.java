@@ -23,6 +23,16 @@ public interface LiveProvider {
 
     CreateRoomResult create(CreateRoomCommand command);
 
+    /**
+     * 用可访问的视频 URL 在媒资中心登记视频，返回 {@code video_id}。
+     * 录播「素材视频」路径：该 id 可作为 create-demand 的 {@code record_id}。
+     *
+     * @param url      可公网拉取的视频地址（如本站 TOS URL）
+     * @param filename 可选展示名；空则由实现省略该参
+     * @return 云侧 video_id（字符串形式的数字）
+     */
+    String createVideoByUrl(String url, String filename);
+
     String buildHostUrl(String providerRoomId);
 
     ProviderRoomSnapshot fetchRoom(String providerRoomId);

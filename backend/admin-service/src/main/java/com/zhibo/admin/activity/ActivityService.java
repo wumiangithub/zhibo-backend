@@ -50,6 +50,8 @@ import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.material.MaterialService;
+import com.zhibo.activity.ActivityReady;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
@@ -61,6 +63,7 @@ import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
 import com.zhibo.livereport.LiveReportEntity;
 import com.zhibo.livereport.LiveReportRepository;
+import com.zhibo.material.MaterialAudit;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
 import com.zhibo.vhall.provider.VhallLiveProvider;
@@ -96,6 +99,9 @@ public class ActivityService {
 
     private static final DateTimeFormatter CREATED_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    /** 活动起止时间（与接口约定一致） */
+    private static final DateTimeFormatter ACTIVITY_DATE_TIME = CREATED_TIME;
+    private static final java.time.ZoneId SHANGHAI = java.time.ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter DAY =
             DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final String VALIDITY_LONG = "长期有效";
@@ -105,7 +111,6 @@ public class ActivityService {
     private static final Set<String> PLAYBACK_VALIDITY = Set.of("forever", "days");
     private static final int RELATION_LIMIT = 20;
     private static final int COURSEWARE_LIMIT = 100;
-
     private final ActivityRepository activityRepository;
     private final LiveProviderRegistry providerRegistry;
     private final ActivityOwnerRepository ownerRepository;
@@ -138,6 +143,7 @@ public class ActivityService {
             throw new IllegalArgumentException("标题不能超过64个字");
         }
         requireFullDateTime(request.getStartTime(), "开始时间");
+        requireStartTimeAfterNow(request.getStartTime());
         validateOptionalEndTime(request.getEndTime(), request.getStartTime());
 
         String introduction = trimToNull(request.getIntroduction());
@@ -162,26 +168,34 @@ public class ActivityService {
         }
         SysUserAccountEntity operator = requireOperator(operatorId);
 
-        CreateRoomResult room = liveProvider.create(new CreateRoomCommand(
-                title,
-                request.getStartTime().trim(),
-                type,
-                introduction,
-                request.getRecordId(),
-                trimToNull(request.getCoverUrl()),
-                request.getUltraLowLatency()
-        ));
+        RecordCreatePlan recordPlan = planRecordCreate(type, request, liveProvider);
+
+        CreateRoomResult room = null;
+        if (recordPlan.createNow()) {
+            CreateRoomCommand createCmd = new CreateRoomCommand(
+                    title,
+                    request.getStartTime().trim(),
+                    type,
+                    introduction,
+                    recordPlan.recordId(),
+                    trimToNull(request.getCoverUrl()),
+                    request.getUltraLowLatency()
+            );
+            room = liveProvider.create(createCmd);
+        }
 
         ActivityEntity entity = new ActivityEntity();
         entity.setId(UUID.randomUUID().toString());
         entity.setReportId(reportId);
         entity.setProvider(provider);
-        entity.setProviderRoomId(room.providerRoomId());
+        entity.setProviderRoomId(room == null ? null : room.providerRoomId());
         entity.setTitle(title);
         entity.setIntroduction(introduction);
         entity.setStartTime(request.getStartTime().trim());
         entity.setEndTime(trimToNull(request.getEndTime()));
         entity.setType(type);
+        entity.setReady(recordPlan.ready());
+        entity.setRecordMaterialId(recordPlan.materialId());
         entity.setState(type == 4 ? 4 : 2);
         entity.setViewerStyle(normalizeViewerStyle(request.getViewerStyle()));
         entity.setUltraLowLatency(request.getUltraLowLatency() == null ? Boolean.TRUE : request.getUltraLowLatency());
@@ -205,19 +219,21 @@ public class ActivityService {
         entity.setPlaybackSpeedAllow(Boolean.TRUE);
         entity.setPlaybackFastForwardAllow(Boolean.TRUE);
 
-        try {
-            ProviderRoomSnapshot snap = liveProvider.fetchRoom(room.providerRoomId());
-            if (snap.state() != null) {
-                entity.setState(snap.state());
+        if (room != null) {
+            try {
+                ProviderRoomSnapshot snap = liveProvider.fetchRoom(room.providerRoomId());
+                if (snap.state() != null) {
+                    entity.setState(snap.state());
+                }
+                if (snap.shareLink() != null) {
+                    entity.setShareLink(snap.shareLink());
+                }
+                if (entity.getCoverUrl() == null && snap.coverUrl() != null) {
+                    entity.setCoverUrl(snap.coverUrl());
+                }
+            } catch (RuntimeException ignored) {
+                // 创建已成功；拉详情失败不挡落库
             }
-            if (snap.shareLink() != null) {
-                entity.setShareLink(snap.shareLink());
-            }
-            if (entity.getCoverUrl() == null && snap.coverUrl() != null) {
-                entity.setCoverUrl(snap.coverUrl());
-            }
-        } catch (RuntimeException ignored) {
-            // 创建已成功；拉详情失败不挡落库
         }
 
         // 必须先落库再写关联表；成员删除用 bulk @Modifying，不能 clear 掉未 flush 的活动
@@ -281,25 +297,30 @@ public class ActivityService {
 
     public ActivityDetailResponse detail(String id) {
         ActivityEntity entity = requireActivity(id);
-        LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
-
         ActivityDetailResponse detail = toDetail(entity);
-        try {
-            ProviderRoomSnapshot snap = liveProvider.fetchRoom(entity.getProviderRoomId());
-            mergeCloudFields(detail, entity, snap);
-            if (snap.state() != null && !snap.state().equals(entity.getState())) {
-                entity.setState(snap.state());
-                activityRepository.save(entity);
+        String roomId = trimToNull(entity.getProviderRoomId());
+        if (roomId != null && ActivityReady.isOk(entity.getReady())) {
+            LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+            try {
+                ProviderRoomSnapshot snap = liveProvider.fetchRoom(roomId);
+                mergeCloudFields(detail, entity, snap);
+                if (snap.state() != null && !snap.state().equals(entity.getState())) {
+                    entity.setState(snap.state());
+                    activityRepository.save(entity);
+                }
+                if (snap.shareLink() != null) {
+                    entity.setShareLink(snap.shareLink());
+                    activityRepository.save(entity);
+                }
+            } catch (RuntimeException ignored) {
+                // 以本站库为准
             }
-            if (snap.shareLink() != null) {
-                entity.setShareLink(snap.shareLink());
-                activityRepository.save(entity);
-            }
-        } catch (RuntimeException ignored) {
-            // 以本站库为准
         }
         detail.setCanBroadcast(BroadcastRules.canBroadcast(
-                detail.getRiskStatus(), detail.getShelfStatus(), detail.getState()));
+                entity.getReady(),
+                detail.getRiskStatus(),
+                detail.getShelfStatus(),
+                detail.getState()));
         return detail;
     }
 
@@ -325,9 +346,11 @@ public class ActivityService {
         boolean hasOwners = request.getOwnerIds() != null;
         boolean hasProducts = request.getProducts() != null;
         boolean hasCoursewares = request.getCoursewareMaterialIds() != null;
+        boolean hasMaterialId = request.getMaterialId() != null;
 
         if (!hasTitle && !hasStart && !hasIntro && !hasEnd && !hasCover && !hasDetail
-                && !hasAutoList && !hasHosts && !hasOwners && !hasProducts && !hasCoursewares) {
+                && !hasAutoList && !hasHosts && !hasOwners && !hasProducts && !hasCoursewares
+                && !hasMaterialId) {
             throw new IllegalArgumentException("至少填写一个可改字段");
         }
 
@@ -340,6 +363,7 @@ public class ActivityService {
         }
         if (hasStart) {
             requireFullDateTime(request.getStartTime(), "开始时间");
+            requireStartTimeAfterNow(request.getStartTime());
             entity.setStartTime(request.getStartTime().trim());
         }
         if (hasIntro) {
@@ -368,13 +392,18 @@ public class ActivityService {
         }
         // viewerStyle / ultraLowLatency / 暖场等：创建后不可改，请求里带了忽略
 
+        if (hasMaterialId) {
+            replaceRecordMaterial(entity, trimToNull(request.getMaterialId()));
+        }
+
         boolean syncCloud = hasTitle || hasStart || hasIntro || hasCover;
-        if (syncCloud) {
+        String roomId = trimToNull(entity.getProviderRoomId());
+        if (syncCloud && roomId != null && ActivityReady.isOk(entity.getReady())) {
             LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
             String coverForCloud = request.getCoverUrl() == null
                     ? null
                     : request.getCoverUrl().trim();
-            liveProvider.update(entity.getProviderRoomId(), new UpdateRoomCommand(
+            liveProvider.update(roomId, new UpdateRoomCommand(
                     hasTitle ? entity.getTitle() : null,
                     hasStart ? entity.getStartTime() : null,
                     hasIntro ? entity.getIntroduction() : null,
@@ -815,6 +844,8 @@ public class ActivityService {
         summary.setCoverUrl(entity.getCoverUrl());
         summary.setState(entity.getState());
         summary.setType(entity.getType());
+        summary.setReady(entity.getReady() == null ? ActivityReady.OK : entity.getReady());
+        summary.setRecordMaterialId(entity.getRecordMaterialId());
         summary.setViewerStyle(entity.getViewerStyle());
         summary.setShareLink(entity.getShareLink());
         if (entity.getCreatedTime() != null) {
@@ -825,7 +856,7 @@ public class ActivityService {
         summary.setSellType(entity.getSellType());
         summary.setValidityLabel(entity.getValidityLabel());
         summary.setCanBroadcast(BroadcastRules.canBroadcast(
-                entity.getRiskStatus(), entity.getShelfStatus(), entity.getState()));
+                entity.getReady(), entity.getRiskStatus(), entity.getShelfStatus(), entity.getState()));
         return summary;
     }
 
@@ -839,6 +870,8 @@ public class ActivityService {
         detail.setCoverUrl(base.getCoverUrl());
         detail.setState(base.getState());
         detail.setType(base.getType());
+        detail.setReady(base.getReady());
+        detail.setRecordMaterialId(base.getRecordMaterialId());
         detail.setViewerStyle(base.getViewerStyle());
         detail.setShareLink(base.getShareLink());
         detail.setCreatedTime(base.getCreatedTime());
@@ -921,6 +954,19 @@ public class ActivityService {
         requireFullDateTime(start, "开始时间");
         if (end.compareTo(start) <= 0) {
             throw new IllegalArgumentException("结束时间须晚于开始时间");
+        }
+    }
+
+    /**
+     * 对齐微吼：定时开始须晚于当前至少 2 分钟，避免云侧 512096。
+     * 在调 LiveProvider 之前拦截。
+     */
+    static void requireStartTimeAfterNow(String startTime) {
+        requireFullDateTime(startTime, "开始时间");
+        LocalDateTime start = LocalDateTime.parse(startTime.trim(), ACTIVITY_DATE_TIME);
+        LocalDateTime minStart = LocalDateTime.now(SHANGHAI).plusMinutes(2);
+        if (start.isBefore(minStart)) {
+            throw new IllegalArgumentException("开始时间须晚于当前时间至少 2 分钟");
         }
     }
 
@@ -1028,6 +1074,110 @@ public class ActivityService {
         List<ProductSnap> products = new ArrayList<>();
         bySpu.forEach((spuId, name) -> products.add(new ProductSnap(spuId, name)));
         return products;
+    }
+
+    /**
+     * 录播创建分流：已转码 → 立刻 create-demand；未转码 → 代上传/等待，本站先 ready=0。
+     */
+    private RecordCreatePlan planRecordCreate(
+            Integer type, CreateActivityRequest request, LiveProvider liveProvider) {
+        String recordId = trimToNull(request.getRecordId());
+        String materialId = trimToNull(request.getMaterialId());
+        if (type == null || type != 4) {
+            return new RecordCreatePlan(ActivityReady.OK, null, recordId, true);
+        }
+        if (materialId != null && recordId != null) {
+            throw new IllegalArgumentException("录播请只传 materialId 或 recordId 其一");
+        }
+        if (materialId != null) {
+            MaterialEntity video = requireRecordVideoBase(materialId);
+            ensureVhallUpload(video, liveProvider);
+            Integer status = video.getVhallTranscodeStatus();
+            String videoId = trimToNull(video.getVhallVideoId());
+            if (status != null && status == MaterialService.VHALL_TRANSCODE_OK && videoId != null) {
+                return new RecordCreatePlan(ActivityReady.OK, materialId, videoId, true);
+            }
+            return new RecordCreatePlan(ActivityReady.PENDING, materialId, null, false);
+        }
+        if (recordId == null) {
+            throw new IllegalArgumentException("录播须填写 recordId 或 materialId");
+        }
+        return new RecordCreatePlan(ActivityReady.OK, null, recordId, true);
+    }
+
+    /** 录播素材基线：未删、视频、两审通过、有 URL（不要求已转码）。 */
+    private MaterialEntity requireRecordVideoBase(String materialId) {
+        MaterialEntity material = materialRepository.findById(materialId)
+                .filter(item -> item.getDeletedTime() == null)
+                .orElseThrow(() -> new IllegalArgumentException("录播素材不存在"));
+        if (!"video".equals(material.getType())) {
+            throw new IllegalArgumentException("录播须选择视频素材");
+        }
+        if (!MaterialAudit.bothPassed(material)) {
+            throw new IllegalArgumentException("录播素材须已通过审核");
+        }
+        if (material.getUrl() == null || material.getUrl().isBlank()) {
+            throw new IllegalArgumentException("录播素材暂无可用地址");
+        }
+        return material;
+    }
+
+    /**
+     * 无 video_id，或转码失败：代调 create-by-url。
+     * 已在转码中（status=0）不重复上传。
+     */
+    private void ensureVhallUpload(MaterialEntity video, LiveProvider liveProvider) {
+        Integer status = video.getVhallTranscodeStatus();
+        String videoId = trimToNull(video.getVhallVideoId());
+        if (status != null && status == MaterialService.VHALL_TRANSCODE_PENDING && videoId != null) {
+            return;
+        }
+        if (status != null && status == MaterialService.VHALL_TRANSCODE_OK && videoId != null) {
+            return;
+        }
+        String newId = liveProvider.createVideoByUrl(video.getUrl().trim(), video.getName());
+        if (newId == null || newId.isBlank()) {
+            throw new IllegalArgumentException("微吼未返回 video_id");
+        }
+        video.setVhallVideoId(newId.trim());
+        video.setVhallTranscodeProgress(0);
+        video.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_PENDING);
+        materialRepository.save(video);
+    }
+
+    /** 设置页替换录播视频：ready→0，按需再上传；等回调 create-demand。 */
+    private void replaceRecordMaterial(ActivityEntity entity, String materialId) {
+        if (entity.getType() == null || entity.getType() != 4) {
+            throw new IllegalArgumentException("仅录播可替换视频素材");
+        }
+        if (materialId == null) {
+            throw new IllegalArgumentException("materialId 不能为空");
+        }
+        MaterialEntity video = requireRecordVideoBase(materialId);
+        LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+        ensureVhallUpload(video, liveProvider);
+        entity.setRecordMaterialId(materialId);
+        entity.setReady(ActivityReady.PENDING);
+        // 旧云侧房间暂留；新 create-demand 成功后再覆盖 provider_room_id
+        Integer status = video.getVhallTranscodeStatus();
+        String videoId = trimToNull(video.getVhallVideoId());
+        if (status != null && status == MaterialService.VHALL_TRANSCODE_OK && videoId != null) {
+            // 已转码：当场建点播
+            CreateRoomResult room = liveProvider.create(new CreateRoomCommand(
+                    entity.getTitle(),
+                    entity.getStartTime(),
+                    entity.getType(),
+                    entity.getIntroduction(),
+                    videoId,
+                    entity.getCoverUrl(),
+                    entity.getUltraLowLatency()
+            ));
+            entity.setProviderRoomId(room.providerRoomId());
+            entity.setReady(ActivityReady.OK);
+        }
+    }
+
+    private record RecordCreatePlan(int ready, String materialId, String recordId, boolean createNow) {
     }
 
     private List<CoursewareSnap> parseCoursewares(List<String> rawIds) {

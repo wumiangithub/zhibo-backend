@@ -75,6 +75,28 @@ public class MaterialEntity {
     @Column(name = "department_name", length = 256)
     private String departmentName;
 
+    /**
+     * 微吼媒资 {@code video_id}（create-by-url）。
+     * 仅视频有意义；空 = 尚未上传到微吼（前端「待转码」）。
+     */
+    @Column(name = "vhall_video_id", length = 64)
+    private String vhallVideoId;
+
+    /**
+     * 微吼转码进度 0～100。
+     * 空 = 未上传；转码中为 0～99；成功时可写 100。
+     */
+    @Column(name = "vhall_transcode_progress")
+    private Integer vhallTranscodeProgress;
+
+    /**
+     * 微吼转码结果（对齐完成回调 {@code method_id=3} 的 {@code status}）。
+     * 空 = 未上传；{@code 0} = 已上传转码中；{@code 1} = 成功；{@code 3} = 失败。
+     * 文档：https://vhall.apifox.cn/6838858m0
+     */
+    @Column(name = "vhall_transcode_status")
+    private Integer vhallTranscodeStatus;
+
     @Column(name = "deleted_time")
     private LocalDateTime deletedTime;
 

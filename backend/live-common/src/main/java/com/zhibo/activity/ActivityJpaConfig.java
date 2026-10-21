@@ -3,6 +3,7 @@ package com.zhibo.activity;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /**
@@ -12,6 +13,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @AutoConfiguration
 @EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course"})
 @EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course"})
-@ComponentScan({"com.zhibo.liveprovider", "com.zhibo.attendance", "com.zhibo.presence"})
+@ComponentScan(
+        basePackages = {"com.zhibo.liveprovider", "com.zhibo.attendance", "com.zhibo.presence", "com.zhibo.activity"},
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = ActivityJpaConfig.class))
 public class ActivityJpaConfig {
 }

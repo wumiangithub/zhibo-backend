@@ -19,6 +19,7 @@ public class WatchSdkService {
 
     public WatchSdkResponse sdk(String activityId, String guestId, String nickname) {
         ActivityEntity entity = watchService.requireActivity(activityId);
+        watchService.requireReadyForWatch(entity);
         WatchSdkBundle bundle = providerRegistry.require(entity.getProvider())
                 .buildWatchSdk(new WatchSdkCommand(
                         entity.getProviderRoomId(), guestId, nickname));

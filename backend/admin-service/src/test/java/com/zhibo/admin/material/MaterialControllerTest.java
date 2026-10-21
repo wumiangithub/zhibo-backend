@@ -115,6 +115,25 @@ class MaterialControllerTest {
     }
 
     @Test
+    void startVhallTranscode_ok() throws Exception {
+        MaterialItemResponse item = new MaterialItemResponse();
+        item.setId("v1");
+        item.setType("video");
+        item.setVhallVideoId("vid-99");
+        item.setVhallTranscodeProgress(0);
+        item.setVhallTranscodeStatus(0);
+        when(materialService.startVhallTranscode("v1")).thenReturn(item);
+
+        mockMvc.perform(post("/api/v1/materials/vhall-transcode/v1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.id").value("v1"))
+                .andExpect(jsonPath("$.data.vhallVideoId").value("vid-99"))
+                .andExpect(jsonPath("$.data.vhallTranscodeProgress").value(0))
+                .andExpect(jsonPath("$.data.vhallTranscodeStatus").value(0));
+    }
+
+    @Test
     void createArticle_ok() throws Exception {
         MaterialItemResponse item = new MaterialItemResponse();
         item.setId("a1");

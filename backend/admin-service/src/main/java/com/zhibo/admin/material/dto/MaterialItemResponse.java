@@ -25,4 +25,13 @@ public class MaterialItemResponse {
     /** 所在部门展示名快照 */
     private String departmentName;
     private String uploadedTime;
+    /** 仅 video：微吼媒资 video_id；未上传可空 */
+    private String vhallVideoId;
+    /** 仅 video：转码进度 0～100；未上传可空 */
+    private Integer vhallTranscodeProgress;
+    /**
+     * 仅 video：转码结果。空=未上传；0=转码中；1=成功；3=失败
+     *（对齐微吼完成回调 method_id=3 的 status）。
+     */
+    private Integer vhallTranscodeStatus;
 }

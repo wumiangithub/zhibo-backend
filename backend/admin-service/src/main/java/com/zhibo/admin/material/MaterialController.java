@@ -139,6 +139,15 @@ public class MaterialController {
         return ApiResponse.ok(materialService.rename(id, request));
     }
 
+    /**
+     * 视频素材上传到微吼转码（create-by-url）。
+     * 无请求体；响应单条列表项（含 vhallVideoId / progress / status=0）。
+     */
+    @PostMapping("/vhall-transcode/{id}")
+    public ApiResponse<MaterialItemResponse> startVhallTranscode(@PathVariable String id) {
+        return ApiResponse.ok(materialService.startVhallTranscode(id));
+    }
+
     /** AI 审核：仅 1 通过 / 2 驳回。 */
     @PutMapping("/ai-audit/{id}")
     public ApiResponse<MaterialItemResponse> updateAiAudit(

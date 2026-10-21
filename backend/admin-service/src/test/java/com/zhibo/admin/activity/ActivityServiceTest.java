@@ -109,7 +109,11 @@ class ActivityServiceTest {
     void create_persistsAndReturnsUuid() {
         CreateActivityRequest request = baseCreateRequest();
         request.setTitle("  测试活动  ");
-        request.setEndTime("2026-10-01 22:00:00");
+        LocalDateTime end = LocalDateTime.parse(
+                request.getStartTime(),
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")).plusHours(2);
+        String endTime = end.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        request.setEndTime(endTime);
         request.setIntroduction("  一场简介  ");
         request.setUltraLowLatency(true);
         request.setAutoList(true);
@@ -120,7 +124,7 @@ class ActivityServiceTest {
         when(liveProvider.create(any(CreateRoomCommand.class)))
                 .thenReturn(new CreateRoomResult("123456"));
         when(liveProvider.fetchRoom("123456")).thenReturn(new ProviderRoomSnapshot(
-                "测试活动", 2, 2, 0, null, "https://share", "2026-10-01 20:00:00",
+                "测试活动", 2, 2, 0, null, "https://share", request.getStartTime(),
                 null, "一场简介", 0, null));
         when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -138,7 +142,7 @@ class ActivityServiceTest {
         assertEquals(response.getId(), entity.getValue().getId());
         assertEquals("vhall", entity.getValue().getProvider());
         assertEquals("123456", entity.getValue().getProviderRoomId());
-        assertEquals("2026-10-01 22:00:00", entity.getValue().getEndTime());
+        assertEquals(endTime, entity.getValue().getEndTime());
         assertEquals(true, entity.getValue().getUltraLowLatency());
         assertEquals("pending", entity.getValue().getShelfStatus());
         assertEquals("pending", entity.getValue().getRiskStatus());
@@ -180,7 +184,7 @@ class ActivityServiceTest {
     }
 
     @Test
-    void create_type4_requiresRecordId() {
+    void create_type4_requiresRecordIdOrMaterialId() {
         CreateActivityRequest request = baseCreateRequest();
         request.setTitle("录播");
         request.setIntroduction("简介");
@@ -189,10 +193,136 @@ class ActivityServiceTest {
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
         when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
-        when(liveProvider.create(any(CreateRoomCommand.class)))
-                .thenThrow(new IllegalArgumentException("录播须填写 recordId"));
 
-        assertThrows(IllegalArgumentException.class, () -> activityService.create(request, OPERATOR_ID));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.create(request, OPERATOR_ID));
+        assertEquals("录播须填写 recordId 或 materialId", ex.getMessage());
+        verify(liveProvider, never()).create(any(CreateRoomCommand.class));
+        verify(liveProvider, never()).createVideoByUrl(any(), any());
+    }
+
+    @Test
+    void create_type4_rejectsBothRecordIdAndMaterialId() {
+        CreateActivityRequest request = baseCreateRequest();
+        request.setTitle("录播");
+        request.setIntroduction("简介");
+        request.setType(4);
+        request.setRecordId("799703");
+        request.setMaterialId("mat-1");
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.create(request, OPERATOR_ID));
+        assertEquals("录播请只传 materialId 或 recordId 其一", ex.getMessage());
+        verify(liveProvider, never()).createVideoByUrl(any(), any());
+    }
+
+    @Test
+    void create_type4_materialId_usesStoredVhallVideoId() {
+        CreateActivityRequest request = baseCreateRequest();
+        request.setTitle("录播");
+        request.setIntroduction("简介");
+        request.setType(4);
+        request.setMaterialId("mat-video-1");
+
+        MaterialEntity video = new MaterialEntity();
+        video.setId("mat-video-1");
+        video.setType("video");
+        video.setName("成片");
+        video.setUrl("https://tos.example/v.mp4");
+        video.setAiAuditStatus(1);
+        video.setRiskAuditStatus(1);
+        video.setVhallVideoId("5768233");
+        video.setVhallTranscodeStatus(1);
+        video.setVhallTranscodeProgress(100);
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(materialRepository.findById("mat-video-1")).thenReturn(Optional.of(video));
+        when(liveProvider.create(any(CreateRoomCommand.class)))
+                .thenReturn(new CreateRoomResult("88"));
+        when(liveProvider.fetchRoom("88")).thenReturn(new ProviderRoomSnapshot(
+                "录播", 4, 4, 0, null, null, "2026-10-01 20:00:00",
+                null, "简介", 0, null));
+        when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateActivityResponse response = activityService.create(request, OPERATOR_ID);
+        assertNotNull(response.getId());
+
+        verify(liveProvider, never()).createVideoByUrl(any(), any());
+        ArgumentCaptor<CreateRoomCommand> cmd = ArgumentCaptor.forClass(CreateRoomCommand.class);
+        verify(liveProvider).create(cmd.capture());
+        assertEquals(4, cmd.getValue().type());
+        assertEquals("5768233", cmd.getValue().recordId());
+    }
+
+    @Test
+    void create_type4_materialId_pendingUploadsAndSkipsDemand() {
+        CreateActivityRequest request = baseCreateRequest();
+        request.setTitle("录播");
+        request.setIntroduction("简介");
+        request.setType(4);
+        request.setMaterialId("mat-video-1");
+
+        MaterialEntity video = new MaterialEntity();
+        video.setId("mat-video-1");
+        video.setType("video");
+        video.setName("成片");
+        video.setUrl("https://tos.example/v.mp4");
+        video.setAiAuditStatus(1);
+        video.setRiskAuditStatus(1);
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(materialRepository.findById("mat-video-1")).thenReturn(Optional.of(video));
+        when(liveProvider.createVideoByUrl("https://tos.example/v.mp4", "成片"))
+                .thenReturn("5768233");
+        when(materialRepository.save(any(MaterialEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CreateActivityResponse response = activityService.create(request, OPERATOR_ID);
+        assertNotNull(response.getId());
+
+        verify(liveProvider).createVideoByUrl("https://tos.example/v.mp4", "成片");
+        verify(liveProvider, never()).create(any(CreateRoomCommand.class));
+        ArgumentCaptor<ActivityEntity> saved = ArgumentCaptor.forClass(ActivityEntity.class);
+        verify(activityRepository).saveAndFlush(saved.capture());
+        assertEquals(0, saved.getValue().getReady());
+        assertEquals("mat-video-1", saved.getValue().getRecordMaterialId());
+        assertNull(saved.getValue().getProviderRoomId());
+        assertEquals("5768233", video.getVhallVideoId());
+        assertEquals(0, video.getVhallTranscodeStatus());
+    }
+
+    @Test
+    void create_type4_recordId_skipsCreateByUrl() {
+        CreateActivityRequest request = baseCreateRequest();
+        request.setTitle("录播");
+        request.setIntroduction("简介");
+        request.setType(4);
+        request.setRecordId("799703");
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(liveProvider.create(any(CreateRoomCommand.class)))
+                .thenReturn(new CreateRoomResult("88"));
+        when(liveProvider.fetchRoom("88")).thenReturn(new ProviderRoomSnapshot(
+                "录播", 4, 4, 0, null, null, "2026-10-01 20:00:00",
+                null, "简介", 0, null));
+        when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        activityService.create(request, OPERATOR_ID);
+
+        verify(liveProvider, never()).createVideoByUrl(any(), any());
+        ArgumentCaptor<CreateRoomCommand> cmd = ArgumentCaptor.forClass(CreateRoomCommand.class);
+        verify(liveProvider).create(cmd.capture());
+        assertEquals("799703", cmd.getValue().recordId());
     }
 
     @Test
@@ -208,13 +338,27 @@ class ActivityServiceTest {
     @Test
     void create_rejectsEndTimeNotAfterStart() {
         CreateActivityRequest request = baseCreateRequest();
-        request.setEndTime("2026-10-01 20:00:00");
+        request.setEndTime(request.getStartTime());
 
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> activityService.create(request, OPERATOR_ID));
         assertEquals("结束时间须晚于开始时间", ex.getMessage());
+        verify(liveProvider, never()).create(any(CreateRoomCommand.class));
+    }
+
+    @Test
+    void create_rejectsStartTimeTooSoon() {
+        CreateActivityRequest request = baseCreateRequest();
+        request.setStartTime("2020-01-01 12:00:00");
+
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.create(request, OPERATOR_ID));
+        assertEquals("开始时间须晚于当前时间至少 2 分钟", ex.getMessage());
+        verify(liveProvider, never()).create(any(CreateRoomCommand.class));
     }
 
     @Test
@@ -1092,7 +1236,9 @@ class ActivityServiceTest {
         CreateActivityRequest request = new CreateActivityRequest();
         request.setProvider("vhall");
         request.setTitle("活动");
-        request.setStartTime("2026-10-01 20:00:00");
+        // 须晚于当前 ≥2 分钟（对齐微吼 / requireStartTimeAfterNow）
+        LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
+        request.setStartTime(start.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         request.setType(2);
         request.setAutoList(false);
         request.setHostIds(List.of(10001L));

@@ -58,6 +58,18 @@ public class ActivityEntity {
     @Column(nullable = false)
     private Integer type;
 
+    /**
+     * 活动是否就绪。默认 1。
+     * 0 = 未就绪（录播视频转码中）；1 = 就绪；2 = 失败（不可重试）。
+     * 库列为 TINYINT（V31），须声明以免 validate 期望 INTEGER。
+     */
+    @Column(nullable = false, columnDefinition = "TINYINT")
+    private Integer ready = 1;
+
+    /** 录播「素材视频」路径：本站素材 UUID；供转码回调挂钩 create-demand。 */
+    @Column(name = "record_material_id", length = 36)
+    private String recordMaterialId;
+
     /** 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放。 */
     @Column(nullable = false)
     private Integer state;

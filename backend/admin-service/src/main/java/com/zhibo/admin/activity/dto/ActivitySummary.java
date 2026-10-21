@@ -17,6 +17,13 @@ public class ActivitySummary {
     private Integer state;
     /** 1音频 2视频 3互动 4录播 */
     private Integer type;
+    /**
+     * 1 就绪（默认）/ 0 转码中未就绪 / 2 失败不可重试。
+     * 录播素材路径用；其它类型恒为 1。
+     */
+    private Integer ready;
+    /** 录播素材 UUID；非素材路径可空 */
+    private String recordMaterialId;
     private String viewerStyle;
     private String shareLink;
     private String createdTime;

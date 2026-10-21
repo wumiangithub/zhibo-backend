@@ -90,6 +90,31 @@ class VhallLiveProviderTest {
     }
 
     @Test
+    void createVideoByUrl_mapsUrlAndFilename() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE_BY_URL), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("video_id", 5768233));
+
+        String videoId = provider.createVideoByUrl(
+                "https://cdn.example/a.mp4", "产品介绍成片");
+        assertEquals("5768233", videoId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(
+                eq(VhallLiveProvider.PATH_CREATE_BY_URL), captor.capture(), eq(Map.class));
+        assertEquals("https://cdn.example/a.mp4", captor.getValue().get("url"));
+        assertEquals("产品介绍成片", captor.getValue().get("filename"));
+    }
+
+    @Test
+    void createVideoByUrl_requiresUrl() {
+        assertThrows(IllegalArgumentException.class, () ->
+                provider.createVideoByUrl("  ", "name"));
+        verify(vhallClient, never()).postForData(
+                eq(VhallLiveProvider.PATH_CREATE_BY_URL), anyMap(), eq(Map.class));
+    }
+
+    @Test
     void create_omitsNoDelayWhenNull() {
         when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE), anyMap(), eq(Map.class)))
                 .thenReturn(Map.of("webinar_id", 1L));

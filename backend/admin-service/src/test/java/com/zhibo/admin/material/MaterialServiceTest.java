@@ -15,6 +15,8 @@ import com.zhibo.admin.material.dto.RenameMaterialRequest;
 import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.liveprovider.LiveProvider;
+import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.material.MaterialArticleEntity;
 import com.zhibo.material.MaterialArticleRepository;
 import com.zhibo.material.MaterialAuditLogRepository;
@@ -22,6 +24,7 @@ import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
 import com.zhibo.material.MaterialRepository;
+import com.zhibo.vhall.provider.VhallLiveProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -61,6 +64,10 @@ class MaterialServiceTest {
     private MaterialAuditLogRepository auditLogRepository;
     @Mock
     private SysUserAccountRepository userRepository;
+    @Mock
+    private LiveProviderRegistry providerRegistry;
+    @Mock
+    private LiveProvider liveProvider;
 
     @InjectMocks
     private MaterialService materialService;
@@ -624,6 +631,96 @@ class MaterialServiceTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> materialService.list("image", null, null, "approved", false, 1, 20));
         assertEquals("auditStatus 仅支持 0、1、2", ex.getMessage());
+    }
+
+    @Test
+    void startVhallTranscode_ok() {
+        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+        when(providerRegistry.require(VhallLiveProvider.CODE)).thenReturn(liveProvider);
+        when(liveProvider.createVideoByUrl("https://cdn/成片.mp4", "成片.mp4")).thenReturn("vid-99");
+        when(materialRepository.save(any(MaterialEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MaterialItemResponse resp = materialService.startVhallTranscode("v1");
+
+        assertEquals("vid-99", resp.getVhallVideoId());
+        assertEquals(0, resp.getVhallTranscodeProgress());
+        assertEquals(MaterialService.VHALL_TRANSCODE_PENDING, resp.getVhallTranscodeStatus());
+        assertEquals("vid-99", m.getVhallVideoId());
+        assertEquals(0, m.getVhallTranscodeProgress());
+        assertEquals(MaterialService.VHALL_TRANSCODE_PENDING, m.getVhallTranscodeStatus());
+    }
+
+    @Test
+    void startVhallTranscode_rejectsNonVideo() {
+        MaterialEntity m = material("i1", "image", "g1", "a.jpg");
+        when(materialRepository.findById("i1")).thenReturn(Optional.of(m));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.startVhallTranscode("i1"));
+        assertEquals("仅视频可上传到微吼转码", ex.getMessage());
+        verify(providerRegistry, never()).require(any());
+    }
+
+    @Test
+    void startVhallTranscode_rejectsWhenPending() {
+        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        m.setVhallVideoId("old");
+        m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_PENDING);
+        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.startVhallTranscode("v1"));
+        assertEquals("转码中，请稍候", ex.getMessage());
+        verify(providerRegistry, never()).require(any());
+    }
+
+    @Test
+    void startVhallTranscode_rejectsWhenOk() {
+        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        m.setVhallVideoId("old");
+        m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_OK);
+        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> materialService.startVhallTranscode("v1"));
+        assertEquals("已转码成功，无需重复上传", ex.getMessage());
+    }
+
+    @Test
+    void startVhallTranscode_allowsRetryAfterFail() {
+        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        m.setVhallVideoId("old-fail");
+        m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_FAIL);
+        m.setVhallTranscodeProgress(40);
+        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+        when(providerRegistry.require(VhallLiveProvider.CODE)).thenReturn(liveProvider);
+        when(liveProvider.createVideoByUrl("https://cdn/成片.mp4", "成片.mp4")).thenReturn("vid-new");
+        when(materialRepository.save(any(MaterialEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MaterialItemResponse resp = materialService.startVhallTranscode("v1");
+
+        assertEquals("vid-new", resp.getVhallVideoId());
+        assertEquals(0, resp.getVhallTranscodeProgress());
+        assertEquals(MaterialService.VHALL_TRANSCODE_PENDING, resp.getVhallTranscodeStatus());
+    }
+
+    @Test
+    void list_includesVhallFieldsForVideo() {
+        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        m.setVhallVideoId("vid-1");
+        m.setVhallTranscodeProgress(45);
+        m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_PENDING);
+        m.setCreatedTime(LocalDateTime.of(2026, 10, 21, 12, 0, 0));
+        when(materialRepository.search(
+                        eq("video"), isNull(), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
+                .thenReturn(new PageImpl<>(List.of(m), PageRequest.of(0, 20), 1));
+
+        MaterialListResponse resp = materialService.list("video", null, null, null, false, 1, 20);
+        MaterialItemResponse item = resp.getList().get(0);
+        assertEquals("vid-1", item.getVhallVideoId());
+        assertEquals(45, item.getVhallTranscodeProgress());
+        assertEquals(MaterialService.VHALL_TRANSCODE_PENDING, item.getVhallTranscodeStatus());
     }
 
     private static MaterialGroupEntity group(String id, String type, String name, boolean def) {

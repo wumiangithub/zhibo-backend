@@ -6,11 +6,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
+
 public interface MaterialRepository extends JpaRepository<MaterialEntity, String> {
 
     long countByGroupIdAndDeletedTimeIsNull(String groupId);
 
     boolean existsByObjectKeyAndDeletedTimeIsNull(String objectKey);
+
+    /** 微吼转码回调：按 create-by-url 返回的 video_id 反查素材。 */
+    Optional<MaterialEntity> findByVhallVideoIdAndDeletedTimeIsNull(String vhallVideoId);
 
     /**
      * @param auditStatus 联合审核。null 不过滤。

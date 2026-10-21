@@ -1,6 +1,7 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityReady;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
@@ -45,6 +46,7 @@ public class WatchService {
 
     public WatchResponse watch(String activityId, String guestId, String nickname) {
         ActivityEntity entity = requireActivity(activityId);
+        requireReadyForWatch(entity);
         LiveProvider provider = providerRegistry.require(entity.getProvider());
 
         String resolvedGuestId = VhallLiveProvider.resolveGuestId(guestId);
@@ -84,6 +86,18 @@ public class WatchService {
         return activityRepository.findById(uuid)
                 .filter(activity -> activity.getDeletedTime() == null)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
+    }
+
+    /** 录播未就绪 / 转码失败时禁止观看与拉 SDK。 */
+    void requireReadyForWatch(ActivityEntity entity) {
+        Integer ready = entity.getReady();
+        if (ActivityReady.isOk(ready)) {
+            return;
+        }
+        if (ready != null && ready == ActivityReady.FAIL) {
+            throw new IllegalArgumentException("视频转码失败，暂无法观看");
+        }
+        throw new IllegalArgumentException("视频转码中，暂无法观看");
     }
 
     private WatchActivityItem toItem(ActivityEntity entity) {

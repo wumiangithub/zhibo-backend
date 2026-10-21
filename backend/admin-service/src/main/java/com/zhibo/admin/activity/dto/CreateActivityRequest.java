@@ -42,8 +42,18 @@ public class CreateActivityRequest {
     @Max(value = 4, message = "直播类型无效")
     private Integer type;
 
-    /** type=4 且 provider=vhall 时必填 */
+    /**
+     * type=4 且 provider=vhall：微吼回放列表 ID，直接作 create-demand 的 record_id。
+     * 与 {@link #materialId} 二选一，不可同时传。
+     */
     private String recordId;
+
+    /**
+     * type=4 且 provider=vhall：本站素材中心视频 UUID。
+     * 须已预转码成功（{@code vhallTranscodeStatus=1}）；服务端用已存 {@code vhallVideoId} 作 create-demand 的 record_id。
+     * 与 {@link #recordId} 二选一，不可同时传。
+     */
+    private String materialId;
 
     private String viewerStyle;
     private Boolean ultraLowLatency;

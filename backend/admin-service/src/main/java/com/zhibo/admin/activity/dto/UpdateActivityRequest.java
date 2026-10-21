@@ -27,6 +27,12 @@ public class UpdateActivityRequest {
     /** 全量覆盖课件；传 [] 清空 */
     private List<String> coursewareMaterialIds;
 
+    /**
+     * 仅 type=4：替换录播素材视频 UUID。
+     * 写入后 {@code ready→0}，按需 create-by-url；转码成功回调后再 create-demand。
+     */
+    private String materialId;
+
     /** 废弃：请求里带了忽略（创建后不可改） */
     private String viewerStyle;
     /** 废弃：请求里带了忽略 */

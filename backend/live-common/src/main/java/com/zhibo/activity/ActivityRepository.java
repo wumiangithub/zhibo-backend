@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ActivityRepository extends JpaRepository<ActivityEntity, String> {
@@ -31,4 +32,8 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
     Page<ActivityEntity> findAllByOrderByCreatedTimeDesc(Pageable pageable);
 
     Optional<ActivityEntity> findByProviderAndProviderRoomId(String provider, String providerRoomId);
+
+    /** 录播转码回调：挂该素材且仍未就绪的活动。 */
+    List<ActivityEntity> findByRecordMaterialIdAndReadyAndDeletedTimeIsNull(
+            String recordMaterialId, Integer ready);
 }

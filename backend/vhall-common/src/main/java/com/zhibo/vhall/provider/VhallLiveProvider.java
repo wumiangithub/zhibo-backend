@@ -33,6 +33,8 @@ public class VhallLiveProvider implements LiveProvider {
 
     static final String PATH_CREATE = "/v3/webinars/webinar/create";
     static final String PATH_CREATE_DEMAND = "/v3/webinars/webinar/create-demand";
+    /** 媒资：URL 拉取上传；返回 video_id，可作 create-demand 的 record_id */
+    static final String PATH_CREATE_BY_URL = "/v3/webinars/videos/create-by-url";
     static final String PATH_INFO = "/v3/webinars/webinar/info";
     static final String PATH_EDIT = "/v3/webinars/webinar/edit";
     /** 开始直播。三方推流必须 {@code start_type=4}，否则微吼侧会黑屏 */
@@ -137,6 +139,27 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("微吼未返回 webinar_id");
         }
         return new CreateRoomResult(roomId);
+    }
+
+    @Override
+    public String createVideoByUrl(String url, String filename) {
+        String videoUrl = url == null ? "" : url.trim();
+        if (videoUrl.isEmpty()) {
+            throw new IllegalArgumentException("视频地址不能为空");
+        }
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("url", videoUrl);
+        String name = trimToNull(filename);
+        if (name != null) {
+            params.put("filename", name);
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.postForData(PATH_CREATE_BY_URL, params, Map.class);
+        String videoId = asString(data == null ? null : data.get("video_id"));
+        if (videoId == null || videoId.isBlank()) {
+            throw new IllegalStateException("微吼未返回 video_id");
+        }
+        return videoId.trim();
     }
 
     @Override

@@ -19,6 +19,8 @@ import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.liveprovider.LiveProvider;
+import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.material.MaterialArticleEntity;
 import com.zhibo.material.MaterialArticleRepository;
 import com.zhibo.material.MaterialAudit;
@@ -28,6 +30,7 @@ import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialGroupEntity;
 import com.zhibo.material.MaterialGroupRepository;
 import com.zhibo.material.MaterialRepository;
+import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -60,11 +63,19 @@ public class MaterialService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int MAX_BATCH = 100;
 
+    /** 对齐微吼完成回调 status：转码中 */
+    public static final int VHALL_TRANSCODE_PENDING = 0;
+    /** 对齐微吼完成回调 status：成功 */
+    public static final int VHALL_TRANSCODE_OK = 1;
+    /** 对齐微吼完成回调 status：失败 */
+    public static final int VHALL_TRANSCODE_FAIL = 3;
+
     private final MaterialGroupRepository groupRepository;
     private final MaterialRepository materialRepository;
     private final MaterialArticleRepository articleRepository;
     private final MaterialAuditLogRepository auditLogRepository;
     private final SysUserAccountRepository userRepository;
+    private final LiveProviderRegistry providerRegistry;
 
     public List<MaterialGroupResponse> listGroups(String type) {
         String t = requireType(type);
@@ -291,6 +302,40 @@ public class MaterialService {
         // 只改展示名；不碰 objectKey / url（TOS 对象不变）。文章标题上限 45。
         int nameMax = "article".equals(entity.getType()) ? ARTICLE_TITLE_MAX : 256;
         entity.setName(requireTrimmed(request.getName(), "name", nameMax));
+        materialRepository.save(entity);
+        return toItemResponse(entity);
+    }
+
+    /**
+     * 素材视频上传到微吼转码（create-by-url）。
+     * 写 {@code vhall_video_id}、progress=0、status=0；等回调更新进度/结果。
+     * 失败（status=3）可再调本接口重传。
+     */
+    @Transactional
+    public MaterialItemResponse startVhallTranscode(String id) {
+        MaterialEntity entity = requireActiveMaterial(id);
+        if (!"video".equals(entity.getType())) {
+            throw new IllegalArgumentException("仅视频可上传到微吼转码");
+        }
+        String url = blankToNull(entity.getUrl());
+        if (url == null) {
+            throw new IllegalArgumentException("视频缺少可访问 URL");
+        }
+        Integer status = entity.getVhallTranscodeStatus();
+        if (status != null && status == VHALL_TRANSCODE_PENDING) {
+            throw new IllegalArgumentException("转码中，请稍候");
+        }
+        if (status != null && status == VHALL_TRANSCODE_OK) {
+            throw new IllegalArgumentException("已转码成功，无需重复上传");
+        }
+        LiveProvider liveProvider = providerRegistry.require(VhallLiveProvider.CODE);
+        String videoId = liveProvider.createVideoByUrl(url, entity.getName());
+        if (videoId == null || videoId.isBlank()) {
+            throw new IllegalArgumentException("微吼未返回 video_id");
+        }
+        entity.setVhallVideoId(videoId.trim());
+        entity.setVhallTranscodeProgress(0);
+        entity.setVhallTranscodeStatus(VHALL_TRANSCODE_PENDING);
         materialRepository.save(entity);
         return toItemResponse(entity);
     }
@@ -525,6 +570,11 @@ public class MaterialService {
         item.setDepartmentName(blankToNull(entity.getDepartmentName()));
         if (entity.getCreatedTime() != null) {
             item.setUploadedTime(entity.getCreatedTime().format(UPLOADED_TIME));
+        }
+        if ("video".equals(entity.getType())) {
+            item.setVhallVideoId(blankToNull(entity.getVhallVideoId()));
+            item.setVhallTranscodeProgress(entity.getVhallTranscodeProgress());
+            item.setVhallTranscodeStatus(entity.getVhallTranscodeStatus());
         }
         return item;
     }
