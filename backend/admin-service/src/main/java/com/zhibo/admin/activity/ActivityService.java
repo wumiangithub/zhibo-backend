@@ -52,6 +52,7 @@ import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.material.MaterialService;
 import com.zhibo.activity.ActivityReady;
+import com.zhibo.activity.RecordDemandFinalizeService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
@@ -122,6 +123,7 @@ public class ActivityService {
     private final SysUserAccountRepository userRepository;
     private final SellPasswordCryptoService sellPasswordCrypto;
     private final LiveReportRepository liveReportRepository;
+    private final RecordDemandFinalizeService recordDemandFinalizeService;
 
     @Transactional
     public CreateActivityResponse create(CreateActivityRequest request, long operatorId) {
@@ -297,6 +299,9 @@ public class ActivityService {
 
     public ActivityDetailResponse detail(String id) {
         ActivityEntity entity = requireActivity(id);
+        // 转码中：主动拉微吼音视频详情，防回调丢失
+        syncPendingTranscodeFromProvider(entity);
+        entity = requireActivity(id);
         ActivityDetailResponse detail = toDetail(entity);
         String roomId = trimToNull(entity.getProviderRoomId());
         if (roomId != null && ActivityReady.isOk(entity.getReady())) {
@@ -322,6 +327,50 @@ public class ActivityService {
                 detail.getShelfStatus(),
                 detail.getState()));
         return detail;
+    }
+
+    /**
+     * 录播 {@code ready=0} 时调微吼 {@code videos/get-info} 查 {@code transcode_status}。
+     * 成功/失败走与回调相同的收尾（create-demand / ready=2）；查询失败不挡详情。
+     */
+    private void syncPendingTranscodeFromProvider(ActivityEntity entity) {
+        if (entity.getReady() == null || entity.getReady() != ActivityReady.PENDING) {
+            return;
+        }
+        String materialId = trimToNull(entity.getRecordMaterialId());
+        if (materialId == null) {
+            return;
+        }
+        MaterialEntity material = materialRepository.findById(materialId)
+                .filter(m -> m.getDeletedTime() == null)
+                .orElse(null);
+        if (material == null) {
+            return;
+        }
+        String videoId = trimToNull(material.getVhallVideoId());
+        if (videoId == null) {
+            return;
+        }
+        try {
+            LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+            Integer status = liveProvider.getVideoTranscodeStatus(videoId);
+            if (status == null) {
+                return;
+            }
+            // 对齐进度回调：1 成功 / 2 转码中 / 3 失败
+            if (status == MaterialService.VHALL_TRANSCODE_OK) {
+                material.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_OK);
+                material.setVhallTranscodeProgress(100);
+                materialRepository.save(material);
+                recordDemandFinalizeService.onMaterialTranscodeOk(materialId);
+            } else if (status == MaterialService.VHALL_TRANSCODE_FAIL) {
+                material.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_FAIL);
+                materialRepository.save(material);
+                recordDemandFinalizeService.onMaterialTranscodeFail(materialId);
+            }
+        } catch (RuntimeException ignored) {
+            // 微吼查询失败不挡详情页
+        }
     }
 
     @Transactional

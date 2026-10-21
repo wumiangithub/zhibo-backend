@@ -35,6 +35,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_CREATE_DEMAND = "/v3/webinars/webinar/create-demand";
     /** 媒资：URL 拉取上传；返回 video_id，可作 create-demand 的 record_id */
     static final String PATH_CREATE_BY_URL = "/v3/webinars/videos/create-by-url";
+    /** 媒资详情：含 transcode_status（1 成功 / 2 转码中 / 3 失败） */
+    static final String PATH_VIDEO_INFO = "/v3/webinars/videos/get-info";
     static final String PATH_INFO = "/v3/webinars/webinar/info";
     static final String PATH_EDIT = "/v3/webinars/webinar/edit";
     /** 开始直播。三方推流必须 {@code start_type=4}，否则微吼侧会黑屏 */
@@ -160,6 +162,22 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("微吼未返回 video_id");
         }
         return videoId.trim();
+    }
+
+    @Override
+    public Integer getVideoTranscodeStatus(String videoId) {
+        String id = videoId == null ? "" : videoId.trim();
+        if (id.isEmpty()) {
+            throw new IllegalArgumentException("video_id 不能为空");
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.getForData(
+                PATH_VIDEO_INFO, Map.of("video_id", id), Map.class);
+        Integer status = data == null ? null : asInteger(data.get("transcode_status"));
+        if (status == null) {
+            throw new IllegalStateException("微吼未返回 transcode_status");
+        }
+        return status;
     }
 
     @Override

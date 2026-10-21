@@ -32,6 +32,7 @@ import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.activity.RecordDemandFinalizeService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
@@ -101,6 +102,8 @@ class ActivityServiceTest {
     private SellPasswordCryptoService sellPasswordCrypto;
     @Mock
     private LiveReportRepository liveReportRepository;
+    @Mock
+    private RecordDemandFinalizeService recordDemandFinalizeService;
 
     @InjectMocks
     private ActivityService activityService;

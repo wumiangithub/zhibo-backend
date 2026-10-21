@@ -115,6 +115,20 @@ class VhallLiveProviderTest {
     }
 
     @Test
+    void getVideoTranscodeStatus_mapsTranscodeStatus() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_VIDEO_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("id", 4732505, "transcode_status", 1));
+
+        assertEquals(1, provider.getVideoTranscodeStatus("4732505"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(
+                eq(VhallLiveProvider.PATH_VIDEO_INFO), captor.capture(), eq(Map.class));
+        assertEquals("4732505", captor.getValue().get("video_id"));
+    }
+
+    @Test
     void create_omitsNoDelayWhenNull() {
         when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE), anyMap(), eq(Map.class)))
                 .thenReturn(Map.of("webinar_id", 1L));

@@ -33,6 +33,16 @@ public interface LiveProvider {
      */
     String createVideoByUrl(String url, String filename);
 
+    /**
+     * 查询云侧媒资转码状态（防回调丢失时详情页主动拉取）。
+     * 微吼 {@code GET /v3/webinars/videos/get-info} 的 {@code transcode_status}：
+     * {@code 1} 成功 / {@code 2} 转码中 / {@code 3} 失败。
+     *
+     * @param videoId 云侧 video_id（本站 {@code material.vhall_video_id}）
+     * @return 转码状态；查不到或未实现可抛业务异常，由调用方吞掉
+     */
+    Integer getVideoTranscodeStatus(String videoId);
+
     String buildHostUrl(String providerRoomId);
 
     ProviderRoomSnapshot fetchRoom(String providerRoomId);
