@@ -472,10 +472,14 @@ public class MaterialService {
         return item;
     }
 
+    /** 软删素材：写 {@code deleted_time} / {@code deleted_by} / {@code deleted_by_name}；不删 TOS。 */
     @Transactional
-    public DeleteIdResponse softDelete(String id) {
+    public DeleteIdResponse softDelete(String id, long operatorId) {
         MaterialEntity entity = requireActiveMaterial(id);
+        SysUserAccountEntity operator = requireOperator(operatorId);
         entity.setDeletedTime(LocalDateTime.now());
+        entity.setDeletedBy(operator.getId());
+        entity.setDeletedByName(operator.getUserName() == null ? "" : operator.getUserName());
         materialRepository.save(entity);
         return new DeleteIdResponse(entity.getId());
     }

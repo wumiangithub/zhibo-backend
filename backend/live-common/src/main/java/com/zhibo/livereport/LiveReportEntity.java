@@ -32,4 +32,10 @@ public class LiveReportEntity {
     @Column(name = "submitted_time", nullable = false) private LocalDateTime submittedTime;
     @CreationTimestamp @Column(name = "created_time", nullable = false, updatable = false) private LocalDateTime createdTime;
     @UpdateTimestamp @Column(name = "updated_time", nullable = false) private LocalDateTime updatedTime;
+    /** 软删时间；非空则列表/详情视为不存在。 */
+    @Column(name = "deleted_time") private LocalDateTime deletedTime;
+    /** 删除人 sys_useraccount.rs_mainkey_id。 */
+    @Column(name = "deleted_by") private Long deletedBy;
+    /** 删除人姓名快照。 */
+    @Column(name = "deleted_by_name", length = 50) private String deletedByName;
 }

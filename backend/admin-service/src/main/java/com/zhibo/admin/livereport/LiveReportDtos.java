@@ -21,6 +21,8 @@ public final class LiveReportDtos {
             String coverMaterialId, Long hostId, List<Attachment> attachments) {}
     public record AuditRequest(@NotBlank String result, @Size(max=500) String reason) {}
     public record Result(String id, String status) {}
+    /** 软删成功响应。 */
+    public record DeleteResult(String id) {}
     public record Detail(String id, String title, String content, List<PlanTime> planTimes,
             String coverUrl, String coverObjectKey, Long coverFileSize, String coverMimeType,
             String coverMaterialId, Host host, List<Attachment> attachments,

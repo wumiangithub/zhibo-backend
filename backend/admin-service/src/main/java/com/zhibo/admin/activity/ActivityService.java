@@ -560,11 +560,14 @@ public class ActivityService {
     }
 
     @Transactional
-    public DeleteActivityResponse delete(String id) {
+    public DeleteActivityResponse delete(String id, long operatorId) {
         ActivityEntity entity = requireActivity(id);
+        SysUserAccountEntity operator = requireOperator(operatorId);
         LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
         liveProvider.delete(entity.getProviderRoomId());
         entity.setDeletedTime(LocalDateTime.now());
+        entity.setDeletedBy(operator.getId());
+        entity.setDeletedByName(operator.getUserName() == null ? "" : operator.getUserName());
         activityRepository.save(entity);
         if (entity.getReportId() != null && !entity.getReportId().isBlank()) {
             liveReportRepository.findById(entity.getReportId())
@@ -1528,6 +1531,9 @@ public class ActivityService {
         }
         LiveReportEntity report = liveReportRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("直播报备不存在"));
+        if (report.getDeletedTime() != null) {
+            throw new IllegalArgumentException("直播报备不存在");
+        }
         if (!"passed".equals(report.getStatus())) {
             throw new IllegalArgumentException("只能绑定已通过的直播报备");
         }

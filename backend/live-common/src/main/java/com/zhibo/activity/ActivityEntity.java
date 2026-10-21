@@ -118,6 +118,14 @@ public class ActivityEntity {
     @Column(name = "deleted_time")
     private LocalDateTime deletedTime;
 
+    /** 删除人 sys_useraccount.rs_mainkey_id。 */
+    @Column(name = "deleted_by")
+    private Long deletedBy;
+
+    /** 删除人姓名快照。 */
+    @Column(name = "deleted_by_name", length = 50)
+    private String deletedByName;
+
     /** 风控通过后是否自动上架。 */
     @Column(name = "auto_list", nullable = false)
     private Boolean autoList = Boolean.FALSE;

@@ -70,6 +70,7 @@ public class LiveReportService {
         LocalDateTime to = blank(startTo) ? null : parse(startTo);
         var spec = (org.springframework.data.jpa.domain.Specification<LiveReportEntity>) (root, q, cb) -> {
             List<Predicate> ps = new ArrayList<>();
+            ps.add(cb.isNull(root.get("deletedTime")));
             if (title != null && !title.isBlank()) ps.add(cb.like(root.get("title"), "%"+title.trim()+"%"));
             if (hostName != null && !hostName.isBlank()) ps.add(cb.like(root.get("hostName"), "%"+hostName.trim()+"%"));
             if (status != null && !status.isBlank()) ps.add(cb.equal(root.get("status"), status));
@@ -136,6 +137,21 @@ public class LiveReportService {
         if ("rejected".equals(req.result()) && (reason==null || reason.isEmpty())) throw new IllegalArgumentException("驳回原因不能为空");
         SysUserAccountEntity operator=user(userId,"当前员工不存在"); e.setStatus(req.result()); reports.save(e);
         addAudit(id,"audit",req.result(),reason,operator); return new LiveReportDtos.Result(id,e.getStatus());
+    }
+
+    /**
+     * 软删报备：写 {@code deleted_time} / {@code deleted_by} / {@code deleted_by_name}。
+     * 已绑定直播仍允许删，不级联软删活动；已软删再删 → 400。
+     */
+    @Transactional
+    public LiveReportDtos.DeleteResult softDelete(String id, long userId) {
+        LiveReportEntity e = report(id);
+        SysUserAccountEntity operator = user(userId, "当前员工不存在");
+        e.setDeletedTime(LocalDateTime.now(clock));
+        e.setDeletedBy(operator.getId());
+        e.setDeletedByName(operator.getUserName() == null ? "" : operator.getUserName());
+        reports.save(e);
+        return new LiveReportDtos.DeleteResult(e.getId());
     }
 
     @Transactional(readOnly=true)
@@ -247,7 +263,13 @@ public class LiveReportService {
     private void validatePlans(List<LiveReportDtos.PlanTime> xs){if(xs==null||xs.isEmpty()||xs.size()>10)throw new IllegalArgumentException("计划时间需为 1~10 段"); LocalDate max=LocalDate.now(clock).plusDays(7); for(var x:xs){LocalDateTime s=parse(x.startTime()),e=parse(x.endTime());if(!e.isAfter(s))throw new IllegalArgumentException("计划结束时间须晚于开始时间");if(e.toLocalDate().isAfter(max))throw new IllegalArgumentException("报备计划截止日期不能超过未来第 7 天");}}
     private LocalDateTime parse(String s){try{return LocalDateTime.parse(s,TIME);}catch(DateTimeParseException|NullPointerException ex){throw new IllegalArgumentException("时间格式须为 yyyy-MM-dd HH:mm:ss");}}
     private void requireFull(LiveReportDtos.UpdateRequest r){if(r.title()==null||r.content()==null||r.planTimes()==null||r.coverUrl()==null||r.coverObjectKey()==null||r.hostId()==null||r.attachments()==null)throw new IllegalArgumentException("驳回后重新提交需包含完整字段");}
-    private LiveReportEntity report(String id){return reports.findById(id).orElseThrow(()->new IllegalArgumentException("报备不存在"));}
+    private LiveReportEntity report(String id) {
+        LiveReportEntity e = reports.findById(id).orElseThrow(() -> new IllegalArgumentException("报备不存在"));
+        if (e.getDeletedTime() != null) {
+            throw new IllegalArgumentException("报备不存在");
+        }
+        return e;
+    }
     private SysUserAccountEntity user(long id,String msg){return users.findById(id).filter(u->Integer.valueOf(1).equals(u.getRsStatus())).orElseThrow(()->new IllegalArgumentException(msg));}
     private long requireHostId(Long hostId){if(hostId==null||hostId<=0L)throw new IllegalArgumentException("主播不存在");return hostId;}
     private String json(Object v){try{return mapper.writeValueAsString(v);}catch(JsonProcessingException e){throw new IllegalArgumentException("数据格式错误");}}

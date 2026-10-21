@@ -304,13 +304,16 @@ class ActivityServiceTest {
         report.setBoundLiveCount(2);
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(liveReportRepository.findById(reportId)).thenReturn(Optional.of(report));
         when(liveReportRepository.save(any(LiveReportEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        activityService.delete(uuid);
+        activityService.delete(uuid, OPERATOR_ID);
         assertEquals(1, report.getBoundLiveCount());
+        assertEquals(OPERATOR_ID, entity.getDeletedBy());
+        assertEquals("余灵巧", entity.getDeletedByName());
         verify(liveReportRepository).save(report);
     }
 
@@ -1039,12 +1042,15 @@ class ActivityServiceTest {
         entity.setProvider("vhall");
         entity.setProviderRoomId("100");
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        DeleteActivityResponse deleted = activityService.delete(uuid);
+        DeleteActivityResponse deleted = activityService.delete(uuid, OPERATOR_ID);
         assertEquals(uuid, deleted.getId());
         assertNotNull(entity.getDeletedTime());
+        assertEquals(OPERATOR_ID, entity.getDeletedBy());
+        assertEquals("余灵巧", entity.getDeletedByName());
         verify(liveProvider).delete("100");
         verify(activityRepository, never()).delete(any());
 

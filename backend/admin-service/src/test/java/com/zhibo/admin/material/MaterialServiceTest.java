@@ -336,12 +336,15 @@ class MaterialServiceTest {
     }
 
     @Test
-    void softDelete_setsDeletedTime() {
+    void softDelete_setsActorAndTime() {
         MaterialEntity m = material("m1", "image", "g1", "a.jpg");
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(userRepository.findById(7L)).thenReturn(Optional.of(uploader(7L, "审核员", null)));
 
-        assertEquals("m1", materialService.softDelete("m1").getId());
+        assertEquals("m1", materialService.softDelete("m1", 7L).getId());
         assertTrue(m.getDeletedTime() != null);
+        assertEquals(7L, m.getDeletedBy());
+        assertEquals("审核员", m.getDeletedByName());
         verify(materialRepository).save(m);
     }
 
@@ -351,7 +354,7 @@ class MaterialServiceTest {
         m.setDeletedTime(LocalDateTime.now());
         when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
 
-        assertThrows(IllegalArgumentException.class, () -> materialService.softDelete("m1"));
+        assertThrows(IllegalArgumentException.class, () -> materialService.softDelete("m1", 7L));
     }
 
     @Test

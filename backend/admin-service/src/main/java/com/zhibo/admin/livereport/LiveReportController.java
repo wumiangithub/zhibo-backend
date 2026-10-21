@@ -58,6 +58,12 @@ public class LiveReportController {
         return ApiResponse.ok(service.audits(id));
     }
 
+    @DeleteMapping("/delete/{id}")
+    public ApiResponse<LiveReportDtos.DeleteResult> softDelete(
+            @PathVariable String id, HttpServletRequest r) {
+        return ApiResponse.ok(service.softDelete(id, userId(r)));
+    }
+
     private static long userId(HttpServletRequest r) {
         Object v = r.getAttribute(AuthInterceptor.ATTR_USER_ID);
         if (v instanceof Number n) return n.longValue();

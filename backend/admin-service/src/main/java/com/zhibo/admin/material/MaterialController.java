@@ -164,7 +164,9 @@ public class MaterialController {
     }
 
     @DeleteMapping("/delete/{id}")
-    public ApiResponse<DeleteIdResponse> softDelete(@PathVariable String id) {
-        return ApiResponse.ok(materialService.softDelete(id));
+    public ApiResponse<DeleteIdResponse> softDelete(
+            @PathVariable String id,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(materialService.softDelete(id, currentUserId(httpRequest)));
     }
 }

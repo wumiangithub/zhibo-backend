@@ -128,8 +128,9 @@ public class ActivityController {
     }
 
     @DeleteMapping("/delete/{id}")
-    public ApiResponse<DeleteActivityResponse> delete(@PathVariable String id) {
-        return ApiResponse.ok(activityService.delete(id));
+    public ApiResponse<DeleteActivityResponse> delete(
+            @PathVariable String id, HttpServletRequest httpRequest) {
+        return ApiResponse.ok(activityService.delete(id, currentUserId(httpRequest)));
     }
 
     @PostMapping("/shelf/{id}")

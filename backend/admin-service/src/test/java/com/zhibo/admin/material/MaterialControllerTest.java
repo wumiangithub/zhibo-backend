@@ -229,10 +229,11 @@ class MaterialControllerTest {
 
     @Test
     void softDelete_ok() throws Exception {
-        when(materialService.softDelete("m1"))
+        when(materialService.softDelete("m1", 10001L))
                 .thenReturn(new com.zhibo.admin.material.dto.DeleteIdResponse("m1"));
 
-        mockMvc.perform(delete("/api/v1/materials/delete/m1"))
+        mockMvc.perform(delete("/api/v1/materials/delete/m1")
+                        .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value("m1"));

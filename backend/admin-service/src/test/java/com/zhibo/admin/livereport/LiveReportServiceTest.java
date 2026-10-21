@@ -353,6 +353,44 @@ class LiveReportServiceTest {
                         && Long.valueOf(7L).equals(a.getOperatorId())));
     }
 
+    @Test
+    void softDelete_setsActorAndTime() {
+        LiveReportEntity report = report("passed", 2);
+        when(reports.findById("r1")).thenReturn(Optional.of(report));
+
+        LiveReportDtos.DeleteResult result = service.softDelete("r1", 7L);
+
+        assertEquals("r1", result.id());
+        assertNotNull(report.getDeletedTime());
+        assertEquals(7L, report.getDeletedBy());
+        assertEquals("审核员", report.getDeletedByName());
+        assertEquals(2, report.getBoundLiveCount());
+        verify(reports).save(report);
+    }
+
+    @Test
+    void softDelete_alreadyDeleted_rejects() {
+        LiveReportEntity report = report("pending", 0);
+        report.setDeletedTime(NOW);
+        when(reports.findById("r1")).thenReturn(Optional.of(report));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.softDelete("r1", 7L));
+        assertEquals("报备不存在", error.getMessage());
+        verify(reports, never()).save(report);
+    }
+
+    @Test
+    void detail_softDeleted_rejects() {
+        LiveReportEntity report = report("pending", 0);
+        report.setDeletedTime(NOW);
+        when(reports.findById("r1")).thenReturn(Optional.of(report));
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.detail("r1"));
+        assertEquals("报备不存在", error.getMessage());
+    }
+
     // ---------- helper ----------
 
     private SysUserAccountEntity user(long id, String name) {
