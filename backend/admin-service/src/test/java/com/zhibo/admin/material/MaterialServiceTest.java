@@ -238,6 +238,24 @@ class MaterialServiceTest {
     }
 
     @Test
+    void listAudits_synthesizesSubmitWhenMissing() {
+        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        m.setUploaderId(10001L);
+        m.setUploaderName("张三");
+        m.setDepartmentName("研究部");
+        m.setCreatedTime(LocalDateTime.of(2026, 10, 20, 14, 20, 0));
+        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(auditLogRepository.findByMaterialIdOrderByCreatedTimeDesc("m1")).thenReturn(List.of());
+
+        var resp = materialService.listAudits("m1");
+        assertEquals(1, resp.getList().size());
+        assertEquals("submit", resp.getList().get(0).getAction());
+        assertEquals("张三", resp.getList().get(0).getOperatorName());
+        assertEquals("研究部", resp.getList().get(0).getDepartmentName());
+        assertNull(resp.getList().get(0).getResult());
+    }
+
+    @Test
     void register_rejectsDuplicateObjectKey() {
         MaterialGroupEntity g = group("g1", "image", "默认分组", true);
         when(groupRepository.findById("g1")).thenReturn(Optional.of(g));

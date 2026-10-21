@@ -176,7 +176,8 @@ public class LiveReportService {
         if(content==null||content.trim().isEmpty()||content.trim().length()>500) throw new IllegalArgumentException("报备内容需为 1~500 字");
         validatePlans(times);
         validateCover(id, coverUrl, coverKey, coverSize, coverMime, coverMaterialId);
-        // 新建时主键尚未告知客户端，材料先落到固定目录；编辑沿用已有 live-report/{id}/attachment/。
+        // 材料统一落在 live-report/attachment/，对象名为 {batchPrefix}_{NN}_{filename}（同批前缀+递增序号，不建子目录）。
+        // 兼容历史：驳回重提仍可带旧键 live-report/{id}/attachment/。
         String shared = "live-report/attachment/";
         String scoped = "live-report/" + id + "/attachment/";
         if(files==null||files.isEmpty()||files.size()>20) throw new IllegalArgumentException("材料需为 1~20 份");

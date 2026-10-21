@@ -415,7 +415,7 @@ public class MaterialService {
 
     @Transactional(readOnly = true)
     public MaterialAuditListResponse listAudits(String id) {
-        requireActiveMaterial(id);
+        MaterialEntity material = requireActiveMaterial(id);
         List<MaterialAuditLogEntity> rows =
                 auditLogRepository.findByMaterialIdOrderByCreatedTimeDesc(id);
         Set<Long> opIds = rows.stream()
@@ -433,6 +433,7 @@ public class MaterialService {
             }
         }
         MaterialAuditListResponse response = new MaterialAuditListResponse();
+        boolean hasSubmit = false;
         for (MaterialAuditLogEntity row : rows) {
             MaterialAuditRecordItem item = new MaterialAuditRecordItem();
             item.setId(row.getId());
@@ -444,9 +445,31 @@ public class MaterialService {
             if (row.getCreatedTime() != null) {
                 item.setCreatedTime(row.getCreatedTime().format(UPLOADED_TIME));
             }
+            if ("submit".equals(row.getAction())) {
+                hasSubmit = true;
+            }
             response.getList().add(item);
         }
+        // 与直播管理一致：库里没有 submit 时按上传人快照补一条「发起申请」，不落库。
+        if (!hasSubmit) {
+            response.getList().add(syntheticSubmit(material));
+        }
         return response;
+    }
+
+    /** 历史素材没有 submit 时，按上传时间补一条「发起申请」，不落库。 */
+    private MaterialAuditRecordItem syntheticSubmit(MaterialEntity entity) {
+        MaterialAuditRecordItem item = new MaterialAuditRecordItem();
+        item.setId("synthetic-submit-" + entity.getId());
+        item.setAction("submit");
+        item.setOperatorId(entity.getUploaderId() != null ? entity.getUploaderId() : 0L);
+        String name = blankToNull(entity.getUploaderName());
+        item.setOperatorName(name != null ? name : "系统");
+        item.setDepartmentName(blankToNull(entity.getDepartmentName()));
+        if (entity.getCreatedTime() != null) {
+            item.setCreatedTime(entity.getCreatedTime().format(UPLOADED_TIME));
+        }
+        return item;
     }
 
     @Transactional

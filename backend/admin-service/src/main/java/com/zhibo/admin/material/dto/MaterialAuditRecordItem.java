@@ -8,9 +8,9 @@ import lombok.Data;
 public class MaterialAuditRecordItem {
 
     private String id;
-    /** ai / risk */
+    /** submit（发起申请） / ai / risk */
     private String action;
-    /** passed / rejected */
+    /** passed / rejected；submit 不返回 */
     private String result;
     private Long operatorId;
     private String operatorName;
