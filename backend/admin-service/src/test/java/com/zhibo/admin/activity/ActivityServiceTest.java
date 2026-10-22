@@ -825,6 +825,48 @@ class ActivityServiceTest {
     }
 
     @Test
+    void update_productsOnly_skipsRiskPendingAndDoesNotReapply() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        UpdateActivityRequest request = new UpdateActivityRequest();
+        CreateActivityRequest.ProductBinding product = new CreateActivityRequest.ProductBinding();
+        product.setSpuId("20002");
+        product.setProductName("满盈单化特训班");
+        request.setProducts(List.of(product));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+
+        CreateActivityResponse response = activityService.update(uuid, request, OPERATOR_ID);
+
+        assertEquals(uuid, response.getId());
+        assertEquals("passed", entity.getRiskStatus());
+        verify(productRepository).deleteByIdActivityId(uuid);
+        verify(productRepository).saveAll(any());
+        verify(auditRepository, never()).save(any());
+        verify(activityRepository, never()).save(any());
+    }
+
+    @Test
+    void update_productsOnly_allowsWhilePending() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
+        UpdateActivityRequest request = new UpdateActivityRequest();
+        CreateActivityRequest.ProductBinding product = new CreateActivityRequest.ProductBinding();
+        product.setSpuId("20002");
+        product.setProductName("满盈单化特训班");
+        request.setProducts(List.of(product));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+
+        activityService.update(uuid, request, OPERATOR_ID);
+
+        assertEquals("pending", entity.getRiskStatus());
+        verify(productRepository).deleteByIdActivityId(uuid);
+        verify(auditRepository, never()).save(any());
+        verify(activityRepository, never()).save(any());
+    }
+
+    @Test
     void listRecords_mapsProviderRecords() {
         String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
         ActivityEntity entity = new ActivityEntity();

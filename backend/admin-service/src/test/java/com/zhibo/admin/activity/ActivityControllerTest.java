@@ -139,14 +139,14 @@ class ActivityControllerTest {
         response.setTotal(1);
         response.setList(java.util.List.of(
                 new com.zhibo.admin.activity.dto.ActivityRecordItem(
-                        "799703", "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover")));
+                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover")));
         when(activityService.listRecords(eq(UUID))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/activities/records/" + UUID).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))
-                .andExpect(jsonPath("$.data.list[0].id").value("799703"))
+                .andExpect(jsonPath("$.data.list[0].id").value(799703))
                 .andExpect(jsonPath("$.data.list[0].title").value("回放A"));
     }
 }

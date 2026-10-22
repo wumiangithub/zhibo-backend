@@ -385,10 +385,6 @@ public class ActivityService {
     @Transactional
     public CreateActivityResponse update(String id, UpdateActivityRequest request, long operatorId) {
         ActivityEntity entity = requireActivity(id);
-        if (isRiskPending(entity.getRiskStatus())) {
-            throw new IllegalArgumentException("审核中不可编辑");
-        }
-        boolean reapply = isRiskReapply(entity.getRiskStatus());
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
@@ -411,6 +407,20 @@ public class ActivityService {
                 && !hasMaterialId) {
             throw new IllegalArgumentException("至少填写一个可改字段");
         }
+
+        // 仅改关联商品：不拦审核中、不回 pending、不追加发起申请（直播带货 Tab）
+        boolean productsOnly = hasProducts
+                && !hasTitle && !hasStart && !hasIntro && !hasEnd && !hasCover && !hasDetail
+                && !hasAutoList && !hasHosts && !hasOwners && !hasCoursewares && !hasMaterialId;
+        if (productsOnly) {
+            replaceProducts(entity.getId(), parseProducts(request.getProducts()));
+            return new CreateActivityResponse(entity.getId());
+        }
+
+        if (isRiskPending(entity.getRiskStatus())) {
+            throw new IllegalArgumentException("审核中不可编辑");
+        }
+        boolean reapply = isRiskReapply(entity.getRiskStatus());
 
         if (hasTitle) {
             String title = request.getTitle().trim();
