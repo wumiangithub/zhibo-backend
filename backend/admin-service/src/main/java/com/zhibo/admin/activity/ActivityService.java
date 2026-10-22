@@ -1140,7 +1140,12 @@ public class ActivityService {
      */
     private RecordCreatePlan planRecordCreate(
             Integer type, CreateActivityRequest request, LiveProvider liveProvider) {
-        String recordId = trimToNull(request.getRecordId());
+        Long recordIdNum = request.getRecordId();
+        if (recordIdNum != null && recordIdNum <= 0) {
+            throw new IllegalArgumentException("recordId 无效");
+        }
+        // CreateRoomCommand / 微吼仍用字符串透传（素材路径的 vhallVideoId 同为数字文本）
+        String recordId = recordIdNum == null ? null : Long.toString(recordIdNum);
         String recordMaterialId = trimToNull(request.getRecordMaterialId());
         if (type == null || type != 4) {
             return new RecordCreatePlan(ActivityReady.OK, null, recordId, true);

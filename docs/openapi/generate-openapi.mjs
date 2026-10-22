@@ -487,7 +487,7 @@ const FIELD_DB_BY_NAME = {
   coverMaterialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   materialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   recordMaterialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
-  recordId: { db: 'VARCHAR(64)', maxLength: 64 },
+  recordId: { db: '微吼 integer（本站不落库，透传 create-demand）' },
   ready: { db: 'INT' },
   captchaId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   providerRoomId: { db: 'VARCHAR(64)', maxLength: 64 },
@@ -610,7 +610,7 @@ const FIELD_DB_BY_PATH = {
   'ActivityMemberItem.nickname': { db: 'VARCHAR(64)', maxLength: 64 },
   'ActivityMemberItem.avatarUrl': { db: 'VARCHAR(512)', maxLength: 512 },
   'ActivityMemberItem.tag': { db: 'VARCHAR(32)', maxLength: 32 },
-  'ActivityRecordItem.id': { db: 'VARCHAR(64)', maxLength: 64 },
+  'ActivityRecordItem.id': { db: '微吼 integer（不落本站库）' },
   'AttendeeItem.online': { db: 'TINYINT(1)' },
   'PresenceTrendPoint.online': { db: 'INT' },
   'AuditSubmitRequest.reason': { db: 'VARCHAR(200)', maxLength: 200 },
@@ -1198,10 +1198,10 @@ function buildAdmin() {
         endTime: { type: 'string', description: '须晚于 startTime；只落本站库' },
         type: { $ref: '#/components/schemas/ActivityType' },
         recordId: {
-          type: 'string',
-          maxLength: 64,
+          type: 'integer',
+          format: 'int64',
           description:
-            'type=4 且 provider=vhall：微吼回放资源 ID，直接作 create-demand 的 record_id。与 recordMaterialId 二选一，不可同时传；库：VARCHAR(64)',
+            'type=4 且 provider=vhall：微吼回放资源 ID（微吼 integer / JSON number），直接作 create-demand 的 record_id。与 GET .../records 的 list[].id 同型。与 recordMaterialId 二选一，不可同时传；本站不落库',
         },
         recordMaterialId: {
           type: 'string',
@@ -1526,7 +1526,12 @@ function buildAdmin() {
       type: 'object',
       required: ['id'],
       properties: {
-        id: { type: 'string', description: 'create-demand 的 record_id' },
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: 'create-demand 的 record_id（微吼 integer / JSON number）',
+          example: 799703,
+        },
         title: { type: 'string' },
         duration: { type: 'string', example: '01:02:03' },
         createdTime: { type: 'string' },

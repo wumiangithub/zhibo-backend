@@ -3824,9 +3824,9 @@
             "description": "类型"
           },
           "recordId": {
-            "type": "string",
-            "maxLength": 64,
-            "description": "type=4 且 provider=vhall：微吼回放资源 ID，直接作 create-demand 的 record_id。与 recordMaterialId 二选一，不可同时传；库：VARCHAR(64)"
+            "type": "integer",
+            "format": "int64",
+            "description": "type=4 且 provider=vhall：微吼回放资源 ID（微吼 integer / JSON number），直接作 create-demand 的 record_id。与 GET .../records 的 list[].id 同型。与 recordMaterialId 二选一，不可同时传；本站不落库；库：微吼 integer（本站不落库，透传 create-demand）"
           },
           "recordMaterialId": {
             "type": "string",
@@ -4448,9 +4448,10 @@
         ],
         "properties": {
           "id": {
-            "type": "string",
-            "description": "create-demand 的 record_id；库：VARCHAR(64)",
-            "maxLength": 64
+            "type": "integer",
+            "format": "int64",
+            "description": "create-demand 的 record_id（微吼 integer / JSON number）；库：微吼 integer（不落本站库）",
+            "example": 799703
           },
           "title": {
             "type": "string",

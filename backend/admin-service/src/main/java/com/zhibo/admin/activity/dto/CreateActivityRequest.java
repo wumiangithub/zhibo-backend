@@ -43,10 +43,10 @@ public class CreateActivityRequest {
     private Integer type;
 
     /**
-     * type=4 且 provider=vhall：微吼回放列表 ID，直接作 create-demand 的 record_id。
+     * type=4 且 provider=vhall：微吼回放列表 ID（微吼 integer / JSON number），直接作 create-demand 的 record_id。
      * 与 {@link #recordMaterialId} 二选一，不可同时传。
      */
-    private String recordId;
+    private Long recordId;
 
     /**
      * type=4：本站录播视频素材 UUID（库列 {@code record_material_id}；请求/响应 JSON 统一 {@code recordMaterialId}）。

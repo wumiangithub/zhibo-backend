@@ -223,7 +223,7 @@ class ActivityServiceTest {
         request.setTitle("录播");
         request.setIntroduction("简介");
         request.setType(4);
-        request.setRecordId("799703");
+        request.setRecordId(799703L);
         request.setRecordMaterialId("mat-1");
 
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
@@ -321,7 +321,7 @@ class ActivityServiceTest {
         request.setTitle("录播");
         request.setIntroduction("简介");
         request.setType(4);
-        request.setRecordId("799703");
+        request.setRecordId(799703L);
 
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
@@ -837,13 +837,13 @@ class ActivityServiceTest {
         when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
                 1,
                 List.of(new ProviderRecordItem(
-                        "799703", "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover"))
+                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover"))
         ));
 
         ActivityRecordListResponse response = activityService.listRecords(uuid);
         assertEquals(1, response.getTotal());
         assertEquals(1, response.getList().size());
-        assertEquals("799703", response.getList().get(0).getId());
+        assertEquals(799703L, response.getList().get(0).getId());
         assertEquals("回放A", response.getList().get(0).getTitle());
         assertEquals("https://cover", response.getList().get(0).getCoverUrl());
     }

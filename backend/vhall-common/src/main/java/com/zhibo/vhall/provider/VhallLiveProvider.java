@@ -103,16 +103,23 @@ public class VhallLiveProvider implements LiveProvider {
         String path;
         if (type == 4) {
             path = PATH_CREATE_DEMAND;
-            String recordId = command.recordId() == null ? "" : command.recordId().trim();
-            if (recordId.isEmpty()) {
+            String recordIdRaw = command.recordId() == null ? "" : command.recordId().trim();
+            if (recordIdRaw.isEmpty()) {
                 throw new IllegalArgumentException("录播须填写 recordId");
+            }
+            // 微吼 record_id 为 integer；能解析则按数字传，避免对方按字符串拒收
+            Object recordIdParam;
+            try {
+                recordIdParam = Long.parseLong(recordIdRaw);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("recordId 无效");
             }
             if (introduction == null) {
                 throw new IllegalArgumentException("录播须填写简介");
             }
             params.put("subject", title);
             params.put("introduction", introduction);
-            params.put("record_id", recordId);
+            params.put("record_id", recordIdParam);
             params.put("webinar_curr_num", 0);
             if (command.coverUrl() != null && !command.coverUrl().isBlank()) {
                 params.put("img_url", command.coverUrl().trim());
@@ -487,8 +494,8 @@ public class VhallLiveProvider implements LiveProvider {
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> raw = (Map<String, Object>) map;
-            String id = asString(raw.get("id"));
-            if (id == null || id.isBlank()) {
+            long id = asLong(raw.get("id"));
+            if (id <= 0) {
                 continue;
             }
             result.add(new ProviderRecordItem(
