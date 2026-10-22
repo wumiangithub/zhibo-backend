@@ -15,6 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -31,9 +32,10 @@ public class WatchService {
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize 需在 1~100");
         }
-        Integer stateFilter = (state != null && state == 0) ? null : state;
+        boolean statesEmpty = state == null || state == 0;
+        List<Integer> statesParam = statesEmpty ? List.of(0) : List.of(state);
         Page<ActivityEntity> result = activityRepository.search(
-                null, stateFilter, null, null, null, null, PageRequest.of(page - 1, pageSize));
+                null, statesEmpty, statesParam, null, null, null, null, PageRequest.of(page - 1, pageSize));
 
         WatchActivityListResponse response = new WatchActivityListResponse();
         response.setTotal(result.getTotalElements());

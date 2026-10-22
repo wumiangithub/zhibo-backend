@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -93,7 +94,7 @@ class WatchServiceTest {
         dead.setId(ID);
         dead.setTitle("已删");
         dead.setDeletedTime(LocalDateTime.now());
-        when(activityRepository.search(any(), any(), any(), any(), any(), any(), any()))
+        when(activityRepository.search(any(), anyBoolean(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(dead)));
 
         var response = watchService.listActivities(1, 20, null);

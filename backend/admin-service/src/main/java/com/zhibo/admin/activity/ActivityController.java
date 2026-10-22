@@ -63,12 +63,13 @@ public class ActivityController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer state,
+            @RequestParam(required = false) String states,
             @RequestParam(required = false) String provider,
             @RequestParam(required = false) String shelfStatus,
             @RequestParam(required = false) String startFrom,
             @RequestParam(required = false) String startTo) {
         return ApiResponse.ok(activityService.list(
-                page, pageSize, keyword, state, provider, shelfStatus, startFrom, startTo));
+                page, pageSize, keyword, state, states, provider, shelfStatus, startFrom, startTo));
     }
 
     @GetMapping("/detail/{id}")

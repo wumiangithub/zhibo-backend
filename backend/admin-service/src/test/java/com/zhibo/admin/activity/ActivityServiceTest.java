@@ -68,6 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
@@ -964,7 +965,7 @@ class ActivityServiceTest {
     @Test
     void list_rejectsPageBelowOne() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.list(0, 20, null, null, null, null, null, null));
+                () -> activityService.list(0, 20, null, null, null, null, null, null, null));
         assertEquals("page 不能小于 1", ex.getMessage());
     }
 
@@ -1214,10 +1215,10 @@ class ActivityServiceTest {
         verify(activityRepository, never()).delete(any());
 
         ActivityEntity alive = liveActivity("b1b2c3d4-e5f6-7890-abcd-ef1234567890", "on", "passed", 2);
-        when(activityRepository.search(any(), any(), any(), any(), any(), any(), any()))
+        when(activityRepository.search(any(), anyBoolean(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(alive, entity), PageRequest.of(0, 20), 2));
 
-        ActivityListResponse list = activityService.list(1, 20, null, null, null, null, null, null);
+        ActivityListResponse list = activityService.list(1, 20, null, null, null, null, null, null, null);
         assertEquals(1, list.getList().size());
         assertEquals(alive.getId(), list.getList().get(0).getId());
         assertTrue(list.getList().stream().noneMatch(item -> uuid.equals(item.getId())));

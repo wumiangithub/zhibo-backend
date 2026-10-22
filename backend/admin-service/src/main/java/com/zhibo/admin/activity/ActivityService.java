@@ -261,6 +261,7 @@ public class ActivityService {
             int pageSize,
             String keyword,
             Integer state,
+            String states,
             String provider,
             String shelfStatus,
             String startFrom,
@@ -271,7 +272,9 @@ public class ActivityService {
         if (pageSize < 1 || pageSize > 100) {
             throw new IllegalArgumentException("pageSize 需在 1~100");
         }
-        Integer stateFilter = (state != null && state == 0) ? null : state;
+        List<Integer> stateFilters = resolveStateFilters(state, states);
+        boolean statesEmpty = stateFilters.isEmpty();
+        List<Integer> statesParam = statesEmpty ? List.of(0) : stateFilters;
         String providerFilter = (provider == null || provider.isBlank()) ? null : provider.trim();
         String keywordFilter = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
         String shelfFilter = normalizeShelfFilter(shelfStatus);
@@ -283,7 +286,8 @@ public class ActivityService {
 
         Page<ActivityEntity> result = activityRepository.search(
                 providerFilter,
-                stateFilter,
+                statesEmpty,
+                statesParam,
                 keywordFilter,
                 shelfFilter,
                 startFromBound,
@@ -1695,6 +1699,43 @@ public class ActivityService {
             throw new IllegalArgumentException("shelfStatus 无效");
         }
         return value;
+    }
+
+    /**
+     * 解析直播状态筛选：优先 {@code states}（逗号分隔多选），否则单值 {@code state}。
+     * 合法取值 1～5；{@code 0} / 空表示不过滤。非法 → 400。
+     */
+    static List<Integer> resolveStateFilters(Integer state, String states) {
+        if (states != null && !states.isBlank()) {
+            LinkedHashSet<Integer> set = new LinkedHashSet<>();
+            for (String part : states.split(",")) {
+                String token = part.trim();
+                if (token.isEmpty()) {
+                    continue;
+                }
+                int value;
+                try {
+                    value = Integer.parseInt(token);
+                } catch (NumberFormatException ex) {
+                    throw new IllegalArgumentException("states 无效");
+                }
+                if (value == 0) {
+                    continue;
+                }
+                if (value < 1 || value > 5) {
+                    throw new IllegalArgumentException("states 无效");
+                }
+                set.add(value);
+            }
+            return List.copyOf(set);
+        }
+        if (state == null || state == 0) {
+            return List.of();
+        }
+        if (state < 1 || state > 5) {
+            throw new IllegalArgumentException("state 无效");
+        }
+        return List.of(state);
     }
 
     private static String dayStart(String day, String field) {
