@@ -14,7 +14,7 @@ info:
     - 时间：`yyyy-MM-dd HH:mm:ss`
     - JSON 不输出 `null` 字段
     - 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`
-  version: "2.3.1"
+  version: "2.3.2"
   contact:
     name: zhibo-backend
 servers:
@@ -654,6 +654,7 @@ paths:
                     - 10001
                   ownerIds:
                     - 10001
+                  reportId: "11111111-1111-1111-1111-111111111111"
                   products: []
                   coursewareMaterialIds: []
       responses:
@@ -2455,6 +2456,7 @@ components:
         - type
         - autoList
         - hostIds
+        - reportId
       properties:
         provider:
           $ref: "#/components/schemas/Provider"
@@ -2475,7 +2477,16 @@ components:
           description: 类型
         recordId:
           type: string
-          description: "type=4 且 provider=vhall 时必填"
+          maxLength: 64
+          description: "type=4 且 provider=vhall：微吼回放资源 ID，直接作 create-demand 的 record_id。与 recordMaterialId 二选一，不可同时传；库：VARCHAR(64)"
+        recordMaterialId:
+          type: string
+          format: uuid
+          maxLength: 36
+          description: "type=4：本站视频素材 UUID。请求/响应/库列统一：JSON recordMaterialId ↔ 库 record_material_id。须未软删、video、两审通过、有 url。与 recordId 二选一；库：VARCHAR(36)"
+        isTiming:
+          type: boolean
+          description: "仅 type=4：是否定时 → 微吼 is_timing（true→1，false→0）。省略按 true。落本站 activity.is_timing；库：TINYINT(1)"
         introduction:
           type: string
           maxLength: 256
@@ -2518,6 +2529,7 @@ components:
           description: 关联商品列表
         coursewareMaterialIds:
           type: array
+          maxLength: 100
           maxItems: 100
           items:
             type: string
@@ -2526,8 +2538,8 @@ components:
         reportId:
           type: string
           format: uuid
-          description: 绑定已通过直播报备。省略表示不绑定。hostIds 须恰好为该报备主播 1 人。创建后不可改绑；库：VARCHAR(36)
           maxLength: 36
+          description: "创建必填。绑定已通过直播报备 UUID。须 status=passed、未软删；hostIds 须恰好为该报备主播 1 人。创建后不可改绑。库：VARCHAR(36)"
     UpdateActivityRequest:
       type: object
       description: 至少填一个字段；未出现的关联字段不改
@@ -2583,6 +2595,11 @@ components:
             type: string
             format: uuid
           description: 课件素材 UUID 有序数组
+        recordMaterialId:
+          type: string
+          format: uuid
+          maxLength: 36
+          description: "仅 type=4：替换录播素材（与创建/详情同名 recordMaterialId）。写入后 ready→0；库：VARCHAR(36)"
     PlaybackSettingsRequest:
       type: object
       required:
@@ -2791,6 +2808,18 @@ components:
         canBroadcast:
           type: boolean
           description: 当前是否允许开播；库：TINYINT(1)
+        ready:
+          type: integer
+          enum:
+            - 0
+            - 1
+            - 2
+          description: "1 就绪（默认）/ 0 转码中 / 2 失败不可重试；库：INT"
+        recordMaterialId:
+          type: string
+          format: uuid
+          maxLength: 36
+          description: 本场绑定的录播素材 UUID（与创建/改活动请求同名）；非录播或不绑可不返回；库：VARCHAR(36)
         owners:
           type: array
           items:
@@ -2833,6 +2862,9 @@ components:
             ultraLowLatency:
               type: boolean
               description: 是否超低延迟；库：TINYINT(1)
+            isTiming:
+              type: boolean
+              description: 录播是否定时；非录播可空；库：TINYINT(1)
             detailHtml:
               type: string
               description: 富文本详情 HTML；库：TEXT

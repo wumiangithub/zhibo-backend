@@ -47,6 +47,7 @@ import com.zhibo.livereport.LiveReportRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
 import com.zhibo.vhall.exception.VhallException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -77,6 +78,7 @@ import static org.mockito.Mockito.when;
 class ActivityServiceTest {
 
     private static final long OPERATOR_ID = 10001L;
+    private static final String DEFAULT_REPORT_ID = "11111111-1111-1111-1111-111111111111";
 
     @Mock
     private ActivityRepository activityRepository;
@@ -107,6 +109,16 @@ class ActivityServiceTest {
 
     @InjectMocks
     private ActivityService activityService;
+
+    @BeforeEach
+    void stubDefaultPassedReport() {
+        org.mockito.Mockito.lenient()
+                .when(liveReportRepository.findById(DEFAULT_REPORT_ID))
+                .thenReturn(Optional.of(passedReport(DEFAULT_REPORT_ID, OPERATOR_ID)));
+        org.mockito.Mockito.lenient()
+                .when(liveReportRepository.save(any(LiveReportEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+    }
 
     @Test
     void create_persistsAndReturnsUuid() {
@@ -199,7 +211,7 @@ class ActivityServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> activityService.create(request, OPERATOR_ID));
-        assertEquals("录播须填写 recordId 或 materialId", ex.getMessage());
+        assertEquals("录播须填写 recordId 或 recordMaterialId", ex.getMessage());
         verify(liveProvider, never()).create(any(CreateRoomCommand.class));
         verify(liveProvider, never()).createVideoByUrl(any(), any());
     }
@@ -211,7 +223,7 @@ class ActivityServiceTest {
         request.setIntroduction("简介");
         request.setType(4);
         request.setRecordId("799703");
-        request.setMaterialId("mat-1");
+        request.setRecordMaterialId("mat-1");
 
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
@@ -219,7 +231,7 @@ class ActivityServiceTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> activityService.create(request, OPERATOR_ID));
-        assertEquals("录播请只传 materialId 或 recordId 其一", ex.getMessage());
+        assertEquals("录播请只传 recordMaterialId 或 recordId 其一", ex.getMessage());
         verify(liveProvider, never()).createVideoByUrl(any(), any());
     }
 
@@ -229,7 +241,7 @@ class ActivityServiceTest {
         request.setTitle("录播");
         request.setIntroduction("简介");
         request.setType(4);
-        request.setMaterialId("mat-video-1");
+        request.setRecordMaterialId("mat-video-1");
 
         MaterialEntity video = new MaterialEntity();
         video.setId("mat-video-1");
@@ -269,7 +281,7 @@ class ActivityServiceTest {
         request.setTitle("录播");
         request.setIntroduction("简介");
         request.setType(4);
-        request.setMaterialId("mat-video-1");
+        request.setRecordMaterialId("mat-video-1");
 
         MaterialEntity video = new MaterialEntity();
         video.setId("mat-video-1");
@@ -1245,6 +1257,7 @@ class ActivityServiceTest {
         request.setType(2);
         request.setAutoList(false);
         request.setHostIds(List.of(10001L));
+        request.setReportId(DEFAULT_REPORT_ID);
         return request;
     }
 

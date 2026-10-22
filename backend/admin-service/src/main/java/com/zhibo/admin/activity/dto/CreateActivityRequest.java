@@ -44,16 +44,15 @@ public class CreateActivityRequest {
 
     /**
      * type=4 且 provider=vhall：微吼回放列表 ID，直接作 create-demand 的 record_id。
-     * 与 {@link #materialId} 二选一，不可同时传。
+     * 与 {@link #recordMaterialId} 二选一，不可同时传。
      */
     private String recordId;
 
     /**
-     * type=4 且 provider=vhall：本站素材中心视频 UUID。
-     * 须已预转码成功（{@code vhallTranscodeStatus=1}）；服务端用已存 {@code vhallVideoId} 作 create-demand 的 record_id。
+     * type=4：本站录播视频素材 UUID（库列 {@code record_material_id}；请求/响应 JSON 统一 {@code recordMaterialId}）。
      * 与 {@link #recordId} 二选一，不可同时传。
      */
-    private String materialId;
+    private String recordMaterialId;
 
     /**
      * type=4：是否定时直播 → 微吼 {@code is_timing}（1/0）。
@@ -98,7 +97,8 @@ public class CreateActivityRequest {
     /** 课件素材 UUID 有序数组；最多 100。 */
     private List<String> coursewareMaterialIds;
 
-    /** 绑定的已通过直播报备 UUID；省略表示不绑定。 */
+    /** 绑定的已通过直播报备 UUID；创建必填。 */
+    @NotBlank(message = "reportId 不能为空")
     @Size(max = 36, message = "reportId 无效")
     private String reportId;
 

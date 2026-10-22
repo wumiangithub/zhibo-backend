@@ -28,10 +28,10 @@ public class UpdateActivityRequest {
     private List<String> coursewareMaterialIds;
 
     /**
-     * 仅 type=4：替换录播素材视频 UUID。
+     * 仅 type=4：替换录播素材视频 UUID（库列 record_material_id；JSON 统一 recordMaterialId）。
      * 写入后 {@code ready→0}，按需 create-by-url；转码成功回调后再 create-demand。
      */
-    private String materialId;
+    private String recordMaterialId;
 
     /** 废弃：请求里带了忽略（创建后不可改） */
     private String viewerStyle;

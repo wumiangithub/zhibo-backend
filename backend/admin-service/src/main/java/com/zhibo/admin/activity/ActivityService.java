@@ -163,11 +163,11 @@ public class ActivityService {
         List<ProductSnap> products = parseProducts(request.getProducts());
         List<CoursewareSnap> coursewares = parseCoursewares(request.getCoursewareMaterialIds());
         String reportId = trimToNull(request.getReportId());
-        LiveReportEntity boundReport = null;
-        if (reportId != null) {
-            boundReport = requirePassedReport(reportId);
-            assertHostMatchesReport(boundReport, hostIds);
+        if (reportId == null) {
+            throw new IllegalArgumentException("reportId 不能为空");
         }
+        LiveReportEntity boundReport = requirePassedReport(reportId);
+        assertHostMatchesReport(boundReport, hostIds);
         SysUserAccountEntity operator = requireOperator(operatorId);
 
         RecordCreatePlan recordPlan = planRecordCreate(type, request, liveProvider);
@@ -201,7 +201,7 @@ public class ActivityService {
         entity.setEndTime(trimToNull(request.getEndTime()));
         entity.setType(type);
         entity.setReady(recordPlan.ready());
-        entity.setRecordMaterialId(recordPlan.materialId());
+        entity.setRecordMaterialId(recordPlan.recordMaterialId());
         entity.setIsTiming(isTiming);
         entity.setState(type == 4 ? 4 : 2);
         entity.setViewerStyle(normalizeViewerStyle(request.getViewerStyle()));
@@ -400,7 +400,7 @@ public class ActivityService {
         boolean hasOwners = request.getOwnerIds() != null;
         boolean hasProducts = request.getProducts() != null;
         boolean hasCoursewares = request.getCoursewareMaterialIds() != null;
-        boolean hasMaterialId = request.getMaterialId() != null;
+        boolean hasMaterialId = request.getRecordMaterialId() != null;
 
         if (!hasTitle && !hasStart && !hasIntro && !hasEnd && !hasCover && !hasDetail
                 && !hasAutoList && !hasHosts && !hasOwners && !hasProducts && !hasCoursewares
@@ -447,7 +447,7 @@ public class ActivityService {
         // viewerStyle / ultraLowLatency / 暖场等：创建后不可改，请求里带了忽略
 
         if (hasMaterialId) {
-            replaceRecordMaterial(entity, trimToNull(request.getMaterialId()));
+            replaceRecordMaterial(entity, trimToNull(request.getRecordMaterialId()));
         }
 
         boolean syncCloud = hasTitle || hasStart || hasIntro || hasCover;
@@ -1137,25 +1137,25 @@ public class ActivityService {
     private RecordCreatePlan planRecordCreate(
             Integer type, CreateActivityRequest request, LiveProvider liveProvider) {
         String recordId = trimToNull(request.getRecordId());
-        String materialId = trimToNull(request.getMaterialId());
+        String recordMaterialId = trimToNull(request.getRecordMaterialId());
         if (type == null || type != 4) {
             return new RecordCreatePlan(ActivityReady.OK, null, recordId, true);
         }
-        if (materialId != null && recordId != null) {
-            throw new IllegalArgumentException("录播请只传 materialId 或 recordId 其一");
+        if (recordMaterialId != null && recordId != null) {
+            throw new IllegalArgumentException("录播请只传 recordMaterialId 或 recordId 其一");
         }
-        if (materialId != null) {
-            MaterialEntity video = requireRecordVideoBase(materialId);
+        if (recordMaterialId != null) {
+            MaterialEntity video = requireRecordVideoBase(recordMaterialId);
             ensureVhallUpload(video, liveProvider);
             Integer status = video.getVhallTranscodeStatus();
             String videoId = trimToNull(video.getVhallVideoId());
             if (status != null && status == MaterialService.VHALL_TRANSCODE_OK && videoId != null) {
-                return new RecordCreatePlan(ActivityReady.OK, materialId, videoId, true);
+                return new RecordCreatePlan(ActivityReady.OK, recordMaterialId, videoId, true);
             }
-            return new RecordCreatePlan(ActivityReady.PENDING, materialId, null, false);
+            return new RecordCreatePlan(ActivityReady.PENDING, recordMaterialId, null, false);
         }
         if (recordId == null) {
-            throw new IllegalArgumentException("录播须填写 recordId 或 materialId");
+            throw new IllegalArgumentException("录播须填写 recordId 或 recordMaterialId");
         }
         return new RecordCreatePlan(ActivityReady.OK, null, recordId, true);
     }
@@ -1206,7 +1206,7 @@ public class ActivityService {
             throw new IllegalArgumentException("仅录播可替换视频素材");
         }
         if (materialId == null) {
-            throw new IllegalArgumentException("materialId 不能为空");
+            throw new IllegalArgumentException("recordMaterialId 不能为空");
         }
         MaterialEntity video = requireRecordVideoBase(materialId);
         LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
@@ -1233,7 +1233,7 @@ public class ActivityService {
         }
     }
 
-    private record RecordCreatePlan(int ready, String materialId, String recordId, boolean createNow) {
+    private record RecordCreatePlan(int ready, String recordMaterialId, String recordId, boolean createNow) {
     }
 
     private List<CoursewareSnap> parseCoursewares(List<String> rawIds) {

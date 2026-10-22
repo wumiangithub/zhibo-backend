@@ -383,6 +383,11 @@ const FIELD_DESC_BY_NAME = {
   salesCount: '总销量（本轮恒为 0）',
   coursewareMaterialIds: '课件素材 UUID 有序数组',
   materialIds: '课件素材 UUID 列表',
+  materialId: '录播视频素材 UUID（素材中心 type=video）',
+  recordMaterialId: '本场绑定的录播素材 UUID',
+  recordId: '微吼回放/点播资源 id（create-demand 的 record_id）',
+  ready: '就绪状态：1 就绪 / 0 转码中 / 2 失败',
+  isTiming: '录播是否定时直播（对应微吼 is_timing）',
   data: '业务数据；失败时可能省略',
   provider: '直播服务商',
   viewerStyle: '观看端样式',
@@ -480,6 +485,10 @@ const FIELD_DB_BY_NAME = {
   groupId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   reportId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   coverMaterialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
+  materialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
+  recordMaterialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
+  recordId: { db: 'VARCHAR(64)', maxLength: 64 },
+  ready: { db: 'INT' },
   captchaId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   providerRoomId: { db: 'VARCHAR(64)', maxLength: 64 },
   shareLink: { db: 'VARCHAR(512)', maxLength: 512 },
@@ -1169,7 +1178,15 @@ function buildAdmin() {
     },
     CreateActivityRequest: {
       type: 'object',
-      required: ['provider', 'title', 'startTime', 'type', 'autoList', 'hostIds'],
+      required: [
+        'provider',
+        'title',
+        'startTime',
+        'type',
+        'autoList',
+        'hostIds',
+        'reportId',
+      ],
       properties: {
         provider: { $ref: '#/components/schemas/Provider' },
         title: { type: 'string', maxLength: 64 },
@@ -1182,7 +1199,21 @@ function buildAdmin() {
         type: { $ref: '#/components/schemas/ActivityType' },
         recordId: {
           type: 'string',
-          description: 'type=4 且 provider=vhall 时必填',
+          maxLength: 64,
+          description:
+            'type=4 且 provider=vhall：微吼回放资源 ID，直接作 create-demand 的 record_id。与 recordMaterialId 二选一，不可同时传；库：VARCHAR(64)',
+        },
+        recordMaterialId: {
+          type: 'string',
+          format: 'uuid',
+          maxLength: 36,
+          description:
+            'type=4：本站视频素材 UUID。请求/响应/库列统一：JSON recordMaterialId ↔ 库 record_material_id。须未软删、video、两审通过、有 url。与 recordId 二选一；库：VARCHAR(36)',
+        },
+        isTiming: {
+          type: 'boolean',
+          description:
+            '仅 type=4：是否定时 → 微吼 is_timing（true→1，false→0）。省略按 true。落本站 activity.is_timing；库：TINYINT(1)',
         },
         introduction: { type: 'string', maxLength: 256 },
         viewerStyle: { $ref: '#/components/schemas/ViewerStyle' },
@@ -1216,14 +1247,16 @@ function buildAdmin() {
         },
         coursewareMaterialIds: {
           type: 'array',
+          maxLength: 100,
           maxItems: 100,
           items: { type: 'string', format: 'uuid' },
         },
         reportId: {
           type: 'string',
           format: 'uuid',
+          maxLength: 36,
           description:
-            '绑定已通过直播报备。省略表示不绑定。hostIds 须恰好为该报备主播 1 人。创建后不可改绑',
+            '创建必填。绑定已通过直播报备 UUID。须 status=passed、未软删；hostIds 须恰好为该报备主播 1 人。创建后不可改绑。库：VARCHAR(36)',
         },
       },
     },
@@ -1260,6 +1293,13 @@ function buildAdmin() {
           type: 'array',
           maxItems: 100,
           items: { type: 'string', format: 'uuid' },
+        },
+        recordMaterialId: {
+          type: 'string',
+          format: 'uuid',
+          maxLength: 36,
+          description:
+            '仅 type=4：替换录播素材（与创建/详情同名 recordMaterialId）。写入后 ready→0；库：VARCHAR(36)',
         },
       },
     },
@@ -1385,6 +1425,18 @@ function buildAdmin() {
         sellType: { $ref: '#/components/schemas/SellType' },
         validityLabel: { type: 'string' },
         canBroadcast: { type: 'boolean' },
+        ready: {
+          type: 'integer',
+          enum: [0, 1, 2],
+          description: '1 就绪（默认）/ 0 转码中 / 2 失败不可重试；库：INT',
+        },
+        recordMaterialId: {
+          type: 'string',
+          format: 'uuid',
+          maxLength: 36,
+          description:
+            '本场绑定的录播素材 UUID（与创建/改活动请求同名）；非录播或不绑可不返回；库：VARCHAR(36)',
+        },
         owners: {
           type: 'array',
           items: { $ref: '#/components/schemas/EmployeeBrief' },
@@ -1412,6 +1464,10 @@ function buildAdmin() {
             pv: { type: 'integer' },
             fullEmbedShareLink: { type: 'string' },
             ultraLowLatency: { type: 'boolean' },
+            isTiming: {
+              type: 'boolean',
+              description: '录播是否定时；非录播可空；库：TINYINT(1)',
+            },
             detailHtml: { type: 'string' },
             autoList: { type: 'boolean' },
             reportId: {
@@ -2743,6 +2799,7 @@ function buildAdmin() {
                     autoList: true,
                     hostIds: [10001],
                     ownerIds: [10001],
+                    reportId: '11111111-1111-1111-1111-111111111111',
                     products: [],
                     coursewareMaterialIds: [],
                   },
@@ -3586,7 +3643,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.3.1',
+      version: '2.3.2',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4074,7 +4131,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.3.1',
+      version: '2.3.2',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4151,7 +4208,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.3.1',
+      version: '2.3.2',
       contact: { name: 'zhibo' },
     },
     servers: [
