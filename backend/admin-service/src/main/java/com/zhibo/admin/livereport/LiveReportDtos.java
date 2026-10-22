@@ -10,7 +10,8 @@ public final class LiveReportDtos {
     public record PlanTime(@NotBlank String startTime, @NotBlank String endTime) {}
     public record Attachment(@NotBlank String name, @NotBlank String url, @NotBlank String objectKey,
                              @NotNull Long fileSize, String mimeType) {}
-    public record Host(Long id, String userName, String avatar) {}
+    /** departmentName：现查主播员工部门，无则省略/null */
+    public record Host(Long id, String userName, String avatar, String departmentName) {}
     public record SaveRequest(@NotBlank @Size(max=64) String title,
             @NotBlank @Size(max=500) String content, @NotNull @Size(min=1,max=10) List<PlanTime> planTimes,
             @NotBlank String coverUrl, @NotBlank String coverObjectKey, Long coverFileSize,

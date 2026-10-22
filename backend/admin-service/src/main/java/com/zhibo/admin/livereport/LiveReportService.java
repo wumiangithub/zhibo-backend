@@ -88,10 +88,18 @@ public class LiveReportService {
             return cb.and(ps.toArray(Predicate[]::new));
         };
         var p = reports.findAll(spec, PageRequest.of(page-1,pageSize,Sort.by(Sort.Direction.DESC,"submittedTime")));
-        return new LiveReportDtos.ListResult(page,pageSize,p.getTotalElements(),p.stream().map(this::detailOf).toList());
+        List<LiveReportEntity> rows = p.getContent();
+        Map<Long, String> hostDept = hostDepartmentById(rows);
+        return new LiveReportDtos.ListResult(page, pageSize, p.getTotalElements(),
+                rows.stream().map(e -> detailOf(e, hostDept.get(e.getHostId()))).toList());
     }
 
-    @Transactional(readOnly = true) public LiveReportDtos.Detail detail(String id) { return detailOf(report(id)); }
+    @Transactional(readOnly = true)
+    public LiveReportDtos.Detail detail(String id) {
+        LiveReportEntity e = report(id);
+        Map<Long, String> hostDept = hostDepartmentById(List.of(e));
+        return detailOf(e, hostDept.get(e.getHostId()));
+    }
 
     @Transactional
     public LiveReportDtos.Result update(String id, LiveReportDtos.UpdateRequest req, long userId) {
@@ -299,7 +307,36 @@ public class LiveReportService {
     private static boolean blank(String s) { return s == null || s.isBlank(); }
     private List<LiveReportDtos.Attachment> attachments(LiveReportEntity e){return read(e.getAttachments(),new TypeReference<>(){});}
     private <T>T read(String s,TypeReference<T> t){try{return mapper.readValue(s,t);}catch(JsonProcessingException e){throw new IllegalStateException("报备数据损坏",e);}}
-    private LiveReportDtos.Detail detailOf(LiveReportEntity e){return new LiveReportDtos.Detail(e.getId(),e.getTitle(),e.getContent(),plans(e),e.getCoverUrl(),e.getCoverObjectKey(),e.getCoverFileSize(),e.getCoverMimeType(),e.getCoverMaterialId(),new LiveReportDtos.Host(e.getHostId(),e.getHostName(),e.getHostAvatar()),attachments(e),e.getStatus(),e.getBoundLiveCount(),e.getSubmitterId(),e.getSubmitterName(),e.getDepartmentName(),formatTime(e.getSubmittedTime()),formatTime(e.getUpdatedTime()));}
+
+    /** 批量现查主播部门，避免列表 N+1。 */
+    private Map<Long, String> hostDepartmentById(List<LiveReportEntity> rows) {
+        Set<Long> hostIds = rows.stream()
+                .map(LiveReportEntity::getHostId)
+                .filter(Objects::nonNull)
+                .filter(id -> id > 0)
+                .collect(Collectors.toSet());
+        Map<Long, String> out = new HashMap<>();
+        if (hostIds.isEmpty()) return out;
+        for (SysUserAccountEntity u : users.findAllById(hostIds)) {
+            String dept = AuthService.resolveDepartmentName(u);
+            if (dept != null && !dept.isBlank()) {
+                out.put(u.getId(), dept);
+            }
+        }
+        return out;
+    }
+
+    private LiveReportDtos.Detail detailOf(LiveReportEntity e, String hostDepartmentName) {
+        return new LiveReportDtos.Detail(
+                e.getId(), e.getTitle(), e.getContent(), plans(e),
+                e.getCoverUrl(), e.getCoverObjectKey(), e.getCoverFileSize(), e.getCoverMimeType(),
+                e.getCoverMaterialId(),
+                new LiveReportDtos.Host(e.getHostId(), e.getHostName(), e.getHostAvatar(), hostDepartmentName),
+                attachments(e), e.getStatus(), e.getBoundLiveCount(),
+                e.getSubmitterId(), e.getSubmitterName(), e.getDepartmentName(),
+                formatTime(e.getSubmittedTime()), formatTime(e.getUpdatedTime()));
+    }
+
     private String formatTime(LocalDateTime t){return t==null?null:t.format(TIME);}
     private void addAudit(String reportId,String action,String result,String reason,SysUserAccountEntity u){LiveReportAuditEntity a=new LiveReportAuditEntity();a.setReportId(reportId);a.setAction(action);a.setResult(result);a.setReason(reason);a.setOperatorId(u.getId());a.setOperatorName(u.getUserName());audits.save(a);}
 }

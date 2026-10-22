@@ -354,6 +354,19 @@ class LiveReportServiceTest {
     }
 
     @Test
+    void auditPassedWithReasonPersistsReason() {
+        LiveReportEntity report = report("pending", 0);
+        when(reports.findById("r1")).thenReturn(Optional.of(report));
+
+        service.audit("r1", new LiveReportDtos.AuditRequest("passed", "  内容合规  "), 7L);
+
+        verify(audits).save(argThat((LiveReportAuditEntity a) ->
+                "audit".equals(a.getAction())
+                        && "passed".equals(a.getResult())
+                        && "内容合规".equals(a.getReason())));
+    }
+
+    @Test
     void softDelete_setsActorAndTime() {
         LiveReportEntity report = report("passed", 2);
         when(reports.findById("r1")).thenReturn(Optional.of(report));

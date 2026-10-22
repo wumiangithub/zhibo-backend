@@ -117,8 +117,12 @@ public class VhallLiveProvider implements LiveProvider {
             if (command.coverUrl() != null && !command.coverUrl().isBlank()) {
                 params.put("img_url", command.coverUrl().trim());
             }
-            params.put("is_timing", 1);
-            params.put("start_time", startTime);
+            // is_timing：null 按定时（与历史硬编码 1 一致）；start_time 仅定时时生效
+            boolean timing = command.isTiming() == null || Boolean.TRUE.equals(command.isTiming());
+            params.put("is_timing", timing ? 1 : 0);
+            if (timing) {
+                params.put("start_time", startTime);
+            }
             putNoDelayIfPresent(params, command.ultraLowLatency());
         } else {
             path = PATH_CREATE;

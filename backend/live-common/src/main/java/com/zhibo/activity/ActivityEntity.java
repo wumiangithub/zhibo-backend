@@ -70,6 +70,13 @@ public class ActivityEntity {
     @Column(name = "record_material_id", length = 36)
     private String recordMaterialId;
 
+    /**
+     * 录播是否定时 → 微吼 create-demand {@code is_timing}。
+     * 仅 type=4 有意义；null 按 true。库列为 TINYINT（V33）。
+     */
+    @Column(name = "is_timing", columnDefinition = "TINYINT")
+    private Boolean isTiming;
+
     /** 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放。 */
     @Column(nullable = false)
     private Integer state;

@@ -85,7 +85,8 @@ public class RecordDemandFinalizeService {
                     activity.getIntroduction(),
                     videoId,
                     activity.getCoverUrl(),
-                    activity.getUltraLowLatency()
+                    activity.getUltraLowLatency(),
+                    activity.getIsTiming()
             );
             CreateRoomResult room = liveProvider.create(cmd);
             activity.setProviderRoomId(room.providerRoomId());

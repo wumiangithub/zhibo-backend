@@ -18,6 +18,8 @@ public class ActivityDetailResponse extends ActivitySummary {
     private Integer pv;
     private String fullEmbedShareLink;
     private Boolean ultraLowLatency;
+    /** type=4：是否定时；非录播可空 */
+    private Boolean isTiming;
     private Boolean virtualAvatar;
     private String warmupType;
     private String warmupUrl;

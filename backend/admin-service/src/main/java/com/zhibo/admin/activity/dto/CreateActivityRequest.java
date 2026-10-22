@@ -55,6 +55,12 @@ public class CreateActivityRequest {
      */
     private String materialId;
 
+    /**
+     * type=4：是否定时直播 → 微吼 {@code is_timing}（1/0）。
+     * 省略或 null 按 {@code true}；非录播忽略。
+     */
+    private Boolean isTiming;
+
     private String viewerStyle;
     private Boolean ultraLowLatency;
     private Boolean virtualAvatar;

@@ -171,6 +171,9 @@ public class ActivityService {
         SysUserAccountEntity operator = requireOperator(operatorId);
 
         RecordCreatePlan recordPlan = planRecordCreate(type, request, liveProvider);
+        Boolean isTiming = type == 4
+                ? (request.getIsTiming() == null ? Boolean.TRUE : request.getIsTiming())
+                : null;
 
         CreateRoomResult room = null;
         if (recordPlan.createNow()) {
@@ -181,7 +184,8 @@ public class ActivityService {
                     introduction,
                     recordPlan.recordId(),
                     trimToNull(request.getCoverUrl()),
-                    request.getUltraLowLatency()
+                    request.getUltraLowLatency(),
+                    isTiming
             );
             room = liveProvider.create(createCmd);
         }
@@ -198,6 +202,7 @@ public class ActivityService {
         entity.setType(type);
         entity.setReady(recordPlan.ready());
         entity.setRecordMaterialId(recordPlan.materialId());
+        entity.setIsTiming(isTiming);
         entity.setState(type == 4 ? 4 : 2);
         entity.setViewerStyle(normalizeViewerStyle(request.getViewerStyle()));
         entity.setUltraLowLatency(request.getUltraLowLatency() == null ? Boolean.TRUE : request.getUltraLowLatency());
@@ -936,6 +941,7 @@ public class ActivityService {
         detail.setIntroduction(entity.getIntroduction());
         detail.setEndTime(entity.getEndTime());
         detail.setUltraLowLatency(entity.getUltraLowLatency());
+        detail.setIsTiming(entity.getIsTiming());
         detail.setVirtualAvatar(entity.getVirtualAvatar());
         detail.setWarmupType(entity.getWarmupType());
         detail.setWarmupUrl(entity.getWarmupUrl());
@@ -1219,7 +1225,8 @@ public class ActivityService {
                     entity.getIntroduction(),
                     videoId,
                     entity.getCoverUrl(),
-                    entity.getUltraLowLatency()
+                    entity.getUltraLowLatency(),
+                    entity.getIsTiming()
             ));
             entity.setProviderRoomId(room.providerRoomId());
             entity.setReady(ActivityReady.OK);

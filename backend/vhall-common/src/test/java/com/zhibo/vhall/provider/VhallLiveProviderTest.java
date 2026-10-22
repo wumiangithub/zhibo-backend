@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,7 +52,7 @@ class VhallLiveProviderTest {
                 .thenReturn(Map.of("webinar_id", 99L));
 
         CreateRoomResult result = provider.create(new CreateRoomCommand(
-                "标题", "2026-10-01 20:00:00", 2, "简介", null, "https://cover", true));
+                "标题", "2026-10-01 20:00:00", 2, "简介", null, "https://cover", true, null));
         assertEquals("99", result.providerRoomId());
 
         @SuppressWarnings("unchecked")
@@ -68,7 +69,7 @@ class VhallLiveProviderTest {
     void create_demandRequiresRecordId() {
         assertThrows(IllegalArgumentException.class, () ->
                 provider.create(new CreateRoomCommand(
-                        "录播", "2026-10-01 20:00:00", 4, "简介", null, null, null)));
+                        "录播", "2026-10-01 20:00:00", 4, "简介", null, null, null, null)));
     }
 
     @Test
@@ -77,7 +78,7 @@ class VhallLiveProviderTest {
                 .thenReturn(Map.of("webinar_id", "88"));
 
         CreateRoomResult result = provider.create(new CreateRoomCommand(
-                "录播", "2026-10-01 20:00:00", 4, "简介", "799703", null, false));
+                "录播", "2026-10-01 20:00:00", 4, "简介", "799703", null, false, true));
         assertEquals("88", result.providerRoomId());
 
         @SuppressWarnings("unchecked")
@@ -87,6 +88,24 @@ class VhallLiveProviderTest {
         assertEquals("799703", captor.getValue().get("record_id"));
         assertEquals(0, captor.getValue().get("webinar_curr_num"));
         assertEquals(0, captor.getValue().get("no_delay_webinar"));
+        assertEquals(1, captor.getValue().get("is_timing"));
+        assertEquals("2026-10-01 20:00", captor.getValue().get("start_time"));
+    }
+
+    @Test
+    void create_demandOmitsStartTimeWhenNotTiming() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CREATE_DEMAND), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_id", "88"));
+
+        provider.create(new CreateRoomCommand(
+                "录播", "2026-10-01 20:00:00", 4, "简介", "799703", null, false, false));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(
+                eq(VhallLiveProvider.PATH_CREATE_DEMAND), captor.capture(), eq(Map.class));
+        assertEquals(0, captor.getValue().get("is_timing"));
+        assertNull(captor.getValue().get("start_time"));
     }
 
     @Test
@@ -134,7 +153,7 @@ class VhallLiveProviderTest {
                 .thenReturn(Map.of("webinar_id", 1L));
 
         provider.create(new CreateRoomCommand(
-                "标题", "2026-10-01 20:00:00", 1, null, null, null, null));
+                "标题", "2026-10-01 20:00:00", 1, null, null, null, null, null));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
