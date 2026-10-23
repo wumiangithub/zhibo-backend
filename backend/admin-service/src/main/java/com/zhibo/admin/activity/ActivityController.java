@@ -3,7 +3,6 @@ package com.zhibo.admin.activity;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
-import com.zhibo.admin.activity.dto.ActivityEmbedResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
@@ -49,7 +48,6 @@ public class ActivityController {
 
     private final ActivityService activityService;
     private final HostService hostService;
-    private final EmbedService embedService;
 
     @PostMapping("/create")
     public ApiResponse<CreateActivityResponse> create(
@@ -204,10 +202,5 @@ public class ActivityController {
             @RequestParam(required = false) Integer role,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(hostService.host(id, role, currentUserId(httpRequest)));
-    }
-
-    @GetMapping("/embed/{id}")
-    public ApiResponse<ActivityEmbedResponse> embed(@PathVariable String id) {
-        return ApiResponse.ok(embedService.embed(id));
     }
 }

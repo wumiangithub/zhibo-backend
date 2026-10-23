@@ -1,7 +1,9 @@
 package com.zhibo.live;
 
+import com.zhibo.live.viewer.ViewerAuthProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
  * 观看端后端启动类。
@@ -10,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 共享库 Bean 由 {@code vhall-common} 的 AutoConfiguration 注册，不靠扫 {@code com.zhibo}。
  */
 @SpringBootApplication
+@EnableConfigurationProperties(ViewerAuthProperties.class)
 public class LiveServiceApplication {
 
     public static void main(String[] args) {

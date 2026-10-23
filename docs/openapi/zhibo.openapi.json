@@ -358,7 +358,29 @@
             "in": "query",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/MaterialType"
+              "$ref": "#/components/schemas/MaterialType",
+              "x-apifox-enum": [
+                {
+                  "value": "image",
+                  "name": "图片",
+                  "description": "图片"
+                },
+                {
+                  "value": "video",
+                  "name": "视频",
+                  "description": "视频"
+                },
+                {
+                  "value": "document",
+                  "name": "文档",
+                  "description": "文档"
+                },
+                {
+                  "value": "article",
+                  "name": "文章",
+                  "description": "文章"
+                }
+              ]
             }
           }
         ],
@@ -400,7 +422,29 @@
                 ],
                 "properties": {
                   "type": {
-                    "$ref": "#/components/schemas/MaterialType"
+                    "$ref": "#/components/schemas/MaterialType",
+                    "x-apifox-enum": [
+                      {
+                        "value": "image",
+                        "name": "图片",
+                        "description": "图片"
+                      },
+                      {
+                        "value": "video",
+                        "name": "视频",
+                        "description": "视频"
+                      },
+                      {
+                        "value": "document",
+                        "name": "文档",
+                        "description": "文档"
+                      },
+                      {
+                        "value": "article",
+                        "name": "文章",
+                        "description": "文章"
+                      }
+                    ]
                   },
                   "name": {
                     "type": "string",
@@ -524,7 +568,29 @@
             "in": "query",
             "required": true,
             "schema": {
-              "$ref": "#/components/schemas/MaterialType"
+              "$ref": "#/components/schemas/MaterialType",
+              "x-apifox-enum": [
+                {
+                  "value": "image",
+                  "name": "图片",
+                  "description": "图片"
+                },
+                {
+                  "value": "video",
+                  "name": "视频",
+                  "description": "视频"
+                },
+                {
+                  "value": "document",
+                  "name": "文档",
+                  "description": "文档"
+                },
+                {
+                  "value": "article",
+                  "name": "文章",
+                  "description": "文章"
+                }
+              ]
             }
           },
           {
@@ -546,7 +612,24 @@
             "name": "auditStatus",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/MaterialAuditStatus"
+              "$ref": "#/components/schemas/MaterialAuditStatus",
+              "x-apifox-enum": [
+                {
+                  "value": 0,
+                  "name": "待审核",
+                  "description": "待审核"
+                },
+                {
+                  "value": 1,
+                  "name": "已通过",
+                  "description": "已通过"
+                },
+                {
+                  "value": 2,
+                  "name": "已驳回",
+                  "description": "已驳回"
+                }
+              ]
             },
             "description": "联合审核：任一方驳回算驳回，否则任一方待审核算待审核，两方都通过才算通过。不传不过滤"
           },
@@ -958,7 +1041,19 @@
                 ],
                 "properties": {
                   "status": {
-                    "$ref": "#/components/schemas/AuditWriteStatus"
+                    "$ref": "#/components/schemas/AuditWriteStatus",
+                    "x-apifox-enum": [
+                      {
+                        "value": 1,
+                        "name": "已通过",
+                        "description": "已通过"
+                      },
+                      {
+                        "value": 2,
+                        "name": "已驳回",
+                        "description": "已驳回"
+                      }
+                    ]
                   }
                 }
               }
@@ -1007,7 +1102,19 @@
                 ],
                 "properties": {
                   "status": {
-                    "$ref": "#/components/schemas/AuditWriteStatus"
+                    "$ref": "#/components/schemas/AuditWriteStatus",
+                    "x-apifox-enum": [
+                      {
+                        "value": 1,
+                        "name": "已通过",
+                        "description": "已通过"
+                      },
+                      {
+                        "value": 2,
+                        "name": "已驳回",
+                        "description": "已驳回"
+                      }
+                    ]
                   }
                 }
               }
@@ -1135,21 +1242,92 @@
             "name": "state",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/ActivityState"
+              "$ref": "#/components/schemas/ActivityState",
+              "x-apifox-enum": [
+                {
+                  "value": 0,
+                  "name": "全部(列表筛)",
+                  "description": "全部(列表筛)"
+                },
+                {
+                  "value": 1,
+                  "name": "直播",
+                  "description": "直播"
+                },
+                {
+                  "value": 2,
+                  "name": "预告",
+                  "description": "预告"
+                },
+                {
+                  "value": 3,
+                  "name": "结束",
+                  "description": "结束"
+                },
+                {
+                  "value": 4,
+                  "name": "点播",
+                  "description": "点播"
+                },
+                {
+                  "value": 5,
+                  "name": "回放",
+                  "description": "回放"
+                }
+              ]
             }
           },
           {
             "name": "provider",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/Provider"
+              "$ref": "#/components/schemas/Provider",
+              "x-apifox-enum": [
+                {
+                  "value": "vhall",
+                  "name": "微吼",
+                  "description": "微吼"
+                },
+                {
+                  "value": "aliyun",
+                  "name": "阿里云",
+                  "description": "阿里云"
+                },
+                {
+                  "value": "tencent",
+                  "name": "腾讯云",
+                  "description": "腾讯云"
+                }
+              ]
             }
           },
           {
             "name": "shelfStatus",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/ShelfStatus"
+              "$ref": "#/components/schemas/ShelfStatus",
+              "x-apifox-enum": [
+                {
+                  "value": "pending",
+                  "name": "待上架",
+                  "description": "待上架"
+                },
+                {
+                  "value": "on",
+                  "name": "已上架",
+                  "description": "已上架"
+                },
+                {
+                  "value": "off",
+                  "name": "已下架",
+                  "description": "已下架"
+                },
+                {
+                  "value": "banned",
+                  "name": "强制封禁",
+                  "description": "强制封禁"
+                }
+              ]
             }
           },
           {
@@ -1849,37 +2027,6 @@
         }
       }
     },
-    "/api/v1/activities/embed/{id}": {
-      "get": {
-        "tags": [
-          "admin/活动管理"
-        ],
-        "summary": "管理后台嵌入页",
-        "operationId": "admin_getActivityEmbed",
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ActivityId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "业务结果（看 body.code；成功 code===0）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseEmbed"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/activities/stats/{id}": {
       "get": {
         "tags": [
@@ -2002,6 +2149,14 @@
               "default": 60,
               "enum": [
                 60
+              ],
+              "description": "60 秒",
+              "x-apifox-enum": [
+                {
+                  "value": 60,
+                  "name": "秒",
+                  "description": "秒"
+                }
               ]
             }
           }
@@ -2048,7 +2203,25 @@
                 "online",
                 "offline"
               ],
-              "default": "all"
+              "default": "all",
+              "description": "all 全部 / online 在线 / offline 离线",
+              "x-apifox-enum": [
+                {
+                  "value": "all",
+                  "name": "全部",
+                  "description": "全部"
+                },
+                {
+                  "value": "online",
+                  "name": "在线",
+                  "description": "在线"
+                },
+                {
+                  "value": "offline",
+                  "name": "离线",
+                  "description": "离线"
+                }
+              ]
             }
           },
           {
@@ -2467,7 +2640,24 @@
             "name": "status",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/LiveReportStatus"
+              "$ref": "#/components/schemas/LiveReportStatus",
+              "x-apifox-enum": [
+                {
+                  "value": "pending",
+                  "name": "待审核",
+                  "description": "待审核"
+                },
+                {
+                  "value": "passed",
+                  "name": "已通过",
+                  "description": "已通过"
+                },
+                {
+                  "value": "rejected",
+                  "name": "已驳回",
+                  "description": "已驳回"
+                }
+              ]
             }
           },
           {
@@ -2731,7 +2921,29 @@
             "name": "shelfStatus",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/ShelfStatus"
+              "$ref": "#/components/schemas/ShelfStatus",
+              "x-apifox-enum": [
+                {
+                  "value": "pending",
+                  "name": "待上架",
+                  "description": "待上架"
+                },
+                {
+                  "value": "on",
+                  "name": "已上架",
+                  "description": "已上架"
+                },
+                {
+                  "value": "off",
+                  "name": "已下架",
+                  "description": "已下架"
+                },
+                {
+                  "value": "banned",
+                  "name": "强制封禁",
+                  "description": "强制封禁"
+                }
+              ]
             }
           },
           {
@@ -2746,7 +2958,24 @@
             "name": "riskStatus",
             "in": "query",
             "schema": {
-              "$ref": "#/components/schemas/RiskStatus"
+              "$ref": "#/components/schemas/RiskStatus",
+              "x-apifox-enum": [
+                {
+                  "value": "pending",
+                  "name": "待审核",
+                  "description": "待审核"
+                },
+                {
+                  "value": "passed",
+                  "name": "已通过",
+                  "description": "已通过"
+                },
+                {
+                  "value": "rejected",
+                  "name": "已驳回",
+                  "description": "已驳回"
+                }
+              ]
             }
           },
           {
@@ -2760,7 +2989,30 @@
                 "salesCount",
                 "updatedTime"
               ],
-              "default": "updatedTime"
+              "default": "updatedTime",
+              "description": "entitledUserCount 权益用户数 / totalUserCount 累计用户数 / salesCount 总销量 / updatedTime 最近更新时间",
+              "x-apifox-enum": [
+                {
+                  "value": "entitledUserCount",
+                  "name": "权益用户数",
+                  "description": "权益用户数"
+                },
+                {
+                  "value": "totalUserCount",
+                  "name": "累计用户数",
+                  "description": "累计用户数"
+                },
+                {
+                  "value": "salesCount",
+                  "name": "总销量",
+                  "description": "总销量"
+                },
+                {
+                  "value": "updatedTime",
+                  "name": "最近更新时间",
+                  "description": "最近更新时间"
+                }
+              ]
             }
           },
           {
@@ -2772,7 +3024,20 @@
                 "asc",
                 "desc"
               ],
-              "default": "desc"
+              "default": "desc",
+              "description": "asc 升序 / desc 降序",
+              "x-apifox-enum": [
+                {
+                  "value": "asc",
+                  "name": "升序",
+                  "description": "升序"
+                },
+                {
+                  "value": "desc",
+                  "name": "降序",
+                  "description": "降序"
+                }
+              ]
             }
           }
         ],
@@ -3056,8 +3321,41 @@
           {
             "name": "state",
             "in": "query",
+            "description": "活动状态；不传或 0 表示不过滤",
             "schema": {
-              "type": "integer"
+              "$ref": "#/components/schemas/ActivityState",
+              "x-apifox-enum": [
+                {
+                  "value": 0,
+                  "name": "全部(列表筛)",
+                  "description": "全部(列表筛)"
+                },
+                {
+                  "value": 1,
+                  "name": "直播",
+                  "description": "直播"
+                },
+                {
+                  "value": 2,
+                  "name": "预告",
+                  "description": "预告"
+                },
+                {
+                  "value": 3,
+                  "name": "结束",
+                  "description": "结束"
+                },
+                {
+                  "value": 4,
+                  "name": "点播",
+                  "description": "点播"
+                },
+                {
+                  "value": 5,
+                  "name": "回放",
+                  "description": "回放"
+                }
+              ]
             }
           }
         ],
@@ -3283,7 +3581,25 @@
                 "online",
                 "offline"
               ],
-              "default": "all"
+              "default": "all",
+              "description": "all 全部 / online 在线 / offline 离线",
+              "x-apifox-enum": [
+                {
+                  "value": "all",
+                  "name": "全部",
+                  "description": "全部"
+                },
+                {
+                  "value": "online",
+                  "name": "在线",
+                  "description": "在线"
+                },
+                {
+                  "value": "offline",
+                  "name": "离线",
+                  "description": "离线"
+                }
+              ]
             }
           },
           {
@@ -3365,6 +3681,14 @@
               "default": 60,
               "enum": [
                 60
+              ],
+              "description": "60 秒",
+              "x-apifox-enum": [
+                {
+                  "value": 60,
+                  "name": "秒",
+                  "description": "秒"
+                }
               ]
             }
           }
@@ -3518,7 +3842,24 @@
           "aliyun",
           "tencent"
         ],
-        "description": "直播服务商；创建后不可改；库：VARCHAR(16)"
+        "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "vhall",
+            "name": "微吼",
+            "description": "微吼"
+          },
+          {
+            "value": "aliyun",
+            "name": "阿里云",
+            "description": "阿里云"
+          },
+          {
+            "value": "tencent",
+            "name": "腾讯云",
+            "description": "腾讯云"
+          }
+        ]
       },
       "ActivityType": {
         "type": "integer",
@@ -3528,7 +3869,29 @@
           3,
           4
         ],
-        "description": "1音频 / 2视频 / 3互动 / 4录播；库：INT"
+        "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 1,
+            "name": "音频",
+            "description": "音频"
+          },
+          {
+            "value": 2,
+            "name": "视频",
+            "description": "视频"
+          },
+          {
+            "value": 3,
+            "name": "互动",
+            "description": "互动"
+          },
+          {
+            "value": 4,
+            "name": "录播",
+            "description": "录播"
+          }
+        ]
       },
       "ActivityState": {
         "type": "integer",
@@ -3540,7 +3903,39 @@
           4,
           5
         ],
-        "description": "0全部(列表筛) / 1直播 / 2预告 / 3结束 / 4点播 / 5回放；库：INT"
+        "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 0,
+            "name": "全部(列表筛)",
+            "description": "全部(列表筛)"
+          },
+          {
+            "value": 1,
+            "name": "直播",
+            "description": "直播"
+          },
+          {
+            "value": 2,
+            "name": "预告",
+            "description": "预告"
+          },
+          {
+            "value": 3,
+            "name": "结束",
+            "description": "结束"
+          },
+          {
+            "value": 4,
+            "name": "点播",
+            "description": "点播"
+          },
+          {
+            "value": 5,
+            "name": "回放",
+            "description": "回放"
+          }
+        ]
       },
       "ViewerStyle": {
         "type": "string",
@@ -3548,7 +3943,19 @@
           "traditional",
           "immersive"
         ],
-        "description": "traditional 传统直播间 / immersive 沉浸直播间；库：VARCHAR(16)"
+        "description": "traditional 传统直播间 / immersive 沉浸直播间；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "traditional",
+            "name": "传统直播间",
+            "description": "传统直播间"
+          },
+          {
+            "value": "immersive",
+            "name": "沉浸直播间",
+            "description": "沉浸直播间"
+          }
+        ]
       },
       "WarmupType": {
         "type": "string",
@@ -3556,7 +3963,19 @@
           "image",
           "video"
         ],
-        "description": "image 暖场图 / video 暖场视频；库：VARCHAR(16)"
+        "description": "image 暖场图 / video 暖场视频；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "image",
+            "name": "暖场图",
+            "description": "暖场图"
+          },
+          {
+            "value": "video",
+            "name": "暖场视频",
+            "description": "暖场视频"
+          }
+        ]
       },
       "ShelfStatus": {
         "type": "string",
@@ -3566,7 +3985,29 @@
           "off",
           "banned"
         ],
-        "description": "pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁；库：VARCHAR(16)"
+        "description": "pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "pending",
+            "name": "待上架",
+            "description": "待上架"
+          },
+          {
+            "value": "on",
+            "name": "已上架",
+            "description": "已上架"
+          },
+          {
+            "value": "off",
+            "name": "已下架",
+            "description": "已下架"
+          },
+          {
+            "value": "banned",
+            "name": "强制封禁",
+            "description": "强制封禁"
+          }
+        ]
       },
       "RiskStatus": {
         "type": "string",
@@ -3575,7 +4016,24 @@
           "passed",
           "rejected"
         ],
-        "description": "pending 待审核 / passed 已通过 / rejected 已驳回；库：VARCHAR(16)"
+        "description": "pending 待审核 / passed 已通过 / rejected 已驳回；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "pending",
+            "name": "待审核",
+            "description": "待审核"
+          },
+          {
+            "value": "passed",
+            "name": "已通过",
+            "description": "已通过"
+          },
+          {
+            "value": "rejected",
+            "name": "已驳回",
+            "description": "已驳回"
+          }
+        ]
       },
       "SellType": {
         "type": "string",
@@ -3585,7 +4043,29 @@
           "encrypted",
           "specified"
         ],
-        "description": "free 免费 / paid 付费 / encrypted 加密 / specified 指定学员；库：VARCHAR(16)"
+        "description": "free 免费 / paid 付费 / encrypted 加密 / specified 指定学员；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "free",
+            "name": "免费",
+            "description": "免费"
+          },
+          {
+            "value": "paid",
+            "name": "付费",
+            "description": "付费"
+          },
+          {
+            "value": "encrypted",
+            "name": "加密",
+            "description": "加密"
+          },
+          {
+            "value": "specified",
+            "name": "指定学员",
+            "description": "指定学员"
+          }
+        ]
       },
       "AccessValidityType": {
         "type": "string",
@@ -3593,7 +4073,19 @@
           "long",
           "days"
         ],
-        "description": "long 长期有效 / days 购买后 N 天有效；库：VARCHAR(16)"
+        "description": "long 长期有效 / days 购买后 N 天有效；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "long",
+            "name": "长期有效",
+            "description": "长期有效"
+          },
+          {
+            "value": "days",
+            "name": "购买后 N 天有效",
+            "description": "购买后 N 天有效"
+          }
+        ]
       },
       "PlaybackValidityType": {
         "type": "string",
@@ -3601,7 +4093,19 @@
           "forever",
           "days"
         ],
-        "description": "forever 永久有效 / days 直播结束后 N 天有效；库：VARCHAR(16)"
+        "description": "forever 永久有效 / days 直播结束后 N 天有效；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "forever",
+            "name": "永久有效",
+            "description": "永久有效"
+          },
+          {
+            "value": "days",
+            "name": "直播结束后 N 天有效",
+            "description": "直播结束后 N 天有效"
+          }
+        ]
       },
       "MaterialType": {
         "type": "string",
@@ -3611,7 +4115,29 @@
           "document",
           "article"
         ],
-        "description": "image 图片 / video 视频 / document 文档 / article 文章；库：VARCHAR(16)"
+        "description": "image 图片 / video 视频 / document 文档 / article 文章；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "image",
+            "name": "图片",
+            "description": "图片"
+          },
+          {
+            "value": "video",
+            "name": "视频",
+            "description": "视频"
+          },
+          {
+            "value": "document",
+            "name": "文档",
+            "description": "文档"
+          },
+          {
+            "value": "article",
+            "name": "文章",
+            "description": "文章"
+          }
+        ]
       },
       "MaterialFileType": {
         "type": "string",
@@ -3620,7 +4146,24 @@
           "video",
           "document"
         ],
-        "description": "批量登记仅接受文件类型，不含 article；库：VARCHAR(16)"
+        "description": "image 图片 / video 视频 / document 文档。批量登记仅接受文件类型，不含 article；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "image",
+            "name": "图片",
+            "description": "图片"
+          },
+          {
+            "value": "video",
+            "name": "视频",
+            "description": "视频"
+          },
+          {
+            "value": "document",
+            "name": "文档",
+            "description": "文档"
+          }
+        ]
       },
       "AuditWriteStatus": {
         "type": "integer",
@@ -3628,7 +4171,19 @@
           1,
           2
         ],
-        "description": "1 已通过 / 2 已驳回。不接受 0；库：INT"
+        "description": "1 已通过 / 2 已驳回。不接受 0；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 1,
+            "name": "已通过",
+            "description": "已通过"
+          },
+          {
+            "value": 2,
+            "name": "已驳回",
+            "description": "已驳回"
+          }
+        ]
       },
       "MaterialAuditStatus": {
         "type": "integer",
@@ -3637,7 +4192,24 @@
           1,
           2
         ],
-        "description": "0 待审核 / 1 已通过 / 2 已驳回；库：INT"
+        "description": "0 待审核 / 1 已通过 / 2 已驳回；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 0,
+            "name": "待审核",
+            "description": "待审核"
+          },
+          {
+            "value": 1,
+            "name": "已通过",
+            "description": "已通过"
+          },
+          {
+            "value": 2,
+            "name": "已驳回",
+            "description": "已驳回"
+          }
+        ]
       },
       "ActivityMemberRole": {
         "type": "integer",
@@ -3646,7 +4218,24 @@
           2,
           3
         ],
-        "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）；库：INT"
+        "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 1,
+            "name": "主播",
+            "description": "主播"
+          },
+          {
+            "value": 2,
+            "name": "嘉宾",
+            "description": "嘉宾"
+          },
+          {
+            "value": 3,
+            "name": "助理",
+            "description": "助理"
+          }
+        ]
       },
       "EmployeeId": {
         "type": "integer",
@@ -3673,7 +4262,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -3733,7 +4322,29 @@
           },
           "type": {
             "$ref": "#/components/schemas/MaterialType",
-            "description": "类型"
+            "description": "image 图片 / video 视频 / document 文档 / article 文章",
+            "x-apifox-enum": [
+              {
+                "value": "image",
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": "video",
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": "document",
+                "name": "文档",
+                "description": "文档"
+              },
+              {
+                "value": "article",
+                "name": "文章",
+                "description": "文章"
+              }
+            ]
           },
           "url": {
             "type": "string",
@@ -3820,7 +4431,29 @@
               2,
               3
             ],
-            "description": "0 pending / 1 success / 2 failed / 3 expired；库：VARCHAR(16)"
+            "description": "0 待扫码 / 1 成功 / 2 失败 / 3 已过期。0 继续轮询；成功时本响应消费 state；库：VARCHAR(16)",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "待扫码",
+                "description": "待扫码"
+              },
+              {
+                "value": 1,
+                "name": "成功",
+                "description": "成功"
+              },
+              {
+                "value": 2,
+                "name": "失败",
+                "description": "失败"
+              },
+              {
+                "value": 3,
+                "name": "已过期",
+                "description": "已过期"
+              }
+            ]
           },
           "errorMsg": {
             "type": "string",
@@ -3988,7 +4621,29 @@
           },
           "type": {
             "$ref": "#/components/schemas/MaterialType",
-            "description": "类型"
+            "description": "image 图片 / video 视频 / document 文档 / article 文章",
+            "x-apifox-enum": [
+              {
+                "value": "image",
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": "video",
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": "document",
+                "name": "文档",
+                "description": "文档"
+              },
+              {
+                "value": "article",
+                "name": "文章",
+                "description": "文章"
+              }
+            ]
           },
           "groupId": {
             "type": "string",
@@ -4034,11 +4689,45 @@
           },
           "aiAuditStatus": {
             "$ref": "#/components/schemas/MaterialAuditStatus",
-            "description": "AI 审核状态"
+            "description": "0 待审核 / 1 已通过 / 2 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": 1,
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": 2,
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "riskAuditStatus": {
             "$ref": "#/components/schemas/MaterialAuditStatus",
-            "description": "风控合规审核状态"
+            "description": "0 待审核 / 1 已通过 / 2 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": 1,
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": 2,
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "uploaderId": {
             "$ref": "#/components/schemas/EmployeeId",
@@ -4096,7 +4785,24 @@
         "properties": {
           "type": {
             "$ref": "#/components/schemas/MaterialFileType",
-            "description": "类型"
+            "description": "image 图片 / video 视频 / document 文档。批量登记仅接受文件类型，不含 article",
+            "x-apifox-enum": [
+              {
+                "value": "image",
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": "video",
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": "document",
+                "name": "文档",
+                "description": "文档"
+              }
+            ]
           },
           "groupId": {
             "type": "string",
@@ -4254,11 +4960,45 @@
           },
           "aiAuditStatus": {
             "$ref": "#/components/schemas/MaterialAuditStatus",
-            "description": "AI 审核状态"
+            "description": "0 待审核 / 1 已通过 / 2 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": 1,
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": 2,
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "riskAuditStatus": {
             "$ref": "#/components/schemas/MaterialAuditStatus",
-            "description": "风控合规审核状态"
+            "description": "0 待审核 / 1 已通过 / 2 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": 1,
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": 2,
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           }
         }
       },
@@ -4276,7 +5016,24 @@
         "properties": {
           "provider": {
             "$ref": "#/components/schemas/Provider",
-            "description": "直播服务商"
+            "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": "vhall",
+                "name": "微吼",
+                "description": "微吼"
+              },
+              {
+                "value": "aliyun",
+                "name": "阿里云",
+                "description": "阿里云"
+              },
+              {
+                "value": "tencent",
+                "name": "腾讯云",
+                "description": "腾讯云"
+              }
+            ]
           },
           "title": {
             "type": "string",
@@ -4294,7 +5051,29 @@
           },
           "type": {
             "$ref": "#/components/schemas/ActivityType",
-            "description": "类型"
+            "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "音频",
+                "description": "音频"
+              },
+              {
+                "value": 2,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 3,
+                "name": "互动",
+                "description": "互动"
+              },
+              {
+                "value": 4,
+                "name": "录播",
+                "description": "录播"
+              }
+            ]
           },
           "recordId": {
             "type": "integer",
@@ -4318,11 +5097,23 @@
           },
           "viewerStyle": {
             "$ref": "#/components/schemas/ViewerStyle",
-            "description": "观看端样式"
+            "description": "traditional 传统直播间 / immersive 沉浸直播间",
+            "x-apifox-enum": [
+              {
+                "value": "traditional",
+                "name": "传统直播间",
+                "description": "传统直播间"
+              },
+              {
+                "value": "immersive",
+                "name": "沉浸直播间",
+                "description": "沉浸直播间"
+              }
+            ]
           },
           "ultraLowLatency": {
             "type": "boolean",
-            "description": "创建后不可改；库：TINYINT(1)"
+            "description": "是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。落本站库。创建后不可改；库：TINYINT(1)"
           },
           "coverUrl": {
             "type": "string",
@@ -4471,7 +5262,19 @@
           },
           "playbackValidityType": {
             "$ref": "#/components/schemas/PlaybackValidityType",
-            "description": "回放有效期类型"
+            "description": "forever 永久有效 / days 直播结束后 N 天有效",
+            "x-apifox-enum": [
+              {
+                "value": "forever",
+                "name": "永久有效",
+                "description": "永久有效"
+              },
+              {
+                "value": "days",
+                "name": "直播结束后 N 天有效",
+                "description": "直播结束后 N 天有效"
+              }
+            ]
           },
           "playbackValidityDays": {
             "type": "integer",
@@ -4501,7 +5304,29 @@
           },
           "sellType": {
             "$ref": "#/components/schemas/SellType",
-            "description": "售卖方式"
+            "description": "free 免费 / paid 付费 / encrypted 加密 / specified 指定学员",
+            "x-apifox-enum": [
+              {
+                "value": "free",
+                "name": "免费",
+                "description": "免费"
+              },
+              {
+                "value": "paid",
+                "name": "付费",
+                "description": "付费"
+              },
+              {
+                "value": "encrypted",
+                "name": "加密",
+                "description": "加密"
+              },
+              {
+                "value": "specified",
+                "name": "指定学员",
+                "description": "指定学员"
+              }
+            ]
           },
           "price": {
             "type": "number",
@@ -4521,7 +5346,19 @@
           },
           "accessValidityType": {
             "$ref": "#/components/schemas/AccessValidityType",
-            "description": "访问有效期类型"
+            "description": "long 长期有效 / days 购买后 N 天有效",
+            "x-apifox-enum": [
+              {
+                "value": "long",
+                "name": "长期有效",
+                "description": "长期有效"
+              },
+              {
+                "value": "days",
+                "name": "购买后 N 天有效",
+                "description": "购买后 N 天有效"
+              }
+            ]
           },
           "accessValidityDays": {
             "type": "integer",
@@ -4541,7 +5378,29 @@
           },
           "sellType": {
             "$ref": "#/components/schemas/SellType",
-            "description": "售卖方式"
+            "description": "free 免费 / paid 付费 / encrypted 加密 / specified 指定学员",
+            "x-apifox-enum": [
+              {
+                "value": "free",
+                "name": "免费",
+                "description": "免费"
+              },
+              {
+                "value": "paid",
+                "name": "付费",
+                "description": "付费"
+              },
+              {
+                "value": "encrypted",
+                "name": "加密",
+                "description": "加密"
+              },
+              {
+                "value": "specified",
+                "name": "指定学员",
+                "description": "指定学员"
+              }
+            ]
           },
           "validityLabel": {
             "type": "string",
@@ -4573,7 +5432,29 @@
           },
           "shelfStatus": {
             "$ref": "#/components/schemas/ShelfStatus",
-            "description": "上架状态"
+            "description": "pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待上架",
+                "description": "待上架"
+              },
+              {
+                "value": "on",
+                "name": "已上架",
+                "description": "已上架"
+              },
+              {
+                "value": "off",
+                "name": "已下架",
+                "description": "已下架"
+              },
+              {
+                "value": "banned",
+                "name": "强制封禁",
+                "description": "强制封禁"
+              }
+            ]
           }
         }
       },
@@ -4589,8 +5470,20 @@
               "passed",
               "rejected"
             ],
-            "description": "passed 通过 / rejected 驳回；库：VARCHAR(16)",
-            "maxLength": 16
+            "description": "passed 已通过 / rejected 已驳回；库：VARCHAR(16)",
+            "maxLength": 16,
+            "x-apifox-enum": [
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "reason": {
             "type": "string",
@@ -4611,11 +5504,50 @@
           },
           "riskStatus": {
             "$ref": "#/components/schemas/RiskStatus",
-            "description": "风控审核状态"
+            "description": "pending 待审核 / passed 已通过 / rejected 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "shelfStatus": {
             "$ref": "#/components/schemas/ShelfStatus",
-            "description": "上架状态"
+            "description": "pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待上架",
+                "description": "待上架"
+              },
+              {
+                "value": "on",
+                "name": "已上架",
+                "description": "已上架"
+              },
+              {
+                "value": "off",
+                "name": "已下架",
+                "description": "已下架"
+              },
+              {
+                "value": "banned",
+                "name": "强制封禁",
+                "description": "强制封禁"
+              }
+            ]
           }
         }
       },
@@ -4634,8 +5566,20 @@
               "submit",
               "audit"
             ],
-            "description": "submit 发起申请不返回 result/reason；audit 为通过或驳回；库：VARCHAR(16)",
-            "maxLength": 16
+            "description": "submit 发起申请 / audit 通过或驳回。发起申请不返回 result、reason；库：VARCHAR(16)",
+            "maxLength": 16,
+            "x-apifox-enum": [
+              {
+                "value": "submit",
+                "name": "发起申请",
+                "description": "发起申请"
+              },
+              {
+                "value": "audit",
+                "name": "通过或驳回",
+                "description": "通过或驳回"
+              }
+            ]
           },
           "result": {
             "type": "string",
@@ -4643,8 +5587,20 @@
               "passed",
               "rejected"
             ],
-            "description": "仅 action=audit 时返回；库：VARCHAR(16)",
-            "maxLength": 16
+            "description": "passed 已通过 / rejected 已驳回。仅 action=audit 时返回；库：VARCHAR(16)",
+            "maxLength": 16,
+            "x-apifox-enum": [
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "reason": {
             "type": "string",
@@ -4677,7 +5633,24 @@
           },
           "provider": {
             "$ref": "#/components/schemas/Provider",
-            "description": "直播服务商"
+            "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": "vhall",
+                "name": "微吼",
+                "description": "微吼"
+              },
+              {
+                "value": "aliyun",
+                "name": "阿里云",
+                "description": "阿里云"
+              },
+              {
+                "value": "tencent",
+                "name": "腾讯云",
+                "description": "腾讯云"
+              }
+            ]
           },
           "title": {
             "type": "string",
@@ -4695,15 +5668,81 @@
           },
           "state": {
             "$ref": "#/components/schemas/ActivityState",
-            "description": "状态"
+            "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           },
           "type": {
             "$ref": "#/components/schemas/ActivityType",
-            "description": "类型"
+            "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "音频",
+                "description": "音频"
+              },
+              {
+                "value": 2,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 3,
+                "name": "互动",
+                "description": "互动"
+              },
+              {
+                "value": 4,
+                "name": "录播",
+                "description": "录播"
+              }
+            ]
           },
           "viewerStyle": {
             "$ref": "#/components/schemas/ViewerStyle",
-            "description": "观看端样式"
+            "description": "traditional 传统直播间 / immersive 沉浸直播间",
+            "x-apifox-enum": [
+              {
+                "value": "traditional",
+                "name": "传统直播间",
+                "description": "传统直播间"
+              },
+              {
+                "value": "immersive",
+                "name": "沉浸直播间",
+                "description": "沉浸直播间"
+              }
+            ]
           },
           "shareLink": {
             "type": "string",
@@ -4716,15 +5755,76 @@
           },
           "shelfStatus": {
             "$ref": "#/components/schemas/ShelfStatus",
-            "description": "上架状态"
+            "description": "pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待上架",
+                "description": "待上架"
+              },
+              {
+                "value": "on",
+                "name": "已上架",
+                "description": "已上架"
+              },
+              {
+                "value": "off",
+                "name": "已下架",
+                "description": "已下架"
+              },
+              {
+                "value": "banned",
+                "name": "强制封禁",
+                "description": "强制封禁"
+              }
+            ]
           },
           "riskStatus": {
             "$ref": "#/components/schemas/RiskStatus",
-            "description": "风控审核状态"
+            "description": "pending 待审核 / passed 已通过 / rejected 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "sellType": {
             "$ref": "#/components/schemas/SellType",
-            "description": "售卖方式"
+            "description": "free 免费 / paid 付费 / encrypted 加密 / specified 指定学员",
+            "x-apifox-enum": [
+              {
+                "value": "free",
+                "name": "免费",
+                "description": "免费"
+              },
+              {
+                "value": "paid",
+                "name": "付费",
+                "description": "付费"
+              },
+              {
+                "value": "encrypted",
+                "name": "加密",
+                "description": "加密"
+              },
+              {
+                "value": "specified",
+                "name": "指定学员",
+                "description": "指定学员"
+              }
+            ]
           },
           "validityLabel": {
             "type": "string",
@@ -4742,7 +5842,24 @@
               1,
               2
             ],
-            "description": "1 就绪（默认）/ 0 转码中 / 2 失败不可重试；库：INT"
+            "description": "1 就绪（默认）/ 0 转码中 / 2 失败不可重试；库：INT",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "转码中",
+                "description": "转码中"
+              },
+              {
+                "value": 1,
+                "name": "就绪（默认）",
+                "description": "就绪（默认）"
+              },
+              {
+                "value": 2,
+                "name": "失败不可重试",
+                "description": "失败不可重试"
+              }
+            ]
           },
           "recordMaterialId": {
             "type": "string",
@@ -4794,7 +5911,47 @@
               },
               "verify": {
                 "type": "integer",
-                "description": "观看验证方式（微吼 verify）；库：INT"
+                "enum": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  6
+                ],
+                "description": "0 无验证 / 1 密码 / 2 白名单 / 3 付费 / 4 F码 / 6 付费+F码；库：INT",
+                "x-apifox-enum": [
+                  {
+                    "value": 0,
+                    "name": "无验证",
+                    "description": "无验证"
+                  },
+                  {
+                    "value": 1,
+                    "name": "密码",
+                    "description": "密码"
+                  },
+                  {
+                    "value": 2,
+                    "name": "白名单",
+                    "description": "白名单"
+                  },
+                  {
+                    "value": 3,
+                    "name": "付费",
+                    "description": "付费"
+                  },
+                  {
+                    "value": 4,
+                    "name": "F码",
+                    "description": "F码"
+                  },
+                  {
+                    "value": 6,
+                    "name": "付费+F码",
+                    "description": "付费+F码"
+                  }
+                ]
               },
               "pv": {
                 "type": "integer",
@@ -4807,7 +5964,7 @@
               },
               "ultraLowLatency": {
                 "type": "boolean",
-                "description": "是否超低延迟；库：TINYINT(1)"
+                "description": "是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。创建后不可改；库：TINYINT(1)"
               },
               "isTiming": {
                 "type": "boolean",
@@ -4862,7 +6019,19 @@
               },
               "accessValidityType": {
                 "$ref": "#/components/schemas/AccessValidityType",
-                "description": "访问有效期类型"
+                "description": "long 长期有效 / days 购买后 N 天有效",
+                "x-apifox-enum": [
+                  {
+                    "value": "long",
+                    "name": "长期有效",
+                    "description": "长期有效"
+                  },
+                  {
+                    "value": "days",
+                    "name": "购买后 N 天有效",
+                    "description": "购买后 N 天有效"
+                  }
+                ]
               },
               "accessValidityDays": {
                 "type": "integer",
@@ -4879,7 +6048,19 @@
               },
               "playbackValidityType": {
                 "$ref": "#/components/schemas/PlaybackValidityType",
-                "description": "回放有效期类型"
+                "description": "forever 永久有效 / days 直播结束后 N 天有效",
+                "x-apifox-enum": [
+                  {
+                    "value": "forever",
+                    "name": "永久有效",
+                    "description": "永久有效"
+                  },
+                  {
+                    "value": "days",
+                    "name": "直播结束后 N 天有效",
+                    "description": "直播结束后 N 天有效"
+                  }
+                ]
               },
               "playbackValidityDays": {
                 "type": "integer",
@@ -4993,7 +6174,29 @@
               2,
               3
             ],
-            "example": 1
+            "example": 1,
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "未开始",
+                "description": "未开始"
+              },
+              {
+                "value": 1,
+                "name": "已完成",
+                "description": "已完成"
+              },
+              {
+                "value": 2,
+                "name": "进行中",
+                "description": "进行中"
+              },
+              {
+                "value": 3,
+                "name": "失败",
+                "description": "失败"
+              }
+            ]
           },
           "progress": {
             "type": "integer",
@@ -5020,7 +6223,39 @@
           },
           "state": {
             "$ref": "#/components/schemas/ActivityState",
-            "description": "本站写回后的活动状态；结束多为 3，live/start 成功多为 1"
+            "description": "本站写回后的活动状态；结束多为 3，live/start 成功多为 1",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           }
         }
       },
@@ -5036,7 +6271,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -5050,7 +6285,24 @@
           },
           "role": {
             "$ref": "#/components/schemas/ActivityMemberRole",
-            "description": "开播角色"
+            "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "主播",
+                "description": "主播"
+              },
+              {
+                "value": 2,
+                "name": "嘉宾",
+                "description": "嘉宾"
+              },
+              {
+                "value": 3,
+                "name": "助理",
+                "description": "助理"
+              }
+            ]
           },
           "nickname": {
             "type": "string",
@@ -5103,11 +6355,28 @@
               "properties": {
                 "id": {
                   "$ref": "#/components/schemas/EmployeeId",
-                  "description": "主键 id"
+                  "description": "员工 rs_mainkey_id（JSON 数字，D56）"
                 },
                 "role": {
                   "$ref": "#/components/schemas/ActivityMemberRole",
-                  "description": "开播角色"
+                  "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）",
+                  "x-apifox-enum": [
+                    {
+                      "value": 1,
+                      "name": "主播",
+                      "description": "主播"
+                    },
+                    {
+                      "value": 2,
+                      "name": "嘉宾",
+                      "description": "嘉宾"
+                    },
+                    {
+                      "value": 3,
+                      "name": "助理",
+                      "description": "助理"
+                    }
+                  ]
                 },
                 "nickname": {
                   "type": "string",
@@ -5138,7 +6407,24 @@
         "properties": {
           "role": {
             "$ref": "#/components/schemas/ActivityMemberRole",
-            "description": "开播角色"
+            "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "主播",
+                "description": "主播"
+              },
+              {
+                "value": 2,
+                "name": "嘉宾",
+                "description": "嘉宾"
+              },
+              {
+                "value": 3,
+                "name": "助理",
+                "description": "助理"
+              }
+            ]
           },
           "inviterId": {
             "$ref": "#/components/schemas/EmployeeId",
@@ -5157,7 +6443,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -5166,7 +6452,24 @@
           },
           "role": {
             "$ref": "#/components/schemas/ActivityMemberRole",
-            "description": "开播角色"
+            "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "主播",
+                "description": "主播"
+              },
+              {
+                "value": 2,
+                "name": "嘉宾",
+                "description": "嘉宾"
+              },
+              {
+                "value": 3,
+                "name": "助理",
+                "description": "助理"
+              }
+            ]
           },
           "alreadyMember": {
             "type": "boolean",
@@ -5187,7 +6490,24 @@
         "properties": {
           "provider": {
             "$ref": "#/components/schemas/Provider",
-            "description": "直播服务商"
+            "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": "vhall",
+                "name": "微吼",
+                "description": "微吼"
+              },
+              {
+                "value": "aliyun",
+                "name": "阿里云",
+                "description": "阿里云"
+              },
+              {
+                "value": "tencent",
+                "name": "腾讯云",
+                "description": "腾讯云"
+              }
+            ]
           },
           "hostUrl": {
             "type": "string",
@@ -5233,21 +6553,19 @@
               0,
               1
             ],
-            "example": 0
-          }
-        }
-      },
-      "EmbedData": {
-        "type": "object",
-        "required": [
-          "embedUrl"
-        ],
-        "properties": {
-          "embedUrl": {
-            "type": "string",
-            "format": "uri",
-            "description": "嵌入页 URL；库：VARCHAR(1024)",
-            "maxLength": 1024
+            "example": 0,
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "无",
+                "description": "无"
+              },
+              {
+                "value": 1,
+                "name": "有",
+                "description": "有"
+              }
+            ]
           }
         }
       },
@@ -5266,12 +6584,66 @@
             "maxLength": 64
           },
           "state": {
-            "type": "integer",
-            "description": "活动状态：1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放；库：INT"
+            "$ref": "#/components/schemas/ActivityState",
+            "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           },
           "type": {
-            "type": "integer",
-            "description": "活动类型：1 音频 / 2 视频 / 3 互动 / 4 录播；库：INT"
+            "$ref": "#/components/schemas/ActivityType",
+            "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "音频",
+                "description": "音频"
+              },
+              {
+                "value": 2,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 3,
+                "name": "互动",
+                "description": "互动"
+              },
+              {
+                "value": 4,
+                "name": "录播",
+                "description": "录播"
+              }
+            ]
           },
           "pv": {
             "type": "integer",
@@ -5422,8 +6794,40 @@
         ],
         "properties": {
           "activityState": {
-            "type": "integer",
-            "description": "活动状态；库：INT"
+            "$ref": "#/components/schemas/ActivityState",
+            "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           },
           "total": {
             "type": "integer",
@@ -5483,7 +6887,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -5511,7 +6915,24 @@
               "disabled",
               "unknown"
             ],
-            "description": "normal 总部正常 / disabled 总部禁用 / unknown 未知"
+            "description": "normal 总部正常 / disabled 总部禁用 / unknown 未知",
+            "x-apifox-enum": [
+              {
+                "value": "normal",
+                "name": "总部正常",
+                "description": "总部正常"
+              },
+              {
+                "value": "disabled",
+                "name": "总部禁用",
+                "description": "总部禁用"
+              },
+              {
+                "value": "unknown",
+                "name": "未知",
+                "description": "未知"
+              }
+            ]
           }
         }
       },
@@ -5557,7 +6978,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "liveEnabled": {
             "type": "boolean",
@@ -5605,7 +7026,7 @@
               "properties": {
                 "id": {
                   "$ref": "#/components/schemas/EmployeeId",
-                  "description": "主键 id"
+                  "description": "员工 rs_mainkey_id（JSON 数字，D56）"
                 },
                 "userName": {
                   "type": "string",
@@ -5667,6 +7088,24 @@
           "pending",
           "passed",
           "rejected"
+        ],
+        "description": "报备审核状态：pending 待审核 / passed 已通过 / rejected 已驳回；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "pending",
+            "name": "待审核",
+            "description": "待审核"
+          },
+          {
+            "value": "passed",
+            "name": "已通过",
+            "description": "已通过"
+          },
+          {
+            "value": "rejected",
+            "name": "已驳回",
+            "description": "已驳回"
+          }
         ]
       },
       "LiveReportPlanTime": {
@@ -5728,7 +7167,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -5890,8 +7329,20 @@
               "passed",
               "rejected"
             ],
-            "description": "passed 通过 / rejected 驳回；库：VARCHAR(16)",
-            "maxLength": 16
+            "description": "passed 已通过 / rejected 已驳回；库：VARCHAR(16)",
+            "maxLength": 16,
+            "x-apifox-enum": [
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "reason": {
             "type": "string",
@@ -5915,7 +7366,24 @@
           },
           "status": {
             "$ref": "#/components/schemas/LiveReportStatus",
-            "description": "报备审核状态"
+            "description": "报备审核状态：pending 待审核 / passed 已通过 / rejected 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           }
         }
       },
@@ -5984,7 +7452,24 @@
           },
           "status": {
             "$ref": "#/components/schemas/LiveReportStatus",
-            "description": "报备审核状态"
+            "description": "报备审核状态：pending 待审核 / passed 已通过 / rejected 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "boundLiveCount": {
             "type": "integer",
@@ -6057,7 +7542,29 @@
               "append"
             ],
             "description": "submit 提交 / resubmit 重新提交 / audit 审核 / append 追加计划时间；库：VARCHAR(16)",
-            "maxLength": 16
+            "maxLength": 16,
+            "x-apifox-enum": [
+              {
+                "value": "submit",
+                "name": "提交",
+                "description": "提交"
+              },
+              {
+                "value": "resubmit",
+                "name": "重新提交",
+                "description": "重新提交"
+              },
+              {
+                "value": "audit",
+                "name": "审核",
+                "description": "审核"
+              },
+              {
+                "value": "append",
+                "name": "追加计划时间",
+                "description": "追加计划时间"
+              }
+            ]
           },
           "result": {
             "type": "string",
@@ -6065,8 +7572,20 @@
               "passed",
               "rejected"
             ],
-            "description": "passed 通过 / rejected 驳回；非审核动作可不返回；库：VARCHAR(16)",
-            "maxLength": 16
+            "description": "passed 已通过 / rejected 已驳回。非审核动作可不返回；库：VARCHAR(16)",
+            "maxLength": 16,
+            "x-apifox-enum": [
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "reason": {
             "type": "string",
@@ -6105,7 +7624,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -6140,7 +7659,24 @@
           },
           "type": {
             "$ref": "#/components/schemas/MaterialFileType",
-            "description": "类型"
+            "description": "image 图片 / video 视频 / document 文档。批量登记仅接受文件类型，不含 article",
+            "x-apifox-enum": [
+              {
+                "value": "image",
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": "video",
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": "document",
+                "name": "文档",
+                "description": "文档"
+              }
+            ]
           },
           "fileSize": {
             "type": "integer",
@@ -6229,11 +7765,50 @@
           },
           "shelfStatus": {
             "$ref": "#/components/schemas/ShelfStatus",
-            "description": "上架状态"
+            "description": "pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待上架",
+                "description": "待上架"
+              },
+              {
+                "value": "on",
+                "name": "已上架",
+                "description": "已上架"
+              },
+              {
+                "value": "off",
+                "name": "已下架",
+                "description": "已下架"
+              },
+              {
+                "value": "banned",
+                "name": "强制封禁",
+                "description": "强制封禁"
+              }
+            ]
           },
           "riskStatus": {
             "$ref": "#/components/schemas/RiskStatus",
-            "description": "风控审核状态"
+            "description": "pending 待审核 / passed 已通过 / rejected 已驳回",
+            "x-apifox-enum": [
+              {
+                "value": "pending",
+                "name": "待审核",
+                "description": "待审核"
+              },
+              {
+                "value": "passed",
+                "name": "已通过",
+                "description": "已通过"
+              },
+              {
+                "value": "rejected",
+                "name": "已驳回",
+                "description": "已驳回"
+              }
+            ]
           },
           "autoList": {
             "type": "boolean",
@@ -6353,7 +7928,7 @@
         "properties": {
           "id": {
             "$ref": "#/components/schemas/EmployeeId",
-            "description": "主键 id"
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
           },
           "userName": {
             "type": "string",
@@ -6831,22 +8406,6 @@
           }
         ]
       },
-      "ApiResponseEmbed": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ApiResponseBase"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "data": {
-                "description": "业务数据；失败时可能省略",
-                "$ref": "#/components/schemas/EmbedData"
-              }
-            }
-          }
-        ]
-      },
       "ApiResponseStats": {
         "allOf": [
           {
@@ -7222,8 +8781,40 @@
             "maxLength": 64
           },
           "state": {
-            "type": "integer",
-            "description": "活动状态；库：INT"
+            "$ref": "#/components/schemas/ActivityState",
+            "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           },
           "startTime": {
             "type": "string",
@@ -7268,12 +8859,66 @@
             "maxLength": 64
           },
           "state": {
-            "type": "integer",
-            "description": "活动状态；库：INT"
+            "$ref": "#/components/schemas/ActivityState",
+            "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           },
           "type": {
-            "type": "integer",
-            "description": "活动类型；库：INT"
+            "$ref": "#/components/schemas/ActivityType",
+            "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "音频",
+                "description": "音频"
+              },
+              {
+                "value": 2,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 3,
+                "name": "互动",
+                "description": "互动"
+              },
+              {
+                "value": 4,
+                "name": "录播",
+                "description": "录播"
+              }
+            ]
           },
           "nickname": {
             "type": "string",
@@ -7362,7 +9007,24 @@
           },
           "provider": {
             "$ref": "#/components/schemas/Provider",
-            "description": "直播服务商"
+            "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": "vhall",
+                "name": "微吼",
+                "description": "微吼"
+              },
+              {
+                "value": "aliyun",
+                "name": "阿里云",
+                "description": "阿里云"
+              },
+              {
+                "value": "tencent",
+                "name": "腾讯云",
+                "description": "腾讯云"
+              }
+            ]
           },
           "title": {
             "type": "string",
@@ -7370,12 +9032,66 @@
             "maxLength": 64
           },
           "state": {
-            "type": "integer",
-            "description": "活动状态；库：INT"
+            "$ref": "#/components/schemas/ActivityState",
+            "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "全部(列表筛)",
+                "description": "全部(列表筛)"
+              },
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "预告",
+                "description": "预告"
+              },
+              {
+                "value": 3,
+                "name": "结束",
+                "description": "结束"
+              },
+              {
+                "value": 4,
+                "name": "点播",
+                "description": "点播"
+              },
+              {
+                "value": 5,
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
           },
           "type": {
-            "type": "integer",
-            "description": "活动类型；库：INT"
+            "$ref": "#/components/schemas/ActivityType",
+            "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "音频",
+                "description": "音频"
+              },
+              {
+                "value": 2,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 3,
+                "name": "互动",
+                "description": "互动"
+              },
+              {
+                "value": 4,
+                "name": "录播",
+                "description": "录播"
+              }
+            ]
           },
           "nickname": {
             "type": "string",
@@ -7529,7 +9245,19 @@
               "Join",
               "Leave"
             ],
-            "description": "Join 进房 / Leave 离房；库：INT"
+            "description": "Join 进房 / Leave 离房；库：INT",
+            "x-apifox-enum": [
+              {
+                "value": "Join",
+                "name": "进房",
+                "description": "进房"
+              },
+              {
+                "value": "Leave",
+                "name": "离房",
+                "description": "离房"
+              }
+            ]
           },
           "webinar_id": {
             "type": "string",

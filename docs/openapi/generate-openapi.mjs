@@ -349,7 +349,8 @@ const FIELD_DESC_BY_NAME = {
   playbackSpeedAllow: '是否允许倍速',
   playbackFastForwardAllow: '是否允许快进',
   accessValidityDays: '购买后有效天数',
-  ultraLowLatency: '是否超低延迟',
+  ultraLowLatency:
+    '是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。创建后不可改',
   verify: '观看验证方式（微吼 verify）',
   isDefault: '是否默认分组',
   liveEnabled: '本站直播账号是否启用',
@@ -438,24 +439,15 @@ const FIELD_DESC_BY_PATH = {
   'PresenceTrendPoint.online': '该桶在线人数',
   'ActivityDetail.price': '售价（元）；非付费可不返回',
   'ActivityDetail.linePrice': '划线价（元）；无则可不返回',
-  'ActivityStats.state': '活动状态：1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放',
-  'ActivityStats.type': '活动类型：1 音频 / 2 视频 / 3 互动 / 4 录播',
-  'WatchActivitySummary.state': '活动状态',
-  'WatchEmbedData.state': '活动状态',
-  'WatchEmbedData.type': '活动类型',
-  'WatchSdkData.state': '活动状态',
-  'WatchSdkData.type': '活动类型',
-  'AuditSubmitRequest.result': 'passed 通过 / rejected 驳回',
-  'LiveReportAuditRequest.result': 'passed 通过 / rejected 驳回',
+  'AuditSubmitRequest.result': 'passed 已通过 / rejected 已驳回',
+  'LiveReportAuditRequest.result': 'passed 已通过 / rejected 已驳回',
   'LiveReportAuditItem.action':
     'submit 提交 / resubmit 重新提交 / audit 审核 / append 追加计划时间',
-  'LiveReportAuditItem.result': 'passed 通过 / rejected 驳回；非审核动作可不返回',
+  'LiveReportAuditItem.result': 'passed 已通过 / rejected 已驳回。非审核动作可不返回',
   'MaterialItem.status': '素材状态，如 available',
   'VhallPresenceCallback.type': 'Join 进房 / Leave 离房',
   'LoginQueryData.user': '扫码成功后的员工信息',
   'LiveReportDetail.host': '报备主播',
-  'LiveReportDetail.status': '报备审核状态',
-  'LiveReportResult.status': '报备审核状态',
   'WatchSdkData.sdk': '观看 JS SDK 初始化参数',
 }
 
@@ -662,18 +654,15 @@ function fillChineseDescriptions(schemas) {
         const path = prefix ? `${prefix}.${key}` : key
         const full = `${schemaName}.${path}`
         if (!prop.description) {
-          const d = FIELD_DESC_BY_PATH[full] || FIELD_DESC_BY_NAME[key]
+          const refName = prop.$ref ? String(prop.$ref).split('/').pop() : ''
+          const refSchema = refName ? schemas[refName] : null
+          // 枚举 $ref 优先用组件上的「取值 中文」；字段名默认文案（类型/状态）不列取值，Apifox 会只显示 1/2/3/4
+          const d =
+            FIELD_DESC_BY_PATH[full] ||
+            (refSchema && refSchema.description) ||
+            FIELD_DESC_BY_NAME[key]
           if (d) {
             prop.description = d
-          } else if (prop.$ref) {
-            // 纯 $ref：用被引用 schema 自己的 description（枚举等）
-            const refName = String(prop.$ref).split('/').pop()
-            const refSchema = schemas[refName]
-            if (refSchema && refSchema.description) {
-              prop.description = refSchema.description
-            } else {
-              missing.push(full)
-            }
           } else {
             missing.push(full)
           }
@@ -839,6 +828,109 @@ function finalizeSchemas(schemas) {
   annotateDbConstraints(schemas)
 }
 
+/**
+ * 从 description 的「取值 中文 / 取值 中文」解析每个枚举项。
+ * 会去掉「；库：…」、句号后的补充说明，以及括号里带逗号的长注释。
+ * 解析不全返回 null。
+ */
+function parseEnumLabels(values, description) {
+  const text = String(description || '')
+    .replace(/；库：[\s\S]*$/, '')
+    .replace(/。[\s\S]*$/, '')
+    .replace(/（[^）]*[，,、/／；;][^）]*）/g, '')
+    .replace(/\([^)]*[，,、/／；;][^)]*\)/g, '')
+    .trim()
+  if (!text) return null
+  const parts = text.split(
+    /\s*[/／]\s*|\s*[，,]\s*(?=\d+\s|\d+[\u4e00-\u9fff]|[A-Za-z][A-Za-z0-9_]*\s)/,
+  )
+  const map = new Map()
+  for (const raw of parts) {
+    const part = raw.trim()
+    if (!part) continue
+    const matched = part.match(
+      /^(?:[\u4e00-\u9fff]{1,8}[：:])?\s*(\d+|[A-Za-z][A-Za-z0-9_]*)\s*(.+)$/,
+    )
+    if (!matched) continue
+    const label = matched[2].trim()
+    if (!label) continue
+    map.set(matched[1], label)
+  }
+  const items = []
+  for (const value of values) {
+    const label = map.get(String(value))
+    if (!label) return null
+    items.push({ value, name: label, description: label })
+  }
+  return items
+}
+
+/**
+ * Apifox 枚举「说明」列只认 x-apifox-enum，不拆 description。
+ * 每个带 enum 的 schema（含 Query 内联）都写上；再抄到 $ref 字段上，避免引用处被收成「类型/状态」。
+ */
+function attachApifoxEnums(doc) {
+  const failures = []
+  const seen = new Set()
+  let count = 0
+
+  function visit(node, path) {
+    if (!node || typeof node !== 'object') return
+    if (seen.has(node)) return
+    seen.add(node)
+    if (Array.isArray(node.enum) && node.enum.length) {
+      const items = parseEnumLabels(node.enum, node.description)
+      if (!items) {
+        failures.push(
+          `${path} enum=${JSON.stringify(node.enum)} desc=${JSON.stringify(node.description || '')}`,
+        )
+      } else {
+        node['x-apifox-enum'] = items
+        count += 1
+      }
+    }
+    if (Array.isArray(node)) {
+      node.forEach((item, i) => visit(item, `${path}[${i}]`))
+      return
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === 'x-apifox-enum') continue
+      visit(value, path ? `${path}.${key}` : key)
+    }
+  }
+
+  visit(doc, 'doc')
+
+  const schemas = doc.components && doc.components.schemas
+  if (schemas) {
+    const seenRef = new Set()
+    function copyRef(node) {
+      if (!node || typeof node !== 'object' || seenRef.has(node)) return
+      seenRef.add(node)
+      if (node.$ref && !node['x-apifox-enum']) {
+        const name = String(node.$ref).split('/').pop()
+        const target = schemas[name]
+        if (target && target['x-apifox-enum']) {
+          node['x-apifox-enum'] = target['x-apifox-enum']
+        }
+      }
+      if (Array.isArray(node)) {
+        node.forEach(copyRef)
+        return
+      }
+      for (const value of Object.values(node)) copyRef(value)
+    }
+    copyRef(doc)
+  }
+
+  if (failures.length) {
+    throw new Error(
+      `OpenAPI 枚举缺少可解析的中文释义，无法生成 x-apifox-enum：\n  ${failures.join('\n  ')}`,
+    )
+  }
+  console.log(`x-apifox-enum: ${count}`)
+}
+
 function buildAdmin() {
   const schemas = {
     ApiResponseBase: {
@@ -856,17 +948,17 @@ function buildAdmin() {
     Provider: {
       type: 'string',
       enum: ['vhall', 'aliyun', 'tencent'],
-      description: '直播服务商；创建后不可改',
+      description: 'vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改',
     },
     ActivityType: {
       type: 'integer',
       enum: [1, 2, 3, 4],
-      description: '1音频 / 2视频 / 3互动 / 4录播',
+      description: '1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改',
     },
     ActivityState: {
       type: 'integer',
       enum: [0, 1, 2, 3, 4, 5],
-      description: '0全部(列表筛) / 1直播 / 2预告 / 3结束 / 4点播 / 5回放',
+      description: '0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放',
     },
     ViewerStyle: {
       type: 'string',
@@ -911,7 +1003,8 @@ function buildAdmin() {
     MaterialFileType: {
       type: 'string',
       enum: ['image', 'video', 'document'],
-      description: '批量登记仅接受文件类型，不含 article',
+      description:
+        'image 图片 / video 视频 / document 文档。批量登记仅接受文件类型，不含 article',
     },
     AuditWriteStatus: {
       type: 'integer',
@@ -1012,7 +1105,8 @@ function buildAdmin() {
         status: {
           type: 'integer',
           enum: [0, 1, 2, 3],
-          description: '0 pending / 1 success / 2 failed / 3 expired',
+          description:
+            '0 待扫码 / 1 成功 / 2 失败 / 3 已过期。0 继续轮询；成功时本响应消费 state',
         },
         errorMsg: { type: 'string' },
         accessToken: { type: 'string' },
@@ -1232,7 +1326,8 @@ function buildAdmin() {
         viewerStyle: { $ref: '#/components/schemas/ViewerStyle' },
         ultraLowLatency: {
           type: 'boolean',
-          description: '创建后不可改',
+          description:
+            '是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。落本站库。创建后不可改',
         },
         coverUrl: { type: 'string' },
         detailHtml: { type: 'string', maxLength: 100000 },
@@ -1404,12 +1499,13 @@ function buildAdmin() {
         action: {
           type: 'string',
           enum: ['submit', 'audit'],
-          description: 'submit 发起申请不返回 result/reason；audit 为通过或驳回',
+          description:
+            'submit 发起申请 / audit 通过或驳回。发起申请不返回 result、reason',
         },
         result: {
           type: 'string',
           enum: ['passed', 'rejected'],
-          description: '仅 action=audit 时返回',
+          description: 'passed 已通过 / rejected 已驳回。仅 action=audit 时返回',
         },
         reason: { type: 'string', description: '仅驳回时返回' },
         operatorId: {
@@ -1473,7 +1569,12 @@ function buildAdmin() {
             },
             introduction: { type: 'string' },
             endTime: { type: 'string' },
-            verify: { type: 'integer' },
+            verify: {
+              type: 'integer',
+              enum: [0, 1, 2, 3, 4, 6],
+              description:
+                '0 无验证 / 1 密码 / 2 白名单 / 3 付费 / 4 F码 / 6 付费+F码',
+            },
             pv: { type: 'integer' },
             fullEmbedShareLink: { type: 'string' },
             ultraLowLatency: { type: 'boolean' },
@@ -1744,18 +1845,13 @@ function buildAdmin() {
         },
       },
     },
-    EmbedData: {
-      type: 'object',
-      required: ['embedUrl'],
-      properties: { embedUrl: { type: 'string', format: 'uri' } },
-    },
     ActivityStats: {
       type: 'object',
       properties: {
         id: { type: 'string', format: 'uuid' },
         title: { type: 'string' },
-        state: { type: 'integer' },
-        type: { type: 'integer' },
+        state: { $ref: '#/components/schemas/ActivityState' },
+        type: { $ref: '#/components/schemas/ActivityType' },
         pv: { type: 'integer' },
         onlineCount: { type: 'integer' },
       },
@@ -1817,7 +1913,7 @@ function buildAdmin() {
       type: 'object',
       required: ['activityState', 'total', 'page', 'pageSize', 'list'],
       properties: {
-        activityState: { type: 'integer' },
+        activityState: { $ref: '#/components/schemas/ActivityState' },
         total: { type: 'integer', format: 'int64' },
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
@@ -1942,6 +2038,8 @@ function buildAdmin() {
     LiveReportStatus: {
       type: 'string',
       enum: ['pending', 'passed', 'rejected'],
+      description:
+        '报备审核状态：pending 待审核 / passed 已通过 / rejected 已驳回',
     },
     LiveReportPlanTime: {
       type: 'object',
@@ -2324,7 +2422,6 @@ function buildAdmin() {
     ApiResponseHost: { $ref: '#/components/schemas/HostData' },
     ApiResponsePushStream: { $ref: '#/components/schemas/PushStreamData' },
     ApiResponseStreamStatus: { $ref: '#/components/schemas/StreamStatusData' },
-    ApiResponseEmbed: { $ref: '#/components/schemas/EmbedData' },
     ApiResponseStats: { $ref: '#/components/schemas/ActivityStats' },
     ApiResponseOnlineTrend: { $ref: '#/components/schemas/OnlineTrend' },
     ApiResponsePresenceTrend: { $ref: '#/components/schemas/PresenceTrend' },
@@ -3192,16 +3289,6 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseLiveStart'),
       },
     },
-    '/api/v1/activities/embed/{id}': {
-      get: {
-        tags: ['活动管理'],
-        summary: '管理后台嵌入页',
-        operationId: 'getActivityEmbed',
-        security: bearer,
-        parameters: [activityId],
-        responses: ok200('#/components/schemas/ApiResponseEmbed'),
-      },
-    },
     '/api/v1/activities/stats/{id}': {
       get: {
         tags: ['统计'],
@@ -3261,7 +3348,12 @@ function buildAdmin() {
           {
             name: 'bucketSeconds',
             in: 'query',
-            schema: { type: 'integer', default: 60, enum: [60] },
+            schema: {
+              type: 'integer',
+              default: 60,
+              enum: [60],
+              description: '60 秒',
+            },
           },
         ],
         responses: ok200('#/components/schemas/ApiResponsePresenceTrend'),
@@ -3285,6 +3377,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['all', 'online', 'offline'],
               default: 'all',
+              description: 'all 全部 / online 在线 / offline 离线',
             },
           },
           ...pageParams,
@@ -3596,6 +3689,8 @@ function buildAdmin() {
                 'updatedTime',
               ],
               default: 'updatedTime',
+              description:
+                'entitledUserCount 权益用户数 / totalUserCount 累计用户数 / salesCount 总销量 / updatedTime 最近更新时间',
             },
           },
           {
@@ -3605,6 +3700,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['asc', 'desc'],
               default: 'desc',
+              description: 'asc 升序 / desc 降序',
             },
           },
         ],
@@ -3807,6 +3903,17 @@ function buildLive() {
     Provider: {
       type: 'string',
       enum: ['vhall', 'aliyun', 'tencent'],
+      description: 'vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改',
+    },
+    ActivityType: {
+      type: 'integer',
+      enum: [1, 2, 3, 4],
+      description: '1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改',
+    },
+    ActivityState: {
+      type: 'integer',
+      enum: [0, 1, 2, 3, 4, 5],
+      description: '0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放',
     },
     IdData: {
       type: 'object',
@@ -3818,7 +3925,7 @@ function buildLive() {
       properties: {
         id: { type: 'string', format: 'uuid' },
         title: { type: 'string' },
-        state: { type: 'integer' },
+        state: { $ref: '#/components/schemas/ActivityState' },
         startTime: { type: 'string' },
         coverUrl: { type: 'string' },
       },
@@ -3838,8 +3945,8 @@ function buildLive() {
       properties: {
         id: { type: 'string', format: 'uuid' },
         title: { type: 'string' },
-        state: { type: 'integer' },
-        type: { type: 'integer' },
+        state: { $ref: '#/components/schemas/ActivityState' },
+        type: { $ref: '#/components/schemas/ActivityType' },
         nickname: { type: 'string' },
         guestId: { type: 'string' },
         startTime: { type: 'string' },
@@ -3868,8 +3975,8 @@ function buildLive() {
         id: { type: 'string', format: 'uuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         title: { type: 'string' },
-        state: { type: 'integer' },
-        type: { type: 'integer' },
+        state: { $ref: '#/components/schemas/ActivityState' },
+        type: { $ref: '#/components/schemas/ActivityType' },
         nickname: { type: 'string' },
         guestId: { type: 'string' },
         startTime: { type: 'string' },
@@ -3937,7 +4044,7 @@ function buildLive() {
       type: 'object',
       required: ['activityState', 'total', 'page', 'pageSize', 'list'],
       properties: {
-        activityState: { type: 'integer' },
+        activityState: { $ref: '#/components/schemas/ActivityState' },
         total: { type: 'integer', format: 'int64' },
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
@@ -4040,7 +4147,8 @@ function buildLive() {
           {
             name: 'state',
             in: 'query',
-            schema: { type: 'integer' },
+            description: '活动状态；不传或 0 表示不过滤',
+            schema: { $ref: '#/components/schemas/ActivityState' },
           },
         ],
         responses: ok200('#/components/schemas/ApiResponseWatchList'),
@@ -4133,6 +4241,7 @@ function buildLive() {
               type: 'string',
               enum: ['all', 'online', 'offline'],
               default: 'all',
+              description: 'all 全部 / online 在线 / offline 离线',
             },
           },
           ...pageParams,
@@ -4164,7 +4273,12 @@ function buildLive() {
           {
             name: 'bucketSeconds',
             in: 'query',
-            schema: { type: 'integer', default: 60, enum: [60] },
+            schema: {
+              type: 'integer',
+              default: 60,
+              enum: [60],
+              description: '60 秒',
+            },
           },
         ],
         responses: ok200('#/components/schemas/ApiResponsePresenceTrend'),
@@ -4338,6 +4452,8 @@ function writeDoc(baseName, doc) {
 
 const admin = buildAdmin()
 const live = buildLive()
+attachApifoxEnums(admin)
+attachApifoxEnums(live)
 const all = mergeDocs(admin, live)
 
 writeDoc('admin-service', admin)

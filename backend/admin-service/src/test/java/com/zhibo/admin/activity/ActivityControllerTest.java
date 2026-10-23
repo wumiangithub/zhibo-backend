@@ -28,15 +28,13 @@ class ActivityControllerTest {
     private MockMvc mockMvc;
     private ActivityService activityService;
     private HostService hostService;
-    private EmbedService embedService;
 
     @BeforeEach
     void setUp() {
         activityService = mock(ActivityService.class);
         hostService = mock(HostService.class);
-        embedService = mock(EmbedService.class);
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new ActivityController(activityService, hostService, embedService))
+                        new ActivityController(activityService, hostService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -120,19 +118,6 @@ class ActivityControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.provider").value("vhall"))
                 .andExpect(jsonPath("$.data.hostUrl").value("https://host.example/page"));
-    }
-
-    @Test
-    void embed_returnsOk() throws Exception {
-        var embed = new com.zhibo.admin.activity.dto.ActivityEmbedResponse();
-        embed.setEmbedUrl("https://e.vhall.com/v3/embed/live/detail/9?token=t");
-        when(embedService.embed(eq(UUID))).thenReturn(embed);
-
-        mockMvc.perform(get("/api/v1/activities/embed/" + UUID).accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.embedUrl")
-                        .value("https://e.vhall.com/v3/embed/live/detail/9?token=t"));
     }
 
     @Test

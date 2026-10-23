@@ -61,6 +61,11 @@ public class CreateActivityRequest {
     private Boolean isTiming;
 
     private String viewerStyle;
+
+    /**
+     * 是否超低延迟。true 时创建微吼传 {@code no_delay_webinar=1}，false 传 0；不传则不带该参。
+     * 落本站库。创建后不可改。
+     */
     private Boolean ultraLowLatency;
     private Boolean virtualAvatar;
     private String coverUrl;

@@ -1,5 +1,6 @@
 package com.zhibo.live.web;
 
+import com.zhibo.live.viewer.ViewerAuthException;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ViewerAuthException.class)
+    public ApiResponse<Void> handleViewerAuth(ViewerAuthException ex) {
+        log.info("观众鉴权 code={} msg={}", ex.getCode(), ex.getMessage());
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
 
     @ExceptionHandler(ProviderNotAvailableException.class)
     public ApiResponse<Void> handleProviderNotAvailable(ProviderNotAvailableException ex) {

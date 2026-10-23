@@ -47,7 +47,6 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_END = "/v3/webinars/live/end";
     static final String PATH_DELETE = "/v3/webinars/webinar/delete";
     static final String PATH_ROLE_URL = "/v3/webinars/live/get-role-url";
-    static final String PATH_GET_TOKEN = "/v3/users/open-user/get-token";
     static final String PATH_ONLINE_NOW = "/v3/data-center/webinar/current-online-number";
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
     /** 某场活动的回放列表；{@code id} 即 create-demand 的 record_id */
@@ -67,7 +66,6 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_STREAM_PUSH = "/v3/webinars/live/get-stream-push-address";
     /** 当前活动是否有推流；业务参数仅 webinar_id；data.status：0 无 / 1 有 */
     static final String PATH_STREAM_STATUS = "/v3/webinars/stream/get-stream-status";
-    static final String EMBED_BASE = "https://e.vhall.com/v3/embed/live/detail/";
     static final String SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
     /** 微吼 get-role-url：1 主持人 */
     static final int ROLE_HOST = 1;
@@ -380,23 +378,6 @@ public class VhallLiveProvider implements LiveProvider {
             }
         }
         return points;
-    }
-
-    @Override
-    public String buildAdminEmbedUrl(String providerRoomId) {
-        requireRoomId(providerRoomId);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> data = vhallClient.postForData(PATH_GET_TOKEN, Map.of(), Map.class);
-        String token = asString(data.get("token"));
-        if (token == null || token.isBlank()) {
-            throw new IllegalStateException("微吼未返回授权 token");
-        }
-        return UriComponentsBuilder
-                .fromUriString(EMBED_BASE + providerRoomId)
-                .queryParam("token", token)
-                .encode()
-                .build()
-                .toUriString();
     }
 
     @Override

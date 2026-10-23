@@ -49,8 +49,28 @@ paths:
           description: 每页条数；默认 20，最大 100
         - name: state
           in: query
+          description: 活动状态；不传或 0 表示不过滤
           schema:
-            type: integer
+            $ref: "#/components/schemas/ActivityState"
+            x-apifox-enum:
+              - value: 0
+                name: 全部(列表筛)
+                description: 全部(列表筛)
+              - value: 1
+                name: 直播
+                description: 直播
+              - value: 2
+                name: 预告
+                description: 预告
+              - value: 3
+                name: 结束
+                description: 结束
+              - value: 4
+                name: 点播
+                description: 点播
+              - value: 5
+                name: 回放
+                description: 回放
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -189,6 +209,17 @@ paths:
               - online
               - offline
             default: all
+            description: all 全部 / online 在线 / offline 离线
+            x-apifox-enum:
+              - value: all
+                name: 全部
+                description: 全部
+              - value: online
+                name: 在线
+                description: 在线
+              - value: offline
+                name: 离线
+                description: 离线
         - name: page
           in: query
           schema:
@@ -241,6 +272,11 @@ paths:
             default: 60
             enum:
               - 60
+            description: "60 秒"
+            x-apifox-enum:
+              - value: 60
+                name: 秒
+                description: 秒
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -307,6 +343,67 @@ components:
         - vhall
         - aliyun
         - tencent
+      description: vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改；库：VARCHAR(16)
+      x-apifox-enum:
+        - value: vhall
+          name: 微吼
+          description: 微吼
+        - value: aliyun
+          name: 阿里云
+          description: 阿里云
+        - value: tencent
+          name: 腾讯云
+          description: 腾讯云
+    ActivityType:
+      type: integer
+      enum:
+        - 1
+        - 2
+        - 3
+        - 4
+      description: "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改；库：INT"
+      x-apifox-enum:
+        - value: 1
+          name: 音频
+          description: 音频
+        - value: 2
+          name: 视频
+          description: 视频
+        - value: 3
+          name: 互动
+          description: 互动
+        - value: 4
+          name: 录播
+          description: 录播
+    ActivityState:
+      type: integer
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      description: "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放；库：INT"
+      x-apifox-enum:
+        - value: 0
+          name: 全部(列表筛)
+          description: 全部(列表筛)
+        - value: 1
+          name: 直播
+          description: 直播
+        - value: 2
+          name: 预告
+          description: 预告
+        - value: 3
+          name: 结束
+          description: 结束
+        - value: 4
+          name: 点播
+          description: 点播
+        - value: 5
+          name: 回放
+          description: 回放
     IdData:
       type: object
       required:
@@ -330,8 +427,27 @@ components:
           description: 标题；库：VARCHAR(64)
           maxLength: 64
         state:
-          type: integer
-          description: 活动状态；库：INT
+          $ref: "#/components/schemas/ActivityState"
+          description: "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放"
+          x-apifox-enum:
+            - value: 0
+              name: 全部(列表筛)
+              description: 全部(列表筛)
+            - value: 1
+              name: 直播
+              description: 直播
+            - value: 2
+              name: 预告
+              description: 预告
+            - value: 3
+              name: 结束
+              description: 结束
+            - value: 4
+              name: 点播
+              description: 点播
+            - value: 5
+              name: 回放
+              description: 回放
         startTime:
           type: string
           description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
@@ -364,11 +480,43 @@ components:
           description: 标题；库：VARCHAR(64)
           maxLength: 64
         state:
-          type: integer
-          description: 活动状态；库：INT
+          $ref: "#/components/schemas/ActivityState"
+          description: "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放"
+          x-apifox-enum:
+            - value: 0
+              name: 全部(列表筛)
+              description: 全部(列表筛)
+            - value: 1
+              name: 直播
+              description: 直播
+            - value: 2
+              name: 预告
+              description: 预告
+            - value: 3
+              name: 结束
+              description: 结束
+            - value: 4
+              name: 点播
+              description: 点播
+            - value: 5
+              name: 回放
+              description: 回放
         type:
-          type: integer
-          description: 活动类型；库：INT
+          $ref: "#/components/schemas/ActivityType"
+          description: "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改"
+          x-apifox-enum:
+            - value: 1
+              name: 音频
+              description: 音频
+            - value: 2
+              name: 视频
+              description: 视频
+            - value: 3
+              name: 互动
+              description: 互动
+            - value: 4
+              name: 录播
+              description: 录播
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -436,17 +584,59 @@ components:
           maxLength: 36
         provider:
           $ref: "#/components/schemas/Provider"
-          description: 直播服务商
+          description: vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改
+          x-apifox-enum:
+            - value: vhall
+              name: 微吼
+              description: 微吼
+            - value: aliyun
+              name: 阿里云
+              description: 阿里云
+            - value: tencent
+              name: 腾讯云
+              description: 腾讯云
         title:
           type: string
           description: 标题；库：VARCHAR(64)
           maxLength: 64
         state:
-          type: integer
-          description: 活动状态；库：INT
+          $ref: "#/components/schemas/ActivityState"
+          description: "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放"
+          x-apifox-enum:
+            - value: 0
+              name: 全部(列表筛)
+              description: 全部(列表筛)
+            - value: 1
+              name: 直播
+              description: 直播
+            - value: 2
+              name: 预告
+              description: 预告
+            - value: 3
+              name: 结束
+              description: 结束
+            - value: 4
+              name: 点播
+              description: 点播
+            - value: 5
+              name: 回放
+              description: 回放
         type:
-          type: integer
-          description: 活动类型；库：INT
+          $ref: "#/components/schemas/ActivityType"
+          description: "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改"
+          x-apifox-enum:
+            - value: 1
+              name: 音频
+              description: 音频
+            - value: 2
+              name: 视频
+              description: 视频
+            - value: 3
+              name: 互动
+              description: 互动
+            - value: 4
+              name: 录播
+              description: 录播
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -576,8 +766,27 @@ components:
         - list
       properties:
         activityState:
-          type: integer
-          description: 活动状态；库：INT
+          $ref: "#/components/schemas/ActivityState"
+          description: "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放"
+          x-apifox-enum:
+            - value: 0
+              name: 全部(列表筛)
+              description: 全部(列表筛)
+            - value: 1
+              name: 直播
+              description: 直播
+            - value: 2
+              name: 预告
+              description: 预告
+            - value: 3
+              name: 结束
+              description: 结束
+            - value: 4
+              name: 点播
+              description: 点播
+            - value: 5
+              name: 回放
+              description: 回放
         total:
           type: integer
           format: int64
@@ -655,6 +864,13 @@ components:
             - Join
             - Leave
           description: Join 进房 / Leave 离房；库：INT
+          x-apifox-enum:
+            - value: Join
+              name: 进房
+              description: 进房
+            - value: Leave
+              name: 离房
+              description: 离房
         webinar_id:
           type: string
           description: 微吼活动号

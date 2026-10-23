@@ -98,8 +98,6 @@ public interface LiveProvider {
      */
     Map<String, Boolean> batchUserOnline(String providerRoomId, List<String> userIds);
 
-    String buildAdminEmbedUrl(String providerRoomId);
-
     WatchSdkBundle buildWatchSdk(WatchSdkCommand command);
 
     /**
