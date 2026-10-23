@@ -251,6 +251,34 @@ class VhallLiveProviderTest {
                 eq(VhallLiveProvider.PATH_RECORD_CHECK_DOWNLOAD), captor.capture(), eq(Map.class));
         assertEquals(5541984L, captor.getValue().get("record_id"));
         assertEquals(1, captor.getValue().size());
+        verify(vhallClient, never()).postForData(
+                eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), anyMap(), eq(Object.class));
+    }
+
+    @Test
+    void checkRecordDownload_submitsTaskWhenNotStarted() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_RECORD_CHECK_DOWNLOAD), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "record_id", 5814669,
+                        "status", 0,
+                        "progress", 0
+                ));
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), anyMap(), eq(Object.class)))
+                .thenReturn(List.of());
+
+        ProviderRecordDownload info = provider.checkRecordDownload(5814669L);
+        assertEquals(5814669L, info.recordId());
+        assertNull(info.downloadUrl());
+        assertEquals(0, info.status());
+        assertEquals(0, info.progress());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(
+                eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), captor.capture(), eq(Object.class));
+        assertEquals(5814669L, captor.getValue().get("record_id"));
+        assertEquals(VhallLiveProvider.RECORD_DOWNLOAD_QUALITY_SAME, captor.getValue().get("quality"));
+        assertEquals(2, captor.getValue().size());
     }
 
     @Test

@@ -794,6 +794,7 @@ public class ActivityService {
     /**
      * 某场活动下一条回放的下载地址（微吼 check-download）。
      * {@code recordId} = listRecords 的 {@code list[].id}。
+     * 微吼 status=0 时由服务商实现提交打包任务，本次仍返回检查结果。
      */
     public ActivityRecordDownloadResponse recordDownload(String id, long recordId) {
         if (recordId <= 0) {

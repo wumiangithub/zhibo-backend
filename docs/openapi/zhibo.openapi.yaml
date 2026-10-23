@@ -12,7 +12,7 @@ info:
     分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。
     
     导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。
-  version: "2.3.2"
+  version: "2.3.4"
   contact:
     name: zhibo
 servers:
@@ -925,7 +925,8 @@ paths:
     get:
       tags:
         - admin/活动管理
-      summary: 某场活动的回放列表
+      summary: 回放列表
+      description: "某场活动的回放文件列表。list[].id = 微吼 record_id，供下载接口与 create-demand 使用。非 vhall / 未接入 → 501。"
       operationId: admin_listActivityRecords
       security:
         - BearerAuth:
@@ -939,6 +940,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseRecordList"
+  /api/v1/activities/records/{id}/download/{recordId}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 回放下载
+      description: "某场活动下一条回放的打包下载地址（管理后台回放「下载」）。路径 id=本站活动 UUID；recordId=回放列表 list[].id。走微吼 check-download。非 vhall / 未接入 → 501。status=1 时 downloadUrl 可用（约 7 天有效）。"
+      operationId: admin_downloadActivityRecord
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 5814669
+          description: "微吼回放 id（同 GET /api/v1/activities/records/{id} 的 list[].id）"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseRecordDownload"
   /api/v1/activities/host/{id}:
     get:
       tags:
@@ -1041,8 +1069,8 @@ paths:
     get:
       tags:
         - admin/活动管理
-      summary: 第三方 rtmp 推流地址
-      description: 只读。选中 rtmp 时使用。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。
+      summary: 获取 rtmp 推流地址（第三方推流到直播间）
+      description: 只读。管理后台「第三方推流到直播间」页：服务器 + 串流密钥。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。
       operationId: admin_getActivityPushStream
       security:
         - BearerAuth:
@@ -1060,8 +1088,8 @@ paths:
     get:
       tags:
         - admin/活动管理
-      summary: 第三方推流是否有流
-      description: 只读。选中 rtmp 时查询。status：0 无流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。
+      summary: 查询推流状态（是否检测到推流）
+      description: 只读。管理后台「推流状态」刷新。status：0 未检测到推流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。
       operationId: admin_getActivityStreamStatus
       security:
         - BearerAuth:
@@ -1079,8 +1107,8 @@ paths:
     post:
       tags:
         - admin/活动管理
-      summary: 第三方推流开始直播
-      description: "无 body。OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。"
+      summary: 开始直播（第三方推流 rtmp 按钮）
+      description: "无 body。对应管理后台「第三方推流到直播间」页的「开始直播」按钮：OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。"
       operationId: admin_startActivityLivePush
       security:
         - BearerAuth:
@@ -2242,7 +2270,7 @@ components:
         - 1
         - 2
         - 3
-      description: "1 主播 / 2 助理 / 3 嘉宾（D57；JSON 只传数字）；库：INT"
+      description: "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）；库：INT"
     EmployeeId:
       type: integer
       format: int64
@@ -3225,14 +3253,6 @@ components:
           type: string
           description: 封面图 URL；库：VARCHAR(2048)
           maxLength: 2048
-        storage:
-          type: string
-          description: 体积（KB），微吼 storage
-          example: "2048"
-        saveTime:
-          type: string
-          description: 到期时间，微吼 save_time；yyyy-MM-dd HH:mm:ss
-          example: "2027-09-01 10:00:00"
     ActivityRecordListData:
       type: object
       properties:
@@ -3245,6 +3265,38 @@ components:
           items:
             $ref: "#/components/schemas/ActivityRecordItem"
           description: 列表数据
+    ActivityRecordDownloadData:
+      type: object
+      required:
+        - recordId
+        - status
+      description: 回放下载：微吼 check-download；对应管理后台回放列表「下载」
+      properties:
+        recordId:
+          type: integer
+          format: int64
+          description: "微吼回放 id（同 GET .../records 的 list[].id）；库：微吼 integer（不落本站库）"
+          example: 5814669
+        downloadUrl:
+          type: string
+          format: uri
+          description: "下载地址；status=1 时可用（微吼侧约 7 天有效）；库：微吼透传（不落本站库）"
+          example: "https://vod-download.vhall.com/....zip"
+        status:
+          type: integer
+          description: 打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败；库：微吼透传（不落本站库）
+          enum:
+            - 0
+            - 1
+            - 2
+            - 3
+          example: 1
+        progress:
+          type: integer
+          description: 打包进度 0～100；库：微吼透传（不落本站库）
+          minimum: 0
+          maximum: 100
+          example: 100
     EndActivityData:
       type: object
       required:
@@ -4444,6 +4496,14 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ActivityRecordListData"
+    ApiResponseRecordDownload:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityRecordDownloadData"
     ApiResponseEndActivity:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"

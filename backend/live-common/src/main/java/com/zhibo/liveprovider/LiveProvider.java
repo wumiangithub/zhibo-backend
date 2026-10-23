@@ -109,6 +109,7 @@ public interface LiveProvider {
 
     /**
      * 查询回放下载地址（微吼 check-download）。
+     * 微吼实现在 status=0（尚未打包）时会再提交下载任务，本次仍返回检查结果。
      *
      * @param recordId 回放 id（listRecords 的 {@code list[].id}）
      */

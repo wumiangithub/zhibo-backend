@@ -54,6 +54,13 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_RECORD_LIST = "/v3/webinars/record/get-list";
     /** 回放下载 URL；业务参数仅 record_id */
     static final String PATH_RECORD_CHECK_DOWNLOAD = "/v3/webinars/record/check-download";
+    /**
+     * 提交回放下载任务。check-download 的 status=0（尚未打包）时调用，
+     * 之后再查才会进入进行中 / 完成并给出 download_url。
+     */
+    static final String PATH_RECORD_DOWNLOAD = "/v3/webinars/record/download";
+    /** 提交下载任务的清晰度：原画。720 / 480 为增值项，默认不申请 */
+    static final String RECORD_DOWNLOAD_QUALITY_SAME = "same";
     /** 聊天审核页（中控台 iframe） */
     static final String PATH_CHAT_FILTER = "/v3/webinars/manage/chat-filter";
     /** 当前活动的 rtmp 推流地址；业务参数仅 webinar_id */
@@ -478,12 +485,28 @@ public class VhallLiveProvider implements LiveProvider {
         if (id <= 0) {
             id = recordId;
         }
+        Integer status = asInteger(data.get("status"));
+        Integer progress = asInteger(data.get("progress"));
+        if (status != null && status == 0) {
+            submitRecordDownload(id);
+        }
         return new ProviderRecordDownload(
                 id,
                 trimToNull(asString(data.get("download_url"))),
-                asInteger(data.get("status")),
-                asInteger(data.get("progress"))
+                status,
+                progress
         );
+    }
+
+    /**
+     * 回放尚未打包时向微吼提交下载任务（原画）。
+     * 成功后本次检查结果仍是未开始；需再次 check-download，status=1 才有下载地址。
+     */
+    void submitRecordDownload(long recordId) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("record_id", recordId);
+        params.put("quality", RECORD_DOWNLOAD_QUALITY_SAME);
+        vhallClient.postForData(PATH_RECORD_DOWNLOAD, params, Object.class);
     }
 
     @Override

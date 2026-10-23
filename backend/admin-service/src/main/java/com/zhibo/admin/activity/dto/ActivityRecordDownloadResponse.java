@@ -6,7 +6,8 @@ import lombok.NoArgsConstructor;
 
 /**
  * GET /api/v1/activities/records/{id}/download/{recordId} 的 data。
- * 对应微吼 check-download；downloadUrl 约 7 天有效。
+ * 对应微吼 check-download；status=0 时后端已提交打包任务，本次仍回检查结果。
+ * downloadUrl 约 7 天有效。
  */
 @Data
 @NoArgsConstructor

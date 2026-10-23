@@ -387,6 +387,8 @@ const FIELD_DESC_BY_NAME = {
   materialId: '录播视频素材 UUID（素材中心 type=video）',
   recordMaterialId: '本场绑定的录播素材 UUID',
   recordId: '微吼回放/点播资源 id（create-demand 的 record_id）',
+  downloadUrl: '回放打包下载地址（微吼 download_url；status=1 时可用，约 7 天有效）',
+  progress: '打包进度 0～100',
   ready: '就绪状态：1 就绪 / 0 转码中 / 2 失败',
   isTiming: '录播是否定时直播（对应微吼 is_timing）',
   data: '业务数据；失败时可能省略',
@@ -416,6 +418,12 @@ const FIELD_DESC_BY_PATH = {
   'AuditSubmitData.id': '本站活动 UUID',
   'AuditRecord.id': '审核记录 UUID',
   'ActivityRecordItem.id': '回放 record_id（create-demand 用）',
+  'ActivityRecordDownloadData.recordId': '微吼回放 id（同 GET .../records 的 list[].id）',
+  'ActivityRecordDownloadData.status':
+    '打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败',
+  'ActivityRecordDownloadData.progress': '打包进度 0～100',
+  'ActivityRecordDownloadData.downloadUrl':
+    '下载地址；status=1 时可用（微吼侧约 7 天有效）',
   'LiveReportResult.id': '报备单 UUID',
   'LiveReportDetail.id': '报备单 UUID',
   'LiveReportAuditItem.id': '审核记录 UUID',
@@ -612,6 +620,10 @@ const FIELD_DB_BY_PATH = {
   'ActivityMemberItem.avatarUrl': { db: 'VARCHAR(512)', maxLength: 512 },
   'ActivityMemberItem.tag': { db: 'VARCHAR(32)', maxLength: 32 },
   'ActivityRecordItem.id': { db: '微吼 integer（不落本站库）' },
+  'ActivityRecordDownloadData.recordId': { db: '微吼 integer（不落本站库）' },
+  'ActivityRecordDownloadData.downloadUrl': { db: '微吼透传（不落本站库）' },
+  'ActivityRecordDownloadData.status': { db: '微吼透传（不落本站库）' },
+  'ActivityRecordDownloadData.progress': { db: '微吼透传（不落本站库）' },
   'AttendeeItem.online': { db: 'TINYINT(1)' },
   'PresenceTrendPoint.online': { db: 'INT' },
   'AuditSubmitRequest.reason': { db: 'VARCHAR(200)', maxLength: 200 },
@@ -1549,6 +1561,40 @@ function buildAdmin() {
         },
       },
     },
+    ActivityRecordDownloadData: {
+      type: 'object',
+      required: ['recordId', 'status'],
+      description:
+        '回放下载：微吼 check-download；对应管理后台回放列表「下载」',
+      properties: {
+        recordId: {
+          type: 'integer',
+          format: 'int64',
+          description: '微吼回放 id（同 GET .../records 的 list[].id）',
+          example: 5814669,
+        },
+        downloadUrl: {
+          type: 'string',
+          format: 'uri',
+          description:
+            '下载地址；status=1 时可用（微吼侧约 7 天有效）',
+          example: 'https://vod-download.vhall.com/....zip',
+        },
+        status: {
+          type: 'integer',
+          description: '打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败',
+          enum: [0, 1, 2, 3],
+          example: 1,
+        },
+        progress: {
+          type: 'integer',
+          description: '打包进度 0～100',
+          minimum: 0,
+          maximum: 100,
+          example: 100,
+        },
+      },
+    },
     EndActivityData: {
       type: 'object',
       required: ['id', 'state'],
@@ -2265,6 +2311,9 @@ function buildAdmin() {
     ApiResponseActivityDetail: { $ref: '#/components/schemas/ActivityDetail' },
     ApiResponseRecordList: {
       $ref: '#/components/schemas/ActivityRecordListData',
+    },
+    ApiResponseRecordDownload: {
+      $ref: '#/components/schemas/ActivityRecordDownloadData',
     },
     ApiResponseEndActivity: { $ref: '#/components/schemas/EndActivityData' },
     ApiResponseLiveStart: { $ref: '#/components/schemas/EndActivityData' },
@@ -2995,11 +3044,39 @@ function buildAdmin() {
     '/api/v1/activities/records/{id}': {
       get: {
         tags: ['活动管理'],
-        summary: '某场活动的回放列表',
+        summary: '回放列表',
+        description:
+          '某场活动的回放文件列表。list[].id = 微吼 record_id，供下载接口与 create-demand 使用。非 vhall / 未接入 → 501。',
         operationId: 'listActivityRecords',
         security: bearer,
         parameters: [activityId],
         responses: ok200('#/components/schemas/ApiResponseRecordList'),
+      },
+    },
+    '/api/v1/activities/records/{id}/download/{recordId}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '回放下载',
+        description:
+          '某场活动下一条回放的打包下载地址（管理后台回放「下载」）。路径 id=本站活动 UUID；recordId=回放列表 list[].id。走微吼 check-download。非 vhall / 未接入 → 501。status=1 时 downloadUrl 可用（约 7 天有效）。',
+        operationId: 'downloadActivityRecord',
+        security: bearer,
+        parameters: [
+          activityId,
+          {
+            name: 'recordId',
+            in: 'path',
+            required: true,
+            schema: {
+              type: 'integer',
+              format: 'int64',
+              example: 5814669,
+            },
+            description:
+              '微吼回放 id（同 GET /api/v1/activities/records/{id} 的 list[].id）',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseRecordDownload'),
       },
     },
     '/api/v1/activities/host/{id}': {
@@ -3082,9 +3159,9 @@ function buildAdmin() {
     '/api/v1/activities/push-stream/{id}': {
       get: {
         tags: ['活动管理'],
-        summary: '第三方 rtmp 推流地址',
+        summary: '获取 rtmp 推流地址（第三方推流到直播间）',
         description:
-          '只读。选中 rtmp 时使用。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。',
+          '只读。管理后台「第三方推流到直播间」页：服务器 + 串流密钥。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。',
         operationId: 'getActivityPushStream',
         security: bearer,
         parameters: [activityId],
@@ -3094,9 +3171,9 @@ function buildAdmin() {
     '/api/v1/activities/stream-status/{id}': {
       get: {
         tags: ['活动管理'],
-        summary: '第三方推流是否有流',
+        summary: '查询推流状态（是否检测到推流）',
         description:
-          '只读。选中 rtmp 时查询。status：0 无流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。',
+          '只读。管理后台「推流状态」刷新。status：0 未检测到推流 / 1 有流。已软删 → 400。非 vhall 或微吼未接入 → 501。不返回密钥或原始响应。',
         operationId: 'getActivityStreamStatus',
         security: bearer,
         parameters: [activityId],
@@ -3106,9 +3183,9 @@ function buildAdmin() {
     '/api/v1/activities/live/start/{id}': {
       post: {
         tags: ['活动管理'],
-        summary: '第三方推流开始直播',
+        summary: '开始直播（第三方推流 rtmp 按钮）',
         description:
-          '无 body。OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。',
+          '无 body。对应管理后台「第三方推流到直播间」页的「开始直播」按钮：OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。',
         operationId: 'startActivityLivePush',
         security: bearer,
         parameters: [activityId],
@@ -3649,7 +3726,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.3.2',
+      version: '2.3.4',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4137,7 +4214,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.3.2',
+      version: '2.3.4',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4214,7 +4291,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.3.2',
+      version: '2.3.4',
       contact: { name: 'zhibo' },
     },
     servers: [

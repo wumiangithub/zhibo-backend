@@ -13,7 +13,7 @@ info:
     - 时间：`yyyy-MM-dd HH:mm:ss`
     - JSON 不输出 `null` 字段
     - 观看端不走管理端 JWT
-  version: "2.3.2"
+  version: "2.3.4"
   contact:
     name: zhibo-backend
 servers:
