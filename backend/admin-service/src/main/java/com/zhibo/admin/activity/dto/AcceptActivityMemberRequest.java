@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class AcceptActivityMemberRequest {
 
-    /** 1 主播 / 2 助理 / 3 嘉宾 */
+    /** 1 主播 / 2 嘉宾 / 3 助理（与微吼 type 一致） */
     @NotNull(message = "邀约角色不能为空")
     private Integer role;
 

@@ -20,7 +20,7 @@ public class ActivityMemberEntity {
     @EmbeddedId
     private ActivityMemberId id;
 
-    /** 开播角色：1 主播 / 2 助理 / 3 嘉宾，见 {@link ActivityMemberRole}。 */
+    /** 开播角色：1 主播 / 2 嘉宾 / 3 助理（与微吼 type 一致），见 {@link ActivityMemberRole}。 */
     @Column(name = "role", nullable = false)
     private int role;
 

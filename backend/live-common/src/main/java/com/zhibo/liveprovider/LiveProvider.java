@@ -3,6 +3,7 @@ package com.zhibo.liveprovider;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
+import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
@@ -43,7 +44,32 @@ public interface LiveProvider {
      */
     Integer getVideoTranscodeStatus(String videoId);
 
+    /**
+     * 主持人参会页（微吼 type=1）。等价于 {@link #buildRoleJoinUrl}(room, 1, null, null, null)。
+     */
     String buildHostUrl(String providerRoomId);
+
+    /**
+     * B 端角色参会页 URL，供本站开播页 iframe。
+     * 微吼：{@code GET /v3/webinars/live/get-role-url}；
+     * {@code role} 与本站 {@code ActivityMemberRole} / 微吼 {@code type} 相同：
+     * 1 主播(主持人) / 2 嘉宾 / 3 助理；type≠1 时 {@code email}、{@code nickname} 必填；
+     * type=1 也应尽量传入本场 email/nickname/avatar（有值则写入微吼 params）。
+     *
+     * @param avatar 头像 URL，可空
+     */
+    default String buildRoleJoinUrl(
+            String providerRoomId,
+            int role,
+            String email,
+            String nickname,
+            String avatar) {
+        // 无自定义身份时回退 buildHostUrl；带 email/nickname/avatar 须由实现覆盖（勿丢掉参数）
+        if (role == 1 && email == null && nickname == null && avatar == null) {
+            return buildHostUrl(providerRoomId);
+        }
+        throw new UnsupportedOperationException("该服务商未接入角色参会");
+    }
 
     ProviderRoomSnapshot fetchRoom(String providerRoomId);
 
@@ -80,6 +106,15 @@ public interface LiveProvider {
      * 某场直播下的回放/录制列表；{@code list[].id} 即 create-demand 的 {@code record_id}。
      */
     ProviderRecordList listRecords(String providerRoomId);
+
+    /**
+     * 查询回放下载地址（微吼 check-download）。
+     *
+     * @param recordId 回放 id（listRecords 的 {@code list[].id}）
+     */
+    default ProviderRecordDownload checkRecordDownload(long recordId) {
+        throw new UnsupportedOperationException("该服务商未接入回放下载");
+    }
 
     /**
      * 聊天审核页 URL（供中控台 iframe）。

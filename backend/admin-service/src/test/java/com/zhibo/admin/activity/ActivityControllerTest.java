@@ -12,6 +12,7 @@ import com.zhibo.admin.auth.AuthInterceptor;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -111,9 +112,10 @@ class ActivityControllerTest {
         var host = new com.zhibo.admin.activity.dto.ActivityHostResponse();
         host.setProvider("vhall");
         host.setHostUrl("https://host.example/page");
-        when(hostService.host(eq(UUID))).thenReturn(host);
+        when(hostService.host(eq(UUID), isNull(), eq(10001L))).thenReturn(host);
 
-        mockMvc.perform(get("/api/v1/activities/host/" + UUID).accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/v1/activities/host/" + UUID).accept(MediaType.APPLICATION_JSON)
+                        .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.provider").value("vhall"))
@@ -139,7 +141,8 @@ class ActivityControllerTest {
         response.setTotal(1);
         response.setList(java.util.List.of(
                 new com.zhibo.admin.activity.dto.ActivityRecordItem(
-                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover")));
+                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover",
+                        "1024", "2027-09-01 10:00:00")));
         when(activityService.listRecords(eq(UUID))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/activities/records/" + UUID).accept(MediaType.APPLICATION_JSON))
@@ -147,6 +150,24 @@ class ActivityControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.list[0].id").value(799703))
-                .andExpect(jsonPath("$.data.list[0].title").value("回放A"));
+                .andExpect(jsonPath("$.data.list[0].title").value("回放A"))
+                .andExpect(jsonPath("$.data.list[0].storage").value("1024"))
+                .andExpect(jsonPath("$.data.list[0].saveTime").value("2027-09-01 10:00:00"));
+    }
+
+    @Test
+    void recordDownload_returnsUrl() throws Exception {
+        when(activityService.recordDownload(eq(UUID), eq(5541984L))).thenReturn(
+                new com.zhibo.admin.activity.dto.ActivityRecordDownloadResponse(
+                        5541984L, "https://vod-download.vhall.com/a.zip", 1, 100));
+
+        mockMvc.perform(get("/api/v1/activities/records/" + UUID + "/download/5541984")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.recordId").value(5541984))
+                .andExpect(jsonPath("$.data.downloadUrl").value("https://vod-download.vhall.com/a.zip"))
+                .andExpect(jsonPath("$.data.status").value(1))
+                .andExpect(jsonPath("$.data.progress").value(100));
     }
 }

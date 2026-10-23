@@ -17,4 +17,8 @@ public class ActivityRecordItem {
     private String duration;
     private String createdTime;
     private String coverUrl;
+    /** 体积（KB），微吼 storage */
+    private String storage;
+    /** 到期时间，微吼 save_time */
+    private String saveTime;
 }

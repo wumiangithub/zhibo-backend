@@ -38,6 +38,7 @@ import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
@@ -634,6 +635,33 @@ class ActivityServiceTest {
         assertEquals("主播昵称", saved.get(0).getNickname());
         assertEquals(ActivityMemberRole.ASSISTANT.getCode(), saved.get(1).getRole());
         assertEquals(20002L, saved.get(1).getId().getUserId());
+        assertEquals("助理甲", saved.get(1).getNickname());
+    }
+
+    @Test
+    void replaceMembers_backfillsNicknameAndAvatarWhenOmitted() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
+        UpdateActivityMembersRequest.MemberBinding host = new UpdateActivityMembersRequest.MemberBinding();
+        host.setId(OPERATOR_ID);
+        host.setRole(ActivityMemberRole.HOST.getCode());
+        request.setMembers(List.of(host));
+
+        SysUserAccountEntity hostUser = operator();
+        hostUser.setHeadimgurl("https://wx.example/a.jpg");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(hostUser));
+        when(memberRepository.findByActivityIds(anyCollection())).thenReturn(List.of());
+
+        activityService.replaceMembers(uuid, request);
+
+        ArgumentCaptor<List<ActivityMemberEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(memberRepository).saveAll(captor.capture());
+        ActivityMemberEntity saved = captor.getValue().get(0);
+        assertEquals("余灵巧", saved.getNickname());
+        assertEquals("https://wx.example/a.jpg", saved.getAvatarUrl());
     }
 
     @Test
@@ -661,7 +689,34 @@ class ActivityServiceTest {
         assertEquals(OPERATOR_ID, captor.getValue().getId().getUserId());
         assertEquals(ActivityMemberRole.ASSISTANT.getCode(), captor.getValue().getRole());
         assertEquals("助教", captor.getValue().getTag());
+        assertEquals("余灵巧", captor.getValue().getNickname());
         assertEquals(0, captor.getValue().getSortOrder());
+    }
+
+    @Test
+    void update_hostIdsSnapshotsEmployeeNickname() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        UpdateActivityRequest request = new UpdateActivityRequest();
+        request.setHostIds(List.of(OPERATOR_ID));
+
+        SysUserAccountEntity hostUser = operator();
+        hostUser.setUserAvatar("https://avatar.example/u.png");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(hostUser));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(hostUser));
+
+        activityService.update(uuid, request, OPERATOR_ID);
+
+        ArgumentCaptor<List<ActivityMemberEntity>> captor = ArgumentCaptor.forClass(List.class);
+        verify(memberRepository).saveAll(captor.capture());
+        ActivityMemberEntity saved = captor.getValue().get(0);
+        assertEquals(ActivityMemberRole.HOST.getCode(), saved.getRole());
+        assertEquals("余灵巧", saved.getNickname());
+        assertEquals("https://avatar.example/u.png", saved.getAvatarUrl());
+        assertEquals("讲师", saved.getTag());
     }
 
     @Test
@@ -879,7 +934,8 @@ class ActivityServiceTest {
         when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
                 1,
                 List.of(new ProviderRecordItem(
-                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover"))
+                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover",
+                        "2048", "2027-09-01 10:00:00"))
         ));
 
         ActivityRecordListResponse response = activityService.listRecords(uuid);
@@ -888,6 +944,28 @@ class ActivityServiceTest {
         assertEquals(799703L, response.getList().get(0).getId());
         assertEquals("回放A", response.getList().get(0).getTitle());
         assertEquals("https://cover", response.getList().get(0).getCoverUrl());
+        assertEquals("2048", response.getList().get(0).getStorage());
+        assertEquals("2027-09-01 10:00:00", response.getList().get(0).getSaveTime());
+    }
+
+    @Test
+    void recordDownload_mapsProviderDownload() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, "https://vod-download.vhall.com/a.zip", 1, 100));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(5541984L, response.getRecordId());
+        assertEquals("https://vod-download.vhall.com/a.zip", response.getDownloadUrl());
+        assertEquals(1, response.getStatus());
+        assertEquals(100, response.getProgress());
     }
 
     @Test

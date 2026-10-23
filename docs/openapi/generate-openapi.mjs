@@ -2,8 +2,9 @@
  * 按 zhibo-shared/docs/API约定.md 生成 OpenAPI 3.0.3
  * 用法：node generate-openapi.mjs
  *
- * D65：不要每次改接口都跑本脚本。仅用户明确要求「重新生成 / 导出 OpenAPI」时再执行。
- * 改接口时以 API约定 + 代码为准；本脚本源可顺带改，产物等用户点名再导。
+ * D65：平时禁止改本脚本、禁止跑导出。仅用户明确要求「重新生成 / 导出 OpenAPI」时：
+ * 先删除旧 *.openapi.yaml / *.openapi.json，再按当时 API约定 + 代码全量重写本脚本并导出；
+ * 不要在旧 yaml 上打补丁，也不要日常攒着改本文件。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -913,7 +914,7 @@ function buildAdmin() {
     ActivityMemberRole: {
       type: 'integer',
       enum: [1, 2, 3],
-      description: '1 主播 / 2 助理 / 3 嘉宾（D57；JSON 只传数字）',
+      description: '1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）',
     },
     // 员工 / 部门 / 角色等 BIGINT 主键（D56：JSON number，禁止十进制 string）
     EmployeeId: {

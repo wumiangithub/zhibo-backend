@@ -29,6 +29,7 @@ import com.zhibo.admin.activity.dto.ActivityProductView;
 import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
+import com.zhibo.admin.activity.dto.ActivityRecordDownloadResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordItem;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.ActivitySummary;
@@ -781,11 +782,32 @@ public class ActivityService {
                     item.title(),
                     item.duration(),
                     item.createdTime(),
-                    item.coverUrl()
+                    item.coverUrl(),
+                    item.storage(),
+                    item.saveTime()
             ));
         }
         response.setList(list);
         return response;
+    }
+
+    /**
+     * 某场活动下一条回放的下载地址（微吼 check-download）。
+     * {@code recordId} = listRecords 的 {@code list[].id}。
+     */
+    public ActivityRecordDownloadResponse recordDownload(String id, long recordId) {
+        if (recordId <= 0) {
+            throw new IllegalArgumentException("recordId 无效");
+        }
+        ActivityEntity entity = requireActivity(id);
+        LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
+        var info = liveProvider.checkRecordDownload(recordId);
+        return new ActivityRecordDownloadResponse(
+                info.recordId() != null ? info.recordId() : recordId,
+                info.downloadUrl(),
+                info.status(),
+                info.progress()
+        );
     }
 
     /**
@@ -1289,21 +1311,28 @@ public class ActivityService {
 
     /**
      * 只全量覆盖主播行（{@link ActivityMemberRole#HOST}），不删助理 / 嘉宾。
-     * 默认标签「讲师」，与角色设置里添加主播一致。
+     * 默认标签「讲师」，与角色设置里添加主播一致；昵称/头像快照员工资料。
      */
     private void replaceHosts(String activityId, List<Long> hostIds) {
         memberRepository.deleteByActivityIdAndRole(activityId, ActivityMemberRole.HOST.getCode());
         if (hostIds.isEmpty()) {
             return;
         }
+        Map<Long, SysUserAccountEntity> users = userRepository.findAllById(hostIds).stream()
+                .collect(Collectors.toMap(SysUserAccountEntity::getId, user -> user, (a, b) -> a));
         List<ActivityMemberEntity> rows = new ArrayList<>();
         int order = 0;
         for (Long userId : hostIds) {
+            SysUserAccountEntity user = users.get(userId);
             ActivityMemberEntity row = new ActivityMemberEntity();
             row.setId(new ActivityMemberId(activityId, userId));
             row.setRole(ActivityMemberRole.HOST.getCode());
             row.setSortOrder(order++);
             row.setTag(ActivityMemberRole.HOST.getDefaultTag());
+            if (user != null) {
+                row.setNickname(snapshotMemberNickname(user));
+                row.setAvatarUrl(AuthService.resolveAvatar(user));
+            }
             rows.add(row);
         }
         memberRepository.saveAll(rows);
@@ -1404,6 +1433,8 @@ public class ActivityService {
         row.setRole(role.getCode());
         row.setSortOrder(nextOrder);
         row.setTag(role.getDefaultTag());
+        row.setNickname(snapshotMemberNickname(invitee));
+        row.setAvatarUrl(AuthService.resolveAvatar(invitee));
         memberRepository.save(row);
         return acceptResponse(invitee, role, false, inviter);
     }
@@ -1472,13 +1503,34 @@ public class ActivityService {
         }
         Map<Long, SysUserAccountEntity> found = userRepository.findAllById(byUser.keySet()).stream()
                 .collect(Collectors.toMap(SysUserAccountEntity::getId, user -> user, (a, b) -> a));
-        for (Long id : byUser.keySet()) {
-            SysUserAccountEntity user = found.get(id);
+        List<ParsedMember> resolved = new ArrayList<>(byUser.size());
+        for (ParsedMember item : byUser.values()) {
+            SysUserAccountEntity user = found.get(item.userId());
             if (user == null || user.getRsStatus() == null || user.getRsStatus() != 1) {
                 throw new IllegalArgumentException("成员无效");
             }
+            String nickname = item.nickname();
+            if (nickname == null) {
+                nickname = snapshotMemberNickname(user);
+            }
+            String avatarUrl = item.avatarUrl();
+            if (avatarUrl == null) {
+                avatarUrl = AuthService.resolveAvatar(user);
+            }
+            resolved.add(new ParsedMember(item.userId(), item.role(), nickname, avatarUrl, item.tag()));
         }
-        return List.copyOf(byUser.values());
+        return List.copyOf(resolved);
+    }
+
+    /**
+     * 写入成员表时未带本场昵称则快照员工姓名；产品展示上限 ≤10，超长截断。
+     */
+    private static String snapshotMemberNickname(SysUserAccountEntity user) {
+        String name = trimToNull(user.getUserName());
+        if (name == null) {
+            return null;
+        }
+        return name.length() <= 10 ? name : name.substring(0, 10);
     }
 
     private ActivityMemberListResponse toMemberList(List<ActivityMemberEntity> rows) {

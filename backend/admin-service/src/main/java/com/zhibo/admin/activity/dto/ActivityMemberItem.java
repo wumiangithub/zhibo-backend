@@ -4,7 +4,7 @@ import lombok.Data;
 
 /**
  * 开播成员一行。
- * {@code role}：1 主播 / 2 助理 / 3 嘉宾（{@link com.zhibo.activity.ActivityMemberRole}）。
+ * {@code role}：1 主播 / 2 嘉宾 / 3 助理（与微吼 type 一致；{@link com.zhibo.activity.ActivityMemberRole}）。
  */
 @Data
 public class ActivityMemberItem {
@@ -14,7 +14,7 @@ public class ActivityMemberItem {
     private String userName;
     /** 任职部门展示名；无则空串 */
     private String departmentName;
-    /** 1 主播 / 2 助理 / 3 嘉宾 */
+    /** 1 主播 / 2 嘉宾 / 3 助理 */
     private Integer role;
     /** 本场昵称（写入 ≤10）；库空时回员工姓名 */
     private String nickname;

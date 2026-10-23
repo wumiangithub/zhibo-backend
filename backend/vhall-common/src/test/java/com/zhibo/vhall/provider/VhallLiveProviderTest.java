@@ -2,6 +2,7 @@ package com.zhibo.vhall.provider;
 
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.vhall.client.VhallClient;
 import com.zhibo.vhall.config.VhallProperties;
@@ -186,18 +187,22 @@ class VhallLiveProviderTest {
                                 "name", "回放A",
                                 "duration", "01:02:03",
                                 "created_at", "2026-09-01 10:00:00",
-                                "img_url", "https://cover"
+                                "img_url", "https://cover",
+                                "storage", "2048",
+                                "save_time", "2027-09-01 10:00:00"
                         ))
                 ));
 
         var result = provider.listRecords("666781572");
         assertEquals(1, result.total());
         assertEquals(1, result.list().size());
-        assertEquals("799703", result.list().get(0).id());
+        assertEquals(799703L, result.list().get(0).id());
         assertEquals("回放A", result.list().get(0).title());
         assertEquals("01:02:03", result.list().get(0).duration());
         assertEquals("2026-09-01 10:00:00", result.list().get(0).createdTime());
         assertEquals("https://cover", result.list().get(0).coverUrl());
+        assertEquals("2048", result.list().get(0).storage());
+        assertEquals("2027-09-01 10:00:00", result.list().get(0).saveTime());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
@@ -222,6 +227,30 @@ class VhallLiveProviderTest {
         assertEquals("99", captor.getValue().get("webinar_id"));
         assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_EMAIL, captor.getValue().get("email"));
         assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_NAME, captor.getValue().get("name"));
+    }
+
+    @Test
+    void checkRecordDownload_mapsUrlStatusProgress() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_RECORD_CHECK_DOWNLOAD), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "record_id", 5541984,
+                        "download_url", "https://vod-download.vhall.com/a.zip",
+                        "status", 1,
+                        "progress", 100
+                ));
+
+        ProviderRecordDownload info = provider.checkRecordDownload(5541984L);
+        assertEquals(5541984L, info.recordId());
+        assertEquals("https://vod-download.vhall.com/a.zip", info.downloadUrl());
+        assertEquals(1, info.status());
+        assertEquals(100, info.progress());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(
+                eq(VhallLiveProvider.PATH_RECORD_CHECK_DOWNLOAD), captor.capture(), eq(Map.class));
+        assertEquals(5541984L, captor.getValue().get("record_id"));
+        assertEquals(1, captor.getValue().size());
     }
 
     @Test
@@ -328,5 +357,75 @@ class VhallLiveProviderTest {
         String tooLong = "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一";
         assertThrows(IllegalArgumentException.class, () ->
                 provider.buildChatFilterUrl("99", "a@b.c", tooLong));
+    }
+
+    @Test
+    void buildRoleJoinUrl_hostPassesEmailNicknameAvatarWhenPresent() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_ROLE_URL), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("page_url", "https://host.example/page"));
+
+        String page = provider.buildRoleJoinUrl(
+                "100",
+                1,
+                "10001@qkzb.com",
+                "本场主播",
+                "https://cdn.example/a.png?x=1&y=2");
+        assertEquals("https://host.example/page", page);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(eq(VhallLiveProvider.PATH_ROLE_URL), captor.capture(), eq(Map.class));
+        Map<String, Object> params = captor.getValue();
+        assertEquals("100", params.get("webinar_id"));
+        assertEquals(1, params.get("type"));
+        assertEquals("10001@qkzb.com", params.get("email"));
+        assertEquals("本场主播", params.get("nickname"));
+        // avatar 去 query，微吼侧只收干净 base URL
+        assertEquals("https://cdn.example/a.png", params.get("avatar"));
+    }
+
+    @Test
+    void buildRoleJoinUrl_stripsAvatarQueryKeepsHttpBase() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_ROLE_URL), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("page_url", "https://host.example/page"));
+
+        provider.buildRoleJoinUrl(
+                "100", 1, "10001@qkzb.com", "主播", "http://cdn.example/b.jpg?token=abc&sig=1");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(eq(VhallLiveProvider.PATH_ROLE_URL), captor.capture(), eq(Map.class));
+        assertEquals("http://cdn.example/b.jpg", captor.getValue().get("avatar"));
+    }
+
+    @Test
+    void buildRoleJoinUrl_omitsAvatarWhenNotUrlAfterStrip() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_ROLE_URL), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("page_url", "https://host.example/page"));
+
+        provider.buildRoleJoinUrl("100", 1, "10001@qkzb.com", "主播", "?x=1&y=2");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(eq(VhallLiveProvider.PATH_ROLE_URL), captor.capture(), eq(Map.class));
+        assertNull(captor.getValue().get("avatar"));
+    }
+
+    @Test
+    void buildRoleJoinUrl_hostOmitsBlankIdentity() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_ROLE_URL), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("page_url", "https://host.example/page"));
+
+        provider.buildRoleJoinUrl("100", 1, null, null, null);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(eq(VhallLiveProvider.PATH_ROLE_URL), captor.capture(), eq(Map.class));
+        Map<String, Object> params = captor.getValue();
+        assertEquals("100", params.get("webinar_id"));
+        assertEquals(1, params.get("type"));
+        assertNull(params.get("email"));
+        assertNull(params.get("nickname"));
+        assertNull(params.get("avatar"));
     }
 }

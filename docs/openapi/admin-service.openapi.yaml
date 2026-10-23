@@ -2963,6 +2963,14 @@ components:
           type: string
           description: 封面图 URL；库：VARCHAR(2048)
           maxLength: 2048
+        storage:
+          type: string
+          description: 体积（KB），微吼 storage
+          example: "2048"
+        saveTime:
+          type: string
+          description: 到期时间，微吼 save_time；yyyy-MM-dd HH:mm:ss
+          example: "2027-09-01 10:00:00"
     ActivityRecordListData:
       type: object
       properties:

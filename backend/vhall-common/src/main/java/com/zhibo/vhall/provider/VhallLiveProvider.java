@@ -4,6 +4,7 @@ import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
+import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
@@ -51,6 +52,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
     /** 某场活动的回放列表；{@code id} 即 create-demand 的 record_id */
     static final String PATH_RECORD_LIST = "/v3/webinars/record/get-list";
+    /** 回放下载 URL；业务参数仅 record_id */
+    static final String PATH_RECORD_CHECK_DOWNLOAD = "/v3/webinars/record/check-download";
     /** 聊天审核页（中控台 iframe） */
     static final String PATH_CHAT_FILTER = "/v3/webinars/manage/chat-filter";
     /** 当前活动的 rtmp 推流地址；业务参数仅 webinar_id */
@@ -59,7 +62,14 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_STREAM_STATUS = "/v3/webinars/stream/get-stream-status";
     static final String EMBED_BASE = "https://e.vhall.com/v3/embed/live/detail/";
     static final String SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
+    /** 微吼 get-role-url：1 主持人 */
     static final int ROLE_HOST = 1;
+    /** 微吼 get-role-url：2 嘉宾 */
+    static final int ROLE_GUEST = 2;
+    /** 微吼 get-role-url：3 助理 */
+    static final int ROLE_ASSISTANT = 3;
+    /** 微吼参会昵称上限（type≠1 时） */
+    static final int ROLE_JOIN_NICKNAME_MAX = 30;
 
     private static final Pattern GUEST_ID_PATTERN = Pattern.compile("^[A-Za-z0-9]+$");
     private static final String EMAIL_DOMAIN = "@zhibo.local";
@@ -193,17 +203,56 @@ public class VhallLiveProvider implements LiveProvider {
 
     @Override
     public String buildHostUrl(String providerRoomId) {
+        return buildRoleJoinUrl(providerRoomId, ROLE_HOST, null, null, null);
+    }
+
+    /**
+     * 微吼 {@code GET /v3/webinars/live/get-role-url}。
+     * {@code role} 与本站 {@code ActivityMemberRole} 一致：1 主持人 / 2 嘉宾 / 3 助理。
+     * type≠1 时 email、nickname 必填；type=1 有值也写入（本场自定义头像/昵称）。
+     * 见 https://vhall.apifox.cn/234257715e0
+     */
+    @Override
+    public String buildRoleJoinUrl(
+            String providerRoomId,
+            int role,
+            String email,
+            String nickname,
+            String avatar) {
         requireRoomId(providerRoomId);
+        if (role < ROLE_HOST || role > ROLE_ASSISTANT) {
+            throw new IllegalArgumentException("开播角色无效");
+        }
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("webinar_id", providerRoomId);
-        params.put("type", ROLE_HOST);
+        params.put("type", role);
+
+        String mail = trimToNull(email);
+        String nick = trimToNull(nickname);
+        if (role != ROLE_HOST && (mail == null || nick == null)) {
+            throw new IllegalArgumentException("嘉宾/助理参会须提供邮箱与昵称");
+        }
+        if (nick != null && nick.length() > ROLE_JOIN_NICKNAME_MAX) {
+            nick = nick.substring(0, ROLE_JOIN_NICKNAME_MAX);
+        }
+        if (mail != null) {
+            params.put("email", mail);
+        }
+        if (nick != null) {
+            params.put("nickname", nick);
+        }
+        String av = sanitizeAvatarForVhall(avatar);
+        if (av != null) {
+            params.put("avatar", av);
+        }
+
         @SuppressWarnings("unchecked")
         Map<String, Object> data = vhallClient.getForData(PATH_ROLE_URL, params, Map.class);
-        String hostUrl = asString(data.get("page_url"));
-        if (hostUrl == null || hostUrl.isBlank()) {
-            throw new IllegalStateException("微吼未返回主持人地址 page_url");
+        String pageUrl = asString(data.get("page_url"));
+        if (pageUrl == null || pageUrl.isBlank()) {
+            throw new IllegalStateException("微吼未返回参会地址 page_url");
         }
-        return hostUrl;
+        return pageUrl;
     }
 
     @Override
@@ -415,6 +464,29 @@ public class VhallLiveProvider implements LiveProvider {
     }
 
     @Override
+    public ProviderRecordDownload checkRecordDownload(long recordId) {
+        if (recordId <= 0) {
+            throw new IllegalArgumentException("recordId 无效");
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.getForData(
+                PATH_RECORD_CHECK_DOWNLOAD, Map.of("record_id", recordId), Map.class);
+        if (data == null) {
+            throw new IllegalStateException("微吼未返回回放下载信息");
+        }
+        long id = asLong(data.get("record_id"));
+        if (id <= 0) {
+            id = recordId;
+        }
+        return new ProviderRecordDownload(
+                id,
+                trimToNull(asString(data.get("download_url"))),
+                asInteger(data.get("status")),
+                asInteger(data.get("progress"))
+        );
+    }
+
+    @Override
     public PushStreamInfo getPushStream(String providerRoomId) {
         requireRoomId(providerRoomId);
         @SuppressWarnings("unchecked")
@@ -503,7 +575,9 @@ public class VhallLiveProvider implements LiveProvider {
                     asString(raw.get("name")),
                     asString(raw.get("duration")),
                     asString(raw.get("created_at")),
-                    asString(raw.get("img_url"))
+                    asString(raw.get("img_url")),
+                    asString(raw.get("storage")),
+                    asString(raw.get("save_time"))
             ));
         }
         return result;
@@ -611,6 +685,33 @@ public class VhallLiveProvider implements LiveProvider {
             return null;
         }
         return value.trim();
+    }
+
+    /**
+     * 微吼 get-role-url 的 avatar：去掉 {@code ?} 及之后的 query，只传干净 http(s) 路径。
+     * 截断后为空或不像 URL 则返回 null（不传该参数），避免 {@code &} 残留截断微吼侧 query。
+     */
+    static String sanitizeAvatarForVhall(String avatar) {
+        String av = trimToNull(avatar);
+        if (av == null) {
+            return null;
+        }
+        int q = av.indexOf('?');
+        if (q >= 0) {
+            av = av.substring(0, q).trim();
+        }
+        if (av.isEmpty()) {
+            return null;
+        }
+        String lower = av.toLowerCase();
+        if (!lower.startsWith("https://") && !lower.startsWith("http://")) {
+            return null;
+        }
+        int schemeLen = lower.startsWith("https://") ? "https://".length() : "http://".length();
+        if (av.length() <= schemeLen) {
+            return null;
+        }
+        return av;
     }
 
     private static String asString(Object value) {

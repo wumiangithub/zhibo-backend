@@ -17,7 +17,7 @@ public class UpdateActivityMembersRequest {
     public static class MemberBinding {
         /** 员工 rs_mainkey_id */
         private Long id;
-        /** 1 主播 / 2 助理 / 3 嘉宾 */
+        /** 1 主播 / 2 嘉宾 / 3 助理（与微吼 type 一致） */
         private Integer role;
         /** 本场昵称 ≤10；空 → NULL */
         private String nickname;

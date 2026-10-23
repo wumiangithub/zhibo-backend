@@ -14,7 +14,6 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -85,20 +84,27 @@ public class VhallClient {
 
     /**
      * GET（查询串签名），用于如参会地址等接口。
+     * <p>
+     * 签名用 {@link #buildSignedParams} 里的<strong>原始</strong>参数值；经 RestClient
+     * {@code UriBuilder} 拼 URI 时由框架<strong>只 encode 一次</strong>（勿先
+     * {@code UriComponentsBuilder.encode()} 再丢给相对 {@code .uri(String)}，否则会双重编码）。
+     * 这样 avatar 等含 {@code ?}&amp; 的值不会截断 query。
      */
     public <T> VhallResponse<T> get(String path, Map<String, ?> businessParams, Class<T> dataType) {
         String requestId = newRequestId();
         Map<String, Object> allParams = buildSignedParams(businessParams);
         MultiValueMap<String, String> query = toForm(allParams);
-        String uri = UriComponentsBuilder.fromPath(path)
-                .queryParams(query)
-                .toUriString();
 
         log.debug("Vhall GET {} request-id={}", path, requestId);
         String body;
         try {
             body = restClient.get()
-                    .uri(uri)
+                    .uri(uriBuilder -> {
+                        uriBuilder.path(path);
+                        query.forEach((name, values) ->
+                                values.forEach(value -> uriBuilder.queryParam(name, value)));
+                        return uriBuilder.build();
+                    })
                     .header("platform", String.valueOf(properties.getPlatform()))
                     .header("request-id", requestId)
                     .retrieve()

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.vhall.config.VhallProperties;
 import com.zhibo.vhall.dto.VhallResponse;
 import com.zhibo.vhall.exception.VhallException;
+import com.zhibo.vhall.util.VhallSignUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -11,9 +12,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
@@ -116,6 +121,64 @@ class VhallClientTest {
                 Map.of("webinar_id", 1, "type", 1), Map.class);
         assertEquals("https://host", data.get("page_url"));
         server.verify();
+    }
+
+    /**
+     * avatar 常含 {@code ?}&amp;；未 encode 会把 query 截断；签名须用原始值，且不得双重编码。
+     */
+    @Test
+    void get_encodesAvatarQueryWithoutDoubleEncodingSign() {
+        String avatar = "https://cdn.example/a.png?x=1&y=2";
+        String nickname = "主播 A";
+
+        server.expect(request -> {
+                    assertEquals(HttpMethod.GET, request.getMethod());
+                    String rawQuery = request.getURI().getRawQuery();
+                    // 截断特征：裸 &y=2；双重编码特征：%253D / %2526 / %25E4
+                    assertFalse(rawQuery.contains("&y=2"), () -> "avatar 被截断: " + rawQuery);
+                    assertFalse(rawQuery.contains("%25"), () -> "疑似双重编码: " + rawQuery);
+                    assertTrue(rawQuery.contains("%26") || rawQuery.contains("%3D"),
+                            () -> "avatar 特殊字符未 encode: " + rawQuery);
+
+                    Map<String, String> decoded = decodeQuery(rawQuery);
+                    assertEquals(avatar, decoded.get("avatar"));
+                    assertEquals(nickname, decoded.get("nickname"));
+                    assertEquals("1", decoded.get("webinar_id"));
+                    assertEquals("1", decoded.get("type"));
+                    assertFalse(decoded.containsKey("y"), () -> "avatar 的 y 不应成为独立 query: " + decoded);
+
+                    Map<String, Object> forSign = new LinkedHashMap<>(decoded);
+                    String actualSign = (String) forSign.remove("sign");
+                    assertEquals(
+                            VhallSignUtil.sign("test_secret", forSign),
+                            actualSign,
+                            "签名须对原始（解码后）参数值计算，禁止对已 encode 的串签名");
+                })
+                .andRespond(withSuccess("""
+                        {"code":200,"msg":"ok","data":{"page_url":"https://host"},"request_id":"g2"}
+                        """, MediaType.APPLICATION_JSON));
+
+        Map data = client.getForData(
+                "/v3/webinars/live/get-role-url",
+                Map.of(
+                        "webinar_id", 1,
+                        "type", 1,
+                        "nickname", nickname,
+                        "avatar", avatar),
+                Map.class);
+        assertEquals("https://host", data.get("page_url"));
+        server.verify();
+    }
+
+    private static Map<String, String> decodeQuery(String rawQuery) {
+        Map<String, String> out = new LinkedHashMap<>();
+        for (String pair : rawQuery.split("&")) {
+            int eq = pair.indexOf('=');
+            String key = URLDecoder.decode(eq < 0 ? pair : pair.substring(0, eq), StandardCharsets.UTF_8);
+            String value = eq < 0 ? "" : URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
+            out.put(key, value);
+        }
+        return out;
     }
 
     @Test

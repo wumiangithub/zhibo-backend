@@ -9,6 +9,7 @@ import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
+import com.zhibo.admin.activity.dto.ActivityRecordDownloadResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.AuditListResponse;
 import com.zhibo.admin.activity.dto.AuditRequest;
@@ -81,6 +82,17 @@ public class ActivityController {
     @GetMapping("/records/{id}")
     public ApiResponse<ActivityRecordListResponse> records(@PathVariable String id) {
         return ApiResponse.ok(activityService.listRecords(id));
+    }
+
+    /**
+     * 某场活动下一条回放的下载地址。
+     * {@code recordId} = 列表 {@code list[].id}；走微吼 check-download。
+     */
+    @GetMapping("/records/{id}/download/{recordId}")
+    public ApiResponse<ActivityRecordDownloadResponse> recordDownload(
+            @PathVariable String id,
+            @PathVariable long recordId) {
+        return ApiResponse.ok(activityService.recordDownload(id, recordId));
     }
 
     /** 某场活动的 rtmp 推流地址与串流密钥。只读，当前登录员工可查。 */
@@ -181,9 +193,17 @@ public class ActivityController {
         return ApiResponse.ok(activityService.acceptMemberInvite(id, currentUserId(httpRequest), request));
     }
 
+    /**
+     * 角色参会地址（微吼 get-role-url → page_url）。
+     * Query {@code role}：1 主播 / 2 嘉宾 / 3 助理；省略按主播。
+     * 本站开播页用返回的 {@code hostUrl} 做 iframe。
+     */
     @GetMapping("/host/{id}")
-    public ApiResponse<ActivityHostResponse> host(@PathVariable String id) {
-        return ApiResponse.ok(hostService.host(id));
+    public ApiResponse<ActivityHostResponse> host(
+            @PathVariable String id,
+            @RequestParam(required = false) Integer role,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(hostService.host(id, role, currentUserId(httpRequest)));
     }
 
     @GetMapping("/embed/{id}")
