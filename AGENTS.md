@@ -1,13 +1,13 @@
 # 接手必读（后端 agent）
 
-本仓库只写 **Java**。每次开工先看：
+本仓库只写 **Java**。读者是 **后端（Cursor）** 与 **后端（Grok，D72）**。每次开工先看：
 
 `../zhibo-shared/docs/工单.md`
 
-有派给「后端」的待办就先做。架构和需求在 `../zhibo-shared/docs/`（`项目背景.md`、`项目规划.md`、`API约定.md`），经常读，日常不要改。  
+Cursor 做派给「后端」的待办；Grok bot 做派给「后端（Grok）」的待办。同一条工单同一时间只一人改。架构和需求在 `../zhibo-shared/docs/`（`项目背景.md`、`项目规划.md`、`API约定.md`），经常读，日常不要改。  
 管理端登录（T21）：只读 `../zhibo-shared/docs/管理端登录.md` + API约定「管理端登录」，**不要**再打开墨刀原型；密钥已在 `.env.local`。
 
-总控可以改你的代码。你不要改前端，也不要改 `zhibo-wxmini`，不要打开父目录 `zhibo` 当工作区。
+总控 / 副总控可以改你的代码。你不要改前端，也不要改 `zhibo-wxmini`，不要打开父目录 `zhibo` 当工作区。本窗口不是副总控，禁止使用 `[lead-grok]`。
 
 ## 本仓文档
 
@@ -15,7 +15,7 @@
 - [docs/java学习笔记.md](docs/java学习笔记.md) — 教过的 Java 概念
 - 微吼对接总览（Open API / SDK / 回调清单）：`../zhibo-shared/docs/微吼对接.md`（改 `vhall-common` 前必读）
 
-规则：用户不会 Java（前端类比）；提交前缀 `[backend]`；共享配置走 `.env`（可提交）；`VOLC_ACCESS_KEY`/`SECRET` 等敏感项放 `.env.local`（不进 git；GitHub 会拦）；包名 `com.zhibo.vhall`。
+规则：用户不会 Java（前端类比）；提交前缀 Cursor `[backend]`、Grok bot `[backend-grok]`，禁止混用，须用户明确要求才提交；共享配置走 `.env`（可提交）；`VOLC_ACCESS_KEY`/`SECRET` 等敏感项放 `.env.local`（不进 git；GitHub 会拦）；包名 `com.zhibo.vhall`。
 
 ## 工作区安全（D64，红线）
 
@@ -89,4 +89,4 @@
 
 ## 代码评审
 
-另有一个**技术总监** agent 只做 code review，结论写在 `../zhibo-shared/docs/代码评审.md`，他不改你的代码。有派给「后端」的条目就修，修完把那条状态改成 `已修` 并留一句怎么改的；不认同可以填 `不修` + 原因，别默默跳过。
+另有一个**技术总监** agent 只做 code review，结论写在 `../zhibo-shared/docs/代码评审.md`，他不改你的代码。有派给「后端」或「后端（Grok）」的条目就修，修完把那条状态改成 `已修` 并留一句怎么改的；不认同可以填 `不修` + 原因，别默默跳过。
