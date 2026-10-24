@@ -47,6 +47,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_END = "/v3/webinars/live/end";
     static final String PATH_DELETE = "/v3/webinars/webinar/delete";
     static final String PATH_ROLE_URL = "/v3/webinars/live/get-role-url";
+    /** 取消嘉宾/助理身份；官方不含主持人。见 https://vhall.apifox.cn/234257712e0 */
+    static final String PATH_CANCEL_ROLE = "/v3/webinars/live/cancel-role";
     static final String PATH_ONLINE_NOW = "/v3/data-center/webinar/current-online-number";
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
     /** 某场活动的回放列表；{@code id} 即 create-demand 的 record_id */
@@ -258,6 +260,27 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("微吼未返回参会地址 page_url");
         }
         return pageUrl;
+    }
+
+    /**
+     * 微吼 {@code POST /v3/webinars/live/cancel-role}：取消嘉宾/助理身份。
+     * 业务参数仅 {@code webinar_id} + {@code email}（≤60）；无 type。
+     * 见 https://vhall.apifox.cn/234257712e0
+     */
+    @Override
+    public void cancelRole(String providerRoomId, String email) {
+        requireRoomId(providerRoomId);
+        String mail = trimToNull(email);
+        if (mail == null) {
+            throw new IllegalArgumentException("取消角色须提供邮箱");
+        }
+        if (mail.length() > 60) {
+            throw new IllegalArgumentException("参会邮箱不能超过60个字符");
+        }
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("webinar_id", providerRoomId);
+        params.put("email", mail);
+        vhallClient.postForData(PATH_CANCEL_ROLE, params, Map.class);
     }
 
     @Override

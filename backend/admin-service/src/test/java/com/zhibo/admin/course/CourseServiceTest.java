@@ -170,6 +170,30 @@ class CourseServiceTest {
         assertEquals("rejected", response.getRiskStatus());
         assertEquals("banned", response.getShelfStatus());
         assertNotNull(entity.getListedTime());
+        ArgumentCaptor<CourseAuditEntity> audit = ArgumentCaptor.forClass(CourseAuditEntity.class);
+        verify(auditRepository).save(audit.capture());
+        assertEquals("audit", audit.getValue().getAction());
+        assertEquals("rejected", audit.getValue().getResult());
+        assertEquals("资料不全", audit.getValue().getReason());
+    }
+
+    @Test
+    void audit_passStoresOptionalReason() {
+        CourseEntity entity = stored("pending", "pending", false);
+        stubOperator();
+        CourseAuditRequest body = new CourseAuditRequest();
+        body.setResult("passed");
+        body.setReason(" 资料齐全 ");
+
+        CourseAuditResultResponse response = courseService.audit(entity.getId(), body, OPERATOR_ID);
+
+        assertEquals("passed", response.getRiskStatus());
+        assertEquals("pending", response.getShelfStatus());
+        ArgumentCaptor<CourseAuditEntity> audit = ArgumentCaptor.forClass(CourseAuditEntity.class);
+        verify(auditRepository).save(audit.capture());
+        assertEquals("audit", audit.getValue().getAction());
+        assertEquals("passed", audit.getValue().getResult());
+        assertEquals("资料齐全", audit.getValue().getReason());
     }
 
     @Test
@@ -268,6 +292,26 @@ class CourseServiceTest {
         CourseEntity ok = stored("pending", "pending", false);
         courseService.delete(ok.getId());
         assertNotNull(ok.getDeletedTime());
+    }
+
+    @Test
+    void resolveAccessPermission_archiveForcedDownloadOnly() {
+        assertEquals(3, CourseService.resolveAccessPermission("a.zip", null));
+        assertEquals(3, CourseService.resolveAccessPermission("a.ZIP", 3));
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> CourseService.resolveAccessPermission("pack.rar", 1));
+        assertTrue(ex.getMessage().contains("压缩包"));
+    }
+
+    @Test
+    void resolveAccessPermission_previewableDefaultsAndRejectsDownloadOnly() {
+        assertEquals(1, CourseService.resolveAccessPermission("a.png", null));
+        assertEquals(2, CourseService.resolveAccessPermission("a.png", 2));
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> CourseService.resolveAccessPermission("doc.pdf", 3));
+        assertTrue(ex.getMessage().contains("仅下载"));
     }
 
     private CreateCourseRequest request(boolean autoList) {

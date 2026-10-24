@@ -205,6 +205,7 @@ public class MaterialService {
 
         Set<String> keysInBatch = new HashSet<>();
         List<MaterialEntity> entities = new ArrayList<>(items.size());
+        LocalDateTime now = LocalDateTime.now();
         for (int i = 0; i < items.size(); i++) {
             RegisterMaterialsRequest.RegisterMaterialItem item = items.get(i);
             if (item == null) {
@@ -241,6 +242,9 @@ public class MaterialService {
             entity.setUploaderId(uploader.getId());
             entity.setUploaderName(uploaderName);
             entity.setDepartmentName(departmentName);
+            // 登记响应立刻回 uploadedTime；勿等 @CreationTimestamp 在 flush 后才可见
+            entity.setCreatedTime(now);
+            entity.setUpdatedTime(now);
             entities.add(entity);
         }
 
@@ -566,9 +570,11 @@ public class MaterialService {
         }
         item.setUploaderName(blankToNull(entity.getUploaderName()));
         item.setDepartmentName(blankToNull(entity.getDepartmentName()));
-        if (entity.getCreatedTime() != null) {
-            item.setUploadedTime(entity.getCreatedTime().format(UPLOADED_TIME));
-        }
+        // 列表/登记均回 uploadedTime（库列 created_time）；缺省用当前时间，避免 jackson non_null 省略
+        LocalDateTime created = entity.getCreatedTime() != null
+                ? entity.getCreatedTime()
+                : LocalDateTime.now();
+        item.setUploadedTime(created.format(UPLOADED_TIME));
         if ("video".equals(entity.getType())) {
             item.setVhallVideoId(blankToNull(entity.getVhallVideoId()));
             item.setVhallTranscodeProgress(entity.getVhallTranscodeProgress());

@@ -33,6 +33,14 @@ public class CourseMaterialEntity {
     @Column(name = "mime_type", length = 128)
     private String mimeType;
 
+    /**
+     * 学员权限：{@link CourseMaterialAccess#PREVIEW_DOWNLOAD} /
+     * {@link CourseMaterialAccess#PREVIEW_ONLY} /
+     * {@link CourseMaterialAccess#DOWNLOAD_ONLY}。
+     */
+    @Column(name = "access_permission", nullable = false)
+    private int accessPermission = CourseMaterialAccess.PREVIEW_DOWNLOAD;
+
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
 }

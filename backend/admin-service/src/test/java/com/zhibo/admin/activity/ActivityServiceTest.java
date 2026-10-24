@@ -76,7 +76,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -527,6 +531,7 @@ class ActivityServiceTest {
     void updateMember_changesNicknameAvatarAndTag() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        entity.setProviderRoomId("100");
         ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
         host.setNickname("旧昵称");
         host.setAvatarUrl("https://cdn.example/old.png");
@@ -541,6 +546,9 @@ class ActivityServiceTest {
         when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host));
         when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildRoleJoinUrl(anyString(), anyInt(), anyString(), anyString(), anyString()))
+                .thenReturn("https://live.vhall.com/role");
 
         ActivityMemberListResponse response = activityService.updateMember(uuid, request);
 
@@ -550,8 +558,34 @@ class ActivityServiceTest {
         assertEquals(ActivityMemberRole.HOST.getCode(), host.getRole());
         verify(memberRepository).save(host);
         verify(memberRepository, never()).deleteByIdActivityId(uuid);
+        verify(liveProvider).buildRoleJoinUrl(
+                eq("100"),
+                eq(ActivityMemberRole.HOST.getCode()),
+                eq(OPERATOR_ID + "@qkzb.com"),
+                eq("新昵称"),
+                eq("https://cdn.example/new.png"));
         assertEquals("新昵称", response.getList().get(0).getNickname());
         assertEquals("金牌讲师", response.getList().get(0).getTag());
+    }
+
+    @Test
+    void updateMember_skipsVhallWhenNoProviderRoom() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        UpdateActivityMemberRequest request = new UpdateActivityMemberRequest();
+        request.setId(OPERATOR_ID);
+        request.setNickname("新昵称");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+
+        activityService.updateMember(uuid, request);
+
+        verify(providerRegistry, never()).require(anyString());
+        verify(liveProvider, never()).buildRoleJoinUrl(anyString(), anyInt(), any(), any(), any());
     }
 
     @Test
@@ -614,6 +648,49 @@ class ActivityServiceTest {
         assertEquals(ActivityMemberRole.ASSISTANT.getCode(), captor.getValue().get(0).getRole());
         assertEquals("助理甲", captor.getValue().get(0).getNickname());
         assertEquals(2, response.getList().size());
+        verify(liveProvider, never()).buildRoleJoinUrl(anyString(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void addMembers_syncsVhallWhenProviderRoomPresent() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        entity.setProviderRoomId("100");
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        SysUserAccountEntity guest = activeUser(20002L, "嘉宾甲");
+        guest.setHeadimgurl("https://cdn.example/g.png");
+
+        AddActivityMembersRequest request = new AddActivityMembersRequest();
+        AddActivityMembersRequest.MemberBinding binding = new AddActivityMembersRequest.MemberBinding();
+        binding.setId(20002L);
+        binding.setRole(ActivityMemberRole.GUEST.getCode());
+        request.setMembers(List.of(binding));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host));
+        when(userRepository.findAllById(anyCollection())).thenAnswer(inv -> {
+            Collection<?> ids = inv.getArgument(0);
+            List<SysUserAccountEntity> users = new ArrayList<>();
+            if (ids.contains(OPERATOR_ID)) {
+                users.add(operator());
+            }
+            if (ids.contains(20002L)) {
+                users.add(guest);
+            }
+            return users;
+        });
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildRoleJoinUrl(anyString(), anyInt(), anyString(), anyString(), anyString()))
+                .thenReturn("https://live.vhall.com/role");
+
+        activityService.addMembers(uuid, request);
+
+        verify(liveProvider).buildRoleJoinUrl(
+                eq("100"),
+                eq(ActivityMemberRole.GUEST.getCode()),
+                eq("20002@qkzb.com"),
+                eq("嘉宾甲"),
+                eq("https://cdn.example/g.png"));
     }
 
     @Test
@@ -636,8 +713,53 @@ class ActivityServiceTest {
 
         verify(memberRepository).deleteById(new ActivityMemberId(uuid, 20002L));
         verify(memberRepository, never()).deleteByIdActivityId(uuid);
+        verify(liveProvider, never()).cancelRole(anyString(), anyString());
         assertEquals(1, response.getList().size());
         assertEquals(OPERATOR_ID, response.getList().get(0).getId());
+    }
+
+    @Test
+    void deleteMembers_cancelsVhallRoleWhenProviderRoomPresent() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        entity.setProviderRoomId("100");
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        ActivityMemberEntity assistant = member(uuid, 20002L, ActivityMemberRole.ASSISTANT.getCode(), 0);
+
+        DeleteActivityMembersRequest request = new DeleteActivityMembersRequest();
+        request.setIds(List.of(20002L));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host, assistant));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+
+        activityService.deleteMembers(uuid, request);
+
+        verify(liveProvider).cancelRole(eq("100"), eq("20002@qkzb.com"));
+        verify(memberRepository).deleteById(new ActivityMemberId(uuid, 20002L));
+    }
+
+    @Test
+    void deleteMembers_skipsVhallCancelForHost() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        entity.setProviderRoomId("100");
+        ActivityMemberEntity host1 = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        ActivityMemberEntity host2 = member(uuid, 20002L, ActivityMemberRole.HOST.getCode(), 1);
+
+        DeleteActivityMembersRequest request = new DeleteActivityMembersRequest();
+        request.setIds(List.of(20002L));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host1, host2));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+
+        activityService.deleteMembers(uuid, request);
+
+        verify(liveProvider, never()).cancelRole(anyString(), anyString());
+        verify(providerRegistry, never()).require(anyString());
+        verify(memberRepository).deleteById(new ActivityMemberId(uuid, 20002L));
     }
 
     @Test
@@ -684,6 +806,34 @@ class ActivityServiceTest {
         assertEquals("助教", captor.getValue().getTag());
         assertEquals("余灵巧", captor.getValue().getNickname());
         assertEquals(0, captor.getValue().getSortOrder());
+        verify(liveProvider, never()).buildRoleJoinUrl(anyString(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void acceptMemberInvite_syncsVhallWhenProviderRoomPresent() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        entity.setProviderRoomId("100");
+        AcceptActivityMemberRequest request = new AcceptActivityMemberRequest();
+        request.setRole(ActivityMemberRole.ASSISTANT.getCode());
+        request.setInviterId(20002L);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(userRepository.findById(20002L)).thenReturn(Optional.of(activeUser(20002L, "邀约人")));
+        when(memberRepository.findByActivityIds(anyCollection())).thenReturn(List.of());
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildRoleJoinUrl(anyString(), anyInt(), anyString(), anyString(), any()))
+                .thenReturn("https://live.vhall.com/role");
+
+        activityService.acceptMemberInvite(uuid, OPERATOR_ID, request);
+
+        verify(liveProvider).buildRoleJoinUrl(
+                eq("100"),
+                eq(ActivityMemberRole.ASSISTANT.getCode()),
+                eq(OPERATOR_ID + "@qkzb.com"),
+                eq("余灵巧"),
+                any());
     }
 
     @Test
@@ -730,6 +880,39 @@ class ActivityServiceTest {
 
         assertTrue(response.isAlreadyMember());
         verify(memberRepository, never()).save(any());
+        verify(liveProvider, never()).buildRoleJoinUrl(anyString(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void acceptMemberInvite_alreadyMemberStillSyncsVhallWhenRoomPresent() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        entity.setProviderRoomId("100");
+        ActivityMemberEntity existing = member(uuid, OPERATOR_ID, ActivityMemberRole.GUEST.getCode(), 0);
+        existing.setNickname("本场嘉宾");
+        existing.setAvatarUrl("https://cdn.example/g.png");
+        AcceptActivityMemberRequest request = new AcceptActivityMemberRequest();
+        request.setRole(ActivityMemberRole.GUEST.getCode());
+        request.setInviterId(20002L);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(userRepository.findById(20002L)).thenReturn(Optional.of(activeUser(20002L, "邀约人")));
+        when(memberRepository.findByActivityIds(anyCollection())).thenReturn(List.of(existing));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildRoleJoinUrl(anyString(), anyInt(), anyString(), anyString(), anyString()))
+                .thenReturn("https://live.vhall.com/role");
+
+        AcceptActivityMemberResponse response = activityService.acceptMemberInvite(uuid, OPERATOR_ID, request);
+
+        assertTrue(response.isAlreadyMember());
+        verify(memberRepository, never()).save(any());
+        verify(liveProvider).buildRoleJoinUrl(
+                eq("100"),
+                eq(ActivityMemberRole.GUEST.getCode()),
+                eq(OPERATOR_ID + "@qkzb.com"),
+                eq("本场嘉宾"),
+                eq("https://cdn.example/g.png"));
     }
 
     @Test
@@ -1078,7 +1261,7 @@ class ActivityServiceTest {
     @Test
     void list_rejectsPageBelowOne() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.list(0, 20, null, null, null, null, null, null, null));
+                () -> activityService.list(0, 20, null, null, null, null, null, null, null, null, null));
         assertEquals("page 不能小于 1", ex.getMessage());
     }
 
@@ -1356,7 +1539,7 @@ class ActivityServiceTest {
         when(activityRepository.search(any(), anyBoolean(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(alive, entity), PageRequest.of(0, 20), 2));
 
-        ActivityListResponse list = activityService.list(1, 20, null, null, null, null, null, null, null);
+        ActivityListResponse list = activityService.list(1, 20, null, null, null, null, null, null, null, null, null);
         assertEquals(1, list.getList().size());
         assertEquals(alive.getId(), list.getList().get(0).getId());
         assertTrue(list.getList().stream().noneMatch(item -> uuid.equals(item.getId())));

@@ -10,6 +10,6 @@ public class CourseAuditRequest {
     @NotBlank(message = "审核结果不能为空")
     private String result;
 
-    /** 仅驳回时填写。 */
+    /** 驳回必填；通过选填，有填则落库并回显。 */
     private String reason;
 }

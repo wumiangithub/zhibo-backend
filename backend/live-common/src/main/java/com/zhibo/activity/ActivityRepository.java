@@ -23,8 +23,7 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
             "(:keyword IS NULL OR a.title LIKE CONCAT('%', :keyword, '%') OR a.id = :keyword) AND " +
             "(:shelfStatus IS NULL OR a.shelfStatus = :shelfStatus) AND " +
             "(:startFrom IS NULL OR a.startTime >= :startFrom) AND " +
-            "(:startTo IS NULL OR a.startTime <= :startTo) " +
-            "ORDER BY a.createdTime DESC")
+            "(:startTo IS NULL OR a.startTime <= :startTo)")
     Page<ActivityEntity> search(
             @Param("provider") String provider,
             @Param("statesEmpty") boolean statesEmpty,

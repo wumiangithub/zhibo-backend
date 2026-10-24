@@ -11,4 +11,6 @@ public class CourseMaterialView {
     private String type;
     private Long fileSize;
     private String mimeType;
+    /** 1 预览及下载 / 2 仅预览 / 3 仅下载 */
+    private Integer accessPermission;
 }

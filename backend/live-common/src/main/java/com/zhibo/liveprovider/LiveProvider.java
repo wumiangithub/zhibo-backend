@@ -71,6 +71,17 @@ public interface LiveProvider {
         throw new UnsupportedOperationException("该服务商未接入角色参会");
     }
 
+    /**
+     * 取消云侧嘉宾/助理身份。
+     * 微吼：{@code POST /v3/webinars/live/cancel-role}（{@code webinar_id} + {@code email}）；
+     * 官方仅支持取消嘉宾/助理，不含主持人（type=1）。见 https://vhall.apifox.cn/234257712e0
+     *
+     * @param email 与 get-role-url 一致，本站为 {@code {userId}@qkzb.com}
+     */
+    default void cancelRole(String providerRoomId, String email) {
+        throw new UnsupportedOperationException("该服务商未接入取消角色");
+    }
+
     ProviderRoomSnapshot fetchRoom(String providerRoomId);
 
     void update(String providerRoomId, UpdateRoomCommand command);

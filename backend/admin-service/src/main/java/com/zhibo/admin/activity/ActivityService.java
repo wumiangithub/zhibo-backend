@@ -73,6 +73,7 @@ import com.zhibo.material.MaterialRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,6 +89,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -115,6 +117,10 @@ public class ActivityService {
     private static final Set<String> PLAYBACK_VALIDITY = Set.of("forever", "days");
     private static final int RELATION_LIMIT = 20;
     private static final int COURSEWARE_LIMIT = 100;
+    /** 微吼 get-role-url 身份邮箱后缀；与 HostService 一致 */
+    private static final String ROLE_EMAIL_DOMAIN = "@qkzb.com";
+    /** 微吼 get-role-url nickname 上限 */
+    private static final int VHALL_NICKNAME_MAX = 30;
     private final ActivityRepository activityRepository;
     private final HostPasscodeService hostPasscodeService;
     private final LiveProviderRegistry providerRegistry;
@@ -267,7 +273,9 @@ public class ActivityService {
             String provider,
             String shelfStatus,
             String startFrom,
-            String startTo) {
+            String startTo,
+            String sort,
+            String order) {
         if (page < 1) {
             throw new IllegalArgumentException("page 不能小于 1");
         }
@@ -294,7 +302,7 @@ public class ActivityService {
                 shelfFilter,
                 startFromBound,
                 startToBound,
-                PageRequest.of(page - 1, pageSize));
+                PageRequest.of(page - 1, pageSize, resolveListSort(sort, order)));
 
         List<ActivityEntity> visible = result.getContent().stream()
                 .filter(activity -> activity.getDeletedTime() == null)
@@ -1334,7 +1342,8 @@ public class ActivityService {
 
     /**
      * 更新一名已有开播成员的本场昵称、头像、标签。不改角色，不增删其他人。
-     * 不改 {@code activity_owner}，不触发风控回 pending，不同步微吼。
+     * 不改 {@code activity_owner}，不触发风控回 pending。
+     * 有 {@code provider_room_id} 时调微吼 get-role-url，把本场昵称/头像推到云侧（返回的 page_url 丢弃）。
      */
     @Transactional
     public ActivityMemberListResponse updateMember(String activityId, UpdateActivityMemberRequest request) {
@@ -1371,12 +1380,14 @@ public class ActivityService {
         target.setAvatarUrl(avatarUrl);
         target.setTag(tag);
         memberRepository.save(target);
+        syncMemberRoleProfileToProvider(entity, target);
         return toMemberList(existing);
     }
 
     /**
      * 增量添加开播成员。只插入请求里的人，不删除、不改已有行。
-     * 不改 {@code activity_owner}，不触发风控回 pending，不同步微吼。
+     * 不改 {@code activity_owner}，不触发风控回 pending。
+     * 有 {@code provider_room_id} 时对每位新人调微吼 get-role-url，推送本场昵称/头像。
      */
     @Transactional
     public ActivityMemberListResponse addMembers(String activityId, AddActivityMembersRequest request) {
@@ -1423,6 +1434,9 @@ public class ActivityService {
             byUser.put(item.userId(), row);
         }
         memberRepository.saveAll(rows);
+        for (ActivityMemberEntity row : rows) {
+            syncMemberRoleProfileToProvider(entity, row);
+        }
         List<ActivityMemberEntity> all = new ArrayList<>(existing);
         all.addAll(rows);
         all.sort(Comparator.comparingInt(ActivityMemberEntity::getRole)
@@ -1433,6 +1447,7 @@ public class ActivityService {
     /**
      * 按员工 id 删除开播成员。只删列出的人，其余不动。
      * 删完至少还要留 1 名主播。已绑报备时不能删主播。
+     * 有 {@code provider_room_id} 时，对被删的嘉宾/助理调微吼 cancel-role；主播只落本站（官方不支持取消主持人）。
      */
     @Transactional
     public ActivityMemberListResponse deleteMembers(String activityId, DeleteActivityMembersRequest request) {
@@ -1460,6 +1475,7 @@ public class ActivityService {
         }
         boolean hostLocked = trimToNull(entity.getReportId()) != null;
         int removingHosts = 0;
+        List<ActivityMemberEntity> toRemove = new ArrayList<>();
         for (Long userId : ids) {
             ActivityMemberEntity row = byUser.get(userId);
             if (row == null) {
@@ -1471,9 +1487,13 @@ public class ActivityService {
                     throw new IllegalArgumentException("已绑定直播报备不可修改");
                 }
             }
+            toRemove.add(row);
         }
         if (hostCount - removingHosts < 1) {
             throw new IllegalArgumentException("主播至少选择1人");
+        }
+        for (ActivityMemberEntity row : toRemove) {
+            cancelMemberRoleOnProvider(entity, row);
         }
         for (Long userId : ids) {
             memberRepository.deleteById(new ActivityMemberId(activityId, userId));
@@ -1490,6 +1510,7 @@ public class ActivityService {
     /**
      * 打开角色邀约链接：把当前登录员工加入本场 {@code activity_member}。
      * 邀约人只校验并回显，不写入成员表。同一人同一角色再次打开视为已加入。
+     * 有 {@code provider_room_id} 时调微吼 get-role-url，推送本场昵称/头像（已加入也再推一次）。
      */
     @Transactional
     public AcceptActivityMemberResponse acceptMemberInvite(
@@ -1522,6 +1543,7 @@ public class ActivityService {
         }
         if (mine != null) {
             if (mine.getRole() == role.getCode()) {
+                syncMemberRoleProfileToProvider(entity, mine);
                 return acceptResponse(invitee, role, true, inviter);
             }
             String current = ActivityMemberRole.requireCode(mine.getRole()).getLabel();
@@ -1541,7 +1563,46 @@ public class ActivityService {
         row.setNickname(snapshotMemberNickname(invitee));
         row.setAvatarUrl(AuthService.resolveAvatar(invitee));
         memberRepository.save(row);
+        syncMemberRoleProfileToProvider(entity, row);
         return acceptResponse(invitee, role, false, inviter);
+    }
+
+    /**
+     * 调微吼 get-role-url，用本场昵称/头像更新云侧角色资料；返回的 page_url 不用。
+     * 尚无 {@code provider_room_id}（如录播未建场）则跳过。云侧异常抛出则事务回滚。
+     */
+    private void syncMemberRoleProfileToProvider(ActivityEntity entity, ActivityMemberEntity member) {
+        String roomId = trimToNull(entity.getProviderRoomId());
+        if (roomId == null) {
+            return;
+        }
+        long userId = member.getId().getUserId();
+        String email = userId + ROLE_EMAIL_DOMAIN;
+        String nickname = trimToNull(member.getNickname());
+        if (nickname == null) {
+            nickname = "用户" + userId;
+        } else if (nickname.length() > VHALL_NICKNAME_MAX) {
+            nickname = nickname.substring(0, VHALL_NICKNAME_MAX);
+        }
+        String avatar = trimToNull(member.getAvatarUrl());
+        providerRegistry.require(entity.getProvider())
+                .buildRoleJoinUrl(roomId, member.getRole(), email, nickname, avatar);
+    }
+
+    /**
+     * 调微吼 cancel-role，取消嘉宾/助理云侧身份。主播跳过（官方接口不含主持人）。
+     * 尚无 {@code provider_room_id} 则跳过。云侧异常抛出则事务回滚（与 get-role-url 同步一致）。
+     */
+    private void cancelMemberRoleOnProvider(ActivityEntity entity, ActivityMemberEntity member) {
+        if (ActivityMemberRole.isHost(member.getRole())) {
+            return;
+        }
+        String roomId = trimToNull(entity.getProviderRoomId());
+        if (roomId == null) {
+            return;
+        }
+        String email = member.getId().getUserId() + ROLE_EMAIL_DOMAIN;
+        providerRegistry.require(entity.getProvider()).cancelRole(roomId, email);
     }
 
     private AcceptActivityMemberResponse acceptResponse(
@@ -1872,6 +1933,22 @@ public class ActivityService {
             throw new IllegalArgumentException("shelfStatus 无效");
         }
         return value;
+    }
+
+    /** 不传 sort 时保持历史默认：createdTime 降序；当前仅支持 startTime。 */
+    static Sort resolveListSort(String sort, String order) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by("createdTime").descending();
+        }
+        String field = sort.trim();
+        if (!"startTime".equals(field)) {
+            throw new IllegalArgumentException("sort 无效");
+        }
+        String direction = order == null || order.isBlank() ? "desc" : order.trim().toLowerCase(Locale.ROOT);
+        if (!"asc".equals(direction) && !"desc".equals(direction)) {
+            throw new IllegalArgumentException("order 无效");
+        }
+        return "asc".equals(direction) ? Sort.by(field).ascending() : Sort.by(field).descending();
     }
 
     /**

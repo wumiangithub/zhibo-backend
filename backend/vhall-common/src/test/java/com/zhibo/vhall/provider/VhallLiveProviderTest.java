@@ -456,4 +456,26 @@ class VhallLiveProviderTest {
         assertNull(params.get("nickname"));
         assertNull(params.get("avatar"));
     }
+
+    @Test
+    void cancelRole_postsWebinarIdAndEmail() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CANCEL_ROLE), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of());
+
+        provider.cancelRole("100", "20002@qkzb.com");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_CANCEL_ROLE), captor.capture(), eq(Map.class));
+        Map<String, Object> params = captor.getValue();
+        assertEquals("100", params.get("webinar_id"));
+        assertEquals("20002@qkzb.com", params.get("email"));
+        assertNull(params.get("type"));
+    }
+
+    @Test
+    void cancelRole_rejectsBlankEmail() {
+        assertThrows(IllegalArgumentException.class, () -> provider.cancelRole("100", "  "));
+        verify(vhallClient, never()).postForData(eq(VhallLiveProvider.PATH_CANCEL_ROLE), anyMap(), eq(Map.class));
+    }
 }

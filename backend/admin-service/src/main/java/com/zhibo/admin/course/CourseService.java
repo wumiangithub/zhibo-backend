@@ -10,6 +10,7 @@ import com.zhibo.admin.course.dto.CourseAuditResultResponse;
 import com.zhibo.admin.course.dto.CourseDetailResponse;
 import com.zhibo.admin.course.dto.CourseIdResponse;
 import com.zhibo.admin.course.dto.CourseListResponse;
+import com.zhibo.admin.course.dto.CourseMaterialInput;
 import com.zhibo.admin.course.dto.CourseMaterialView;
 import com.zhibo.admin.course.dto.CoursePerson;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
@@ -22,6 +23,7 @@ import com.zhibo.admin.course.dto.OutsideCourseOwner;
 import com.zhibo.course.CourseAuditEntity;
 import com.zhibo.course.CourseAuditRepository;
 import com.zhibo.course.CourseEntity;
+import com.zhibo.course.CourseMaterialAccess;
 import com.zhibo.course.CourseMaterialEntity;
 import com.zhibo.course.CourseMaterialId;
 import com.zhibo.course.CourseMaterialRepository;
@@ -92,7 +94,7 @@ public class CourseService {
         String detailHtml = normalizeDetail(request.getDetailHtml());
         MaterialEntity cover = requireCover(request.getCoverMaterialId());
         List<Long> ownerIds = parseOwnerIds(request.getOwnerIds());
-        List<MaterialEntity> materials = parseMaterials(request.getMaterialIds());
+        List<BoundMaterial> materials = parseBoundMaterials(request.getMaterials(), request.getMaterialIds());
         SysUserAccountEntity operator = requireOperator(operatorId);
 
         CourseEntity entity = new CourseEntity();
@@ -294,13 +296,14 @@ public class CourseService {
             throw new IllegalArgumentException("审核结果无效");
         }
         String reason = null;
-        if ("rejected".equals(result)) {
-            reason = request.getReason() == null ? "" : request.getReason().trim();
-            if (reason.isEmpty() || reason.length() > 200) {
-                throw new IllegalArgumentException("驳回理由须为1～200字");
+        if (request.getReason() != null && !request.getReason().isBlank()) {
+            reason = request.getReason().trim();
+            if (reason.length() > 200) {
+                throw new IllegalArgumentException("理由不能超过200字");
             }
-        } else if (request.getReason() != null && !request.getReason().isBlank()) {
-            throw new IllegalArgumentException("通过时不要填写理由");
+        }
+        if ("rejected".equals(result) && (reason == null || reason.isEmpty())) {
+            throw new IllegalArgumentException("驳回理由须为1～200字");
         }
 
         CourseEntity entity = requireCourse(id);
@@ -435,26 +438,55 @@ public class CourseService {
         return List.copyOf(ids);
     }
 
-    private List<MaterialEntity> parseMaterials(List<String> rawIds) {
-        if (rawIds == null || rawIds.isEmpty()) {
+    /**
+     * 优先 {@code materials}；否则回退 {@code materialIds}（权限按扩展名默认）。
+     */
+    private List<BoundMaterial> parseBoundMaterials(
+            List<CourseMaterialInput> materials,
+            List<String> materialIds) {
+        if (materials != null && !materials.isEmpty()) {
+            LinkedHashMap<String, Integer> ordered = new LinkedHashMap<>();
+            for (CourseMaterialInput item : materials) {
+                if (item == null) {
+                    throw new IllegalArgumentException("课件无效");
+                }
+                String id = item.getId() == null ? "" : item.getId().trim();
+                if (id.isEmpty()) {
+                    throw new IllegalArgumentException("课件无效");
+                }
+                if (ordered.containsKey(id)) {
+                    continue;
+                }
+                ordered.put(id, item.getAccessPermission());
+            }
+            return resolveBoundMaterials(ordered);
+        }
+        if (materialIds == null || materialIds.isEmpty()) {
             return List.of();
         }
-        LinkedHashSet<String> ids = new LinkedHashSet<>();
-        for (String raw : rawIds) {
+        LinkedHashMap<String, Integer> ordered = new LinkedHashMap<>();
+        for (String raw : materialIds) {
             String id = raw == null ? "" : raw.trim();
             if (id.isEmpty()) {
                 throw new IllegalArgumentException("课件无效");
             }
-            ids.add(id);
+            if (ordered.containsKey(id)) {
+                continue;
+            }
+            ordered.put(id, null);
         }
-        if (ids.size() > MATERIAL_LIMIT) {
+        return resolveBoundMaterials(ordered);
+    }
+
+    private List<BoundMaterial> resolveBoundMaterials(LinkedHashMap<String, Integer> ordered) {
+        if (ordered.size() > MATERIAL_LIMIT) {
             throw new IllegalArgumentException("课件不能超过" + MATERIAL_LIMIT + "个");
         }
-        Map<String, MaterialEntity> found = materialRepository.findAllById(ids).stream()
+        Map<String, MaterialEntity> found = materialRepository.findAllById(ordered.keySet()).stream()
                 .collect(Collectors.toMap(MaterialEntity::getId, item -> item, (a, b) -> a));
-        List<MaterialEntity> materials = new ArrayList<>();
-        for (String id : ids) {
-            MaterialEntity material = found.get(id);
+        List<BoundMaterial> result = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : ordered.entrySet()) {
+            MaterialEntity material = found.get(entry.getKey());
             if (material == null || material.getDeletedTime() != null) {
                 throw new IllegalArgumentException("课件无效");
             }
@@ -470,9 +502,49 @@ public class CourseService {
             if (material.getUrl() == null || material.getUrl().isBlank()) {
                 throw new IllegalArgumentException("课件无效");
             }
-            materials.add(material);
+            int permission = resolveAccessPermission(material.getName(), entry.getValue());
+            result.add(new BoundMaterial(material, permission));
         }
-        return materials;
+        return result;
+    }
+
+    /**
+     * 压缩包强制仅下载；可预览格式只允许预览及下载 / 仅预览；省略则默认预览及下载。
+     */
+    static int resolveAccessPermission(String materialName, Integer requested) {
+        if (isArchiveName(materialName)) {
+            if (requested != null && requested != CourseMaterialAccess.DOWNLOAD_ONLY) {
+                throw new IllegalArgumentException(
+                        CourseMaterialAccess.isKnown(requested)
+                                ? "压缩包课件仅支持下载"
+                                : "课件用户权限无效");
+            }
+            return CourseMaterialAccess.DOWNLOAD_ONLY;
+        }
+        if (requested == null) {
+            return CourseMaterialAccess.PREVIEW_DOWNLOAD;
+        }
+        if (requested == CourseMaterialAccess.PREVIEW_DOWNLOAD
+                || requested == CourseMaterialAccess.PREVIEW_ONLY) {
+            return requested;
+        }
+        if (requested == CourseMaterialAccess.DOWNLOAD_ONLY) {
+            throw new IllegalArgumentException("该课件不支持仅下载，请选择预览及下载或仅预览");
+        }
+        throw new IllegalArgumentException("课件用户权限无效");
+    }
+
+    static boolean isArchiveName(String name) {
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        String lower = name.trim().toLowerCase(Locale.ROOT);
+        int dot = lower.lastIndexOf('.');
+        if (dot < 0 || dot == lower.length() - 1) {
+            return false;
+        }
+        String ext = lower.substring(dot + 1);
+        return Set.of("zip", "rar", "7z", "tar", "gz", "tgz").contains(ext);
     }
 
     private static boolean passed(MaterialEntity material) {
@@ -512,14 +584,15 @@ public class CourseService {
         ownerRepository.saveAll(rows);
     }
 
-    private void replaceMaterials(String courseId, List<MaterialEntity> materials) {
+    private void replaceMaterials(String courseId, List<BoundMaterial> materials) {
         materialBindingRepository.deleteByIdCourseId(courseId);
         if (materials.isEmpty()) {
             return;
         }
         List<CourseMaterialEntity> rows = new ArrayList<>();
         int order = 0;
-        for (MaterialEntity material : materials) {
+        for (BoundMaterial bound : materials) {
+            MaterialEntity material = bound.material();
             CourseMaterialEntity row = new CourseMaterialEntity();
             row.setId(new CourseMaterialId(courseId, material.getId()));
             row.setName(material.getName() == null ? "" : material.getName());
@@ -527,6 +600,7 @@ public class CourseService {
             row.setType(material.getType());
             row.setFileSize(material.getFileSize());
             row.setMimeType(material.getMimeType());
+            row.setAccessPermission(bound.accessPermission());
             row.setSortOrder(order++);
             rows.add(row);
         }
@@ -635,9 +709,13 @@ public class CourseService {
             view.setType(row.getType());
             view.setFileSize(row.getFileSize());
             view.setMimeType(row.getMimeType());
+            view.setAccessPermission(row.getAccessPermission());
             views.add(view);
         }
         return views;
+    }
+
+    private record BoundMaterial(MaterialEntity material, int accessPermission) {
     }
 
     private CourseSummary toSummary(CourseEntity entity) {
@@ -693,7 +771,7 @@ public class CourseService {
         item.setCreatedTime(formatTime(row.getCreatedTime()));
         if (!"submit".equals(action)) {
             item.setResult(row.getResult());
-            if ("rejected".equals(row.getResult())) {
+            if (row.getReason() != null && !row.getReason().isBlank()) {
                 item.setReason(row.getReason());
             }
         }

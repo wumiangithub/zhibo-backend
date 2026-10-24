@@ -70,9 +70,11 @@ public class ActivityController {
             @RequestParam(required = false) String provider,
             @RequestParam(required = false) String shelfStatus,
             @RequestParam(required = false) String startFrom,
-            @RequestParam(required = false) String startTo) {
+            @RequestParam(required = false) String startTo,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
         return ApiResponse.ok(activityService.list(
-                page, pageSize, keyword, state, states, provider, shelfStatus, startFrom, startTo));
+                page, pageSize, keyword, state, states, provider, shelfStatus, startFrom, startTo, sort, order));
     }
 
     @GetMapping("/detail/{id}")
