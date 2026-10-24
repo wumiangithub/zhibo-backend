@@ -85,7 +85,7 @@ import static org.mockito.Mockito.when;
 class ActivityServiceTest {
 
     private static final long OPERATOR_ID = 10001L;
-    private static final String DEFAULT_REPORT_ID = "11111111-1111-1111-1111-111111111111";
+    private static final String DEFAULT_REPORT_ID = "11111111111111111111111111111111";
 
     @Mock
     private ActivityRepository activityRepository;
@@ -113,6 +113,8 @@ class ActivityServiceTest {
     private LiveReportRepository liveReportRepository;
     @Mock
     private RecordDemandFinalizeService recordDemandFinalizeService;
+    @Mock
+    private HostPasscodeService hostPasscodeService;
 
     @InjectMocks
     private ActivityService activityService;
@@ -399,7 +401,7 @@ class ActivityServiceTest {
 
     @Test
     void create_bindsPassedReport() {
-        String reportId = "11111111-1111-1111-1111-111111111111";
+        String reportId = "11111111111111111111111111111111";
         CreateActivityRequest request = baseCreateRequest();
         request.setReportId(reportId);
         LiveReportEntity report = passedReport(reportId, OPERATOR_ID);
@@ -428,7 +430,7 @@ class ActivityServiceTest {
 
     @Test
     void create_rejectsNonPassedReport() {
-        String reportId = "11111111-1111-1111-1111-111111111111";
+        String reportId = "11111111111111111111111111111111";
         CreateActivityRequest request = baseCreateRequest();
         request.setReportId(reportId);
         LiveReportEntity report = passedReport(reportId, OPERATOR_ID);
@@ -445,7 +447,7 @@ class ActivityServiceTest {
 
     @Test
     void create_rejectsHostMismatch() {
-        String reportId = "11111111-1111-1111-1111-111111111111";
+        String reportId = "11111111111111111111111111111111";
         CreateActivityRequest request = baseCreateRequest();
         request.setReportId(reportId);
 
@@ -460,8 +462,8 @@ class ActivityServiceTest {
 
     @Test
     void delete_decrementsBoundReport() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-        String reportId = "11111111-1111-1111-1111-111111111111";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        String reportId = "11111111111111111111111111111111";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         entity.setProvider("vhall");
         entity.setProviderRoomId("100");
@@ -485,7 +487,7 @@ class ActivityServiceTest {
 
     @Test
     void create_rejectsUnknownReport() {
-        String reportId = "11111111-1111-1111-1111-111111111111";
+        String reportId = "11111111111111111111111111111111";
         CreateActivityRequest request = baseCreateRequest();
         request.setReportId(reportId);
 
@@ -500,8 +502,8 @@ class ActivityServiceTest {
 
     @Test
     void update_rejectsHostChangeWhenBound() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-        String reportId = "11111111-1111-1111-1111-111111111111";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        String reportId = "11111111111111111111111111111111";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         entity.setReportId(reportId);
         UpdateActivityRequest request = new UpdateActivityRequest();
@@ -523,7 +525,7 @@ class ActivityServiceTest {
 
     @Test
     void updateMember_changesNicknameAvatarAndTag() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
         host.setNickname("旧昵称");
@@ -554,7 +556,7 @@ class ActivityServiceTest {
 
     @Test
     void listMembers_returnsLiveHeadimgurl() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         SysUserAccountEntity hostUser = operator();
         hostUser.setHeadimgurl("  https://wx.example/live.jpg  ");
@@ -576,7 +578,7 @@ class ActivityServiceTest {
 
     @Test
     void addMembers_insertsAssistantWithoutReplacingHost() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
         host.setNickname("余灵巧");
@@ -616,7 +618,7 @@ class ActivityServiceTest {
 
     @Test
     void deleteMembers_removesAssistantAndKeepsHost() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
         host.setNickname("余灵巧");
@@ -640,7 +642,7 @@ class ActivityServiceTest {
 
     @Test
     void deleteMembers_rejectsRemovingLastHost() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
         DeleteActivityMembersRequest request = new DeleteActivityMembersRequest();
@@ -657,7 +659,7 @@ class ActivityServiceTest {
 
     @Test
     void acceptMemberInvite_insertsAssistant() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         AcceptActivityMemberRequest request = new AcceptActivityMemberRequest();
         request.setRole(ActivityMemberRole.ASSISTANT.getCode());
@@ -686,7 +688,7 @@ class ActivityServiceTest {
 
     @Test
     void update_hostIdsSnapshotsEmployeeNickname() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         request.setHostIds(List.of(OPERATOR_ID));
@@ -712,7 +714,7 @@ class ActivityServiceTest {
 
     @Test
     void acceptMemberInvite_sameRoleDoesNotInsertAgain() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         ActivityMemberEntity existing = member(uuid, OPERATOR_ID, ActivityMemberRole.GUEST.getCode(), 0);
         AcceptActivityMemberRequest request = new AcceptActivityMemberRequest();
@@ -732,7 +734,7 @@ class ActivityServiceTest {
 
     @Test
     void acceptMemberInvite_rejectsSwitchingRole() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         AcceptActivityMemberRequest request = new AcceptActivityMemberRequest();
         request.setRole(ActivityMemberRole.HOST.getCode());
@@ -752,7 +754,7 @@ class ActivityServiceTest {
 
     @Test
     void acceptMemberInvite_rejectsHostWhenReportBound() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         entity.setReportId("report-1");
         AcceptActivityMemberRequest request = new AcceptActivityMemberRequest();
@@ -771,7 +773,7 @@ class ActivityServiceTest {
 
     @Test
     void acceptMemberInvite_rejectsInactiveInviter() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         SysUserAccountEntity inviter = activeUser(20002L, "邀约人");
         inviter.setRsStatus(0);
@@ -791,7 +793,7 @@ class ActivityServiceTest {
 
     @Test
     void update_hostIdsDoesNotWipeOtherRoles() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         request.setHostIds(List.of(OPERATOR_ID));
@@ -810,7 +812,7 @@ class ActivityServiceTest {
 
     @Test
     void update_fromPassedAppendsSubmit() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         request.setAutoList(true);
@@ -835,7 +837,7 @@ class ActivityServiceTest {
 
     @Test
     void update_fromRejectedAppendsSubmit() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         request.setDetailHtml("<p>改详情</p>");
@@ -855,7 +857,7 @@ class ActivityServiceTest {
 
     @Test
     void update_pendingDoesNotAppendSubmit() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         request.setAutoList(false);
@@ -872,7 +874,7 @@ class ActivityServiceTest {
 
     @Test
     void update_productsOnly_skipsRiskPendingAndDoesNotReapply() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         CreateActivityRequest.ProductBinding product = new CreateActivityRequest.ProductBinding();
@@ -894,7 +896,7 @@ class ActivityServiceTest {
 
     @Test
     void update_productsOnly_allowsWhilePending() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
         CreateActivityRequest.ProductBinding product = new CreateActivityRequest.ProductBinding();
@@ -914,7 +916,7 @@ class ActivityServiceTest {
 
     @Test
     void listRecords_mapsProviderRecords() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -941,7 +943,7 @@ class ActivityServiceTest {
 
     @Test
     void recordDownload_mapsProviderDownload() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -961,7 +963,7 @@ class ActivityServiceTest {
 
     @Test
     void pushStream_mapsThreeFields() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -983,7 +985,7 @@ class ActivityServiceTest {
 
     @Test
     void pushStream_propagatesVhallFailure() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -1001,7 +1003,7 @@ class ActivityServiceTest {
 
     @Test
     void streamStatus_mapsStatus() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -1017,7 +1019,7 @@ class ActivityServiceTest {
 
     @Test
     void streamStatus_propagatesVhallFailure() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -1035,7 +1037,7 @@ class ActivityServiceTest {
 
     @Test
     void startLive_writesStateFromProvider() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -1056,7 +1058,7 @@ class ActivityServiceTest {
 
     @Test
     void startLive_propagatesVhallFailure() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
@@ -1082,7 +1084,7 @@ class ActivityServiceTest {
 
     @Test
     void audit_rejectBansShelf() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "pending", 2);
         SysUserAccountEntity operator = operator();
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
@@ -1109,7 +1111,7 @@ class ActivityServiceTest {
 
     @Test
     void audit_passWithAutoListGoesOn() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         entity.setAutoList(true);
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
@@ -1125,8 +1127,31 @@ class ActivityServiceTest {
     }
 
     @Test
+    void audit_passWithOptionalReasonPersists() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
+        entity.setAutoList(false);
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(10001L)).thenReturn(Optional.of(operator()));
+        when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        AuditRequest request = new AuditRequest();
+        request.setResult("passed");
+        request.setReason("  材料齐全  ");
+
+        AuditResultResponse response = activityService.audit(uuid, request, 10001L);
+        assertEquals("passed", response.getRiskStatus());
+
+        ArgumentCaptor<ActivityAuditEntity> row = ArgumentCaptor.forClass(ActivityAuditEntity.class);
+        verify(auditRepository).save(row.capture());
+        assertEquals("audit", row.getValue().getAction());
+        assertEquals("passed", row.getValue().getResult());
+        assertEquals("材料齐全", row.getValue().getReason());
+    }
+
+    @Test
     void audit_passAfterBanWithoutAutoListReturnsToPending() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         entity.setAutoList(false);
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
@@ -1151,7 +1176,7 @@ class ActivityServiceTest {
 
     @Test
     void audits_returnsSubmitThenAuditNewestFirst() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         entity.setCreatedTime(LocalDateTime.of(2026, 10, 14, 10, 0, 0));
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
@@ -1169,6 +1194,7 @@ class ActivityServiceTest {
         pass.setActivityId(uuid);
         pass.setAction("audit");
         pass.setResult("passed");
+        pass.setReason("材料齐全");
         pass.setOperatorId(10001L);
         pass.setOperatorName("余灵巧");
         pass.setCreatedTime(LocalDateTime.of(2026, 10, 14, 11, 0, 0));
@@ -1179,6 +1205,7 @@ class ActivityServiceTest {
         assertEquals(2, response.getList().size());
         assertEquals("audit", response.getList().get(0).getAction());
         assertEquals("passed", response.getList().get(0).getResult());
+        assertEquals("材料齐全", response.getList().get(0).getReason());
         assertEquals("2026-10-14 11:00:00", response.getList().get(0).getCreatedTime());
         assertEquals("submit", response.getList().get(1).getAction());
         assertNull(response.getList().get(1).getResult());
@@ -1188,7 +1215,7 @@ class ActivityServiceTest {
 
     @Test
     void audits_synthesizesSubmitWhenHistoryMissing() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         entity.setCreatedTime(LocalDateTime.of(2026, 10, 1, 9, 30, 0));
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
@@ -1219,7 +1246,7 @@ class ActivityServiceTest {
 
     @Test
     void audits_synthesizesSubmitWhenNoRows() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         entity.setCreatedTime(LocalDateTime.of(2026, 10, 17, 8, 0, 0));
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
@@ -1237,7 +1264,7 @@ class ActivityServiceTest {
 
     @Test
     void updatePlayback_requiresFieldsWhenEnabled() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
 
@@ -1251,7 +1278,7 @@ class ActivityServiceTest {
 
     @Test
     void updateSales_paidRequiresPriceAndLinePriceGreater() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -1281,7 +1308,7 @@ class ActivityServiceTest {
 
     @Test
     void updateSales_encryptedRequiresSixDigits() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -1308,7 +1335,7 @@ class ActivityServiceTest {
 
     @Test
     void delete_softDeletesAndListHidesIt() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
         entity.setProvider("vhall");
         entity.setProviderRoomId("100");
@@ -1325,7 +1352,7 @@ class ActivityServiceTest {
         verify(liveProvider).delete("100");
         verify(activityRepository, never()).delete(any());
 
-        ActivityEntity alive = liveActivity("b1b2c3d4-e5f6-7890-abcd-ef1234567890", "on", "passed", 2);
+        ActivityEntity alive = liveActivity("b1b2c3d4e5f67890abcdef1234567890", "on", "passed", 2);
         when(activityRepository.search(any(), anyBoolean(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(alive, entity), PageRequest.of(0, 20), 2));
 
@@ -1337,7 +1364,7 @@ class ActivityServiceTest {
 
     @Test
     void shelf_bannedCannotChange() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         ShelfRequest request = new ShelfRequest();

@@ -10,7 +10,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /** 素材 AI / 风控审核流水。 */
 @Entity
@@ -20,10 +20,10 @@ import java.util.UUID;
 public class MaterialAuditLogEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
-    @Column(name = "material_id", nullable = false, length = 36)
+    @Column(name = "material_id", nullable = false, length = 32)
     private String materialId;
 
     /** ai / risk */
@@ -47,7 +47,7 @@ public class MaterialAuditLogEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }

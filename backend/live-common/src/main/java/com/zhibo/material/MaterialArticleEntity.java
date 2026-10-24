@@ -15,7 +15,7 @@ import lombok.Setter;
 public class MaterialArticleEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
     @Column(nullable = false, length = 16)

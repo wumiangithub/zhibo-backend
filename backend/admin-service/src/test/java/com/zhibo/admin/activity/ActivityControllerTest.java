@@ -1,5 +1,6 @@
 package com.zhibo.admin.activity;
 
+import com.zhibo.admin.activity.dto.ActivityPasscodeResponse;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
 import com.zhibo.admin.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,18 +24,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 class ActivityControllerTest {
 
-    private static final String UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    private static final String UUID = "a1b2c3d4e5f67890abcdef1234567890";
 
     private MockMvc mockMvc;
     private ActivityService activityService;
     private HostService hostService;
+    private HostPasscodeService hostPasscodeService;
 
     @BeforeEach
     void setUp() {
         activityService = mock(ActivityService.class);
         hostService = mock(HostService.class);
+        hostPasscodeService = mock(HostPasscodeService.class);
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new ActivityController(activityService, hostService))
+                        new ActivityController(activityService, hostService, hostPasscodeService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -118,6 +121,30 @@ class ActivityControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.provider").value("vhall"))
                 .andExpect(jsonPath("$.data.hostUrl").value("https://host.example/page"));
+    }
+
+    @Test
+    void passcode_returnsOk() throws Exception {
+        ActivityPasscodeResponse body = new ActivityPasscodeResponse();
+        body.setPasscode("274803129");
+        when(hostPasscodeService.getPasscode(eq(UUID))).thenReturn(body);
+
+        mockMvc.perform(get("/api/v1/activities/passcode/" + UUID).accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.passcode").value("274803129"));
+    }
+
+    @Test
+    void resetPasscode_returnsOk() throws Exception {
+        ActivityPasscodeResponse body = new ActivityPasscodeResponse();
+        body.setPasscode("111222333");
+        when(hostPasscodeService.resetPasscode(eq(UUID))).thenReturn(body);
+
+        mockMvc.perform(post("/api/v1/activities/passcode/reset/" + UUID).accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.passcode").value("111222333"));
     }
 
     @Test

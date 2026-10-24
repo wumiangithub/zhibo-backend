@@ -47,7 +47,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 import java.util.stream.Collectors;
 
 @Service
@@ -273,7 +273,7 @@ public class MaterialService {
         String content = requireArticleContent(request.getContent());
 
         MaterialEntity entity = new MaterialEntity();
-        entity.setId(UUID.randomUUID().toString());
+        entity.setId(UuidIds.newId());
         entity.setType("article");
         entity.setGroupId(groupId);
         entity.setName(title);
@@ -530,10 +530,8 @@ public class MaterialService {
     }
 
     private MaterialEntity requireActiveMaterial(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("素材不存在或已删除");
-        }
-        MaterialEntity entity = materialRepository.findById(id.trim())
+        String uuid = UuidIds.require(id, "素材不存在或已删除", "素材不存在或已删除");
+        MaterialEntity entity = materialRepository.findById(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("素材不存在或已删除"));
         if (entity.getDeletedTime() != null) {
             throw new IllegalArgumentException("素材不存在或已删除");
@@ -607,10 +605,8 @@ public class MaterialService {
     }
 
     private MaterialGroupEntity requireGroup(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("分组不存在");
-        }
-        return groupRepository.findById(id.trim())
+        String uuid = UuidIds.require(id, "分组不存在", "分组不存在");
+        return groupRepository.findById(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("分组不存在"));
     }
 

@@ -19,7 +19,7 @@ import java.io.Serializable;
 @EqualsAndHashCode
 public class ActivityProductId implements Serializable {
 
-    @Column(name = "activity_id", length = 36)
+    @Column(name = "activity_id", length = 32)
     private String activityId;
 
     /** 十进制字符串，避免雪花 id 超出 JS 安全整数。 */

@@ -12,7 +12,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 import org.springframework.stereotype.Service;
@@ -35,7 +35,7 @@ public class CaptchaService {
 
     public CaptchaResponse create() {
         purge();
-        String id = UUID.randomUUID().toString();
+        String id = UuidIds.newId();
         String code = randomCode();
         store.put(id, new Entry(code, clock.instant().plusSeconds(TTL_SECONDS)));
         return new CaptchaResponse(id, "data:image/png;base64," + renderPngBase64(code));

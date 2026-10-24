@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class WatchServiceTest {
 
-    private static final String ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    private static final String ID = "a1b2c3d4e5f67890abcdef1234567890";
 
     @Mock
     private ActivityRepository activityRepository;

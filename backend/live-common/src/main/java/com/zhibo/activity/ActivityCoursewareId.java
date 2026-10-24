@@ -19,9 +19,9 @@ import java.io.Serializable;
 @EqualsAndHashCode
 public class ActivityCoursewareId implements Serializable {
 
-    @Column(name = "activity_id", length = 36)
+    @Column(name = "activity_id", length = 32)
     private String activityId;
 
-    @Column(name = "material_id", length = 36)
+    @Column(name = "material_id", length = 32)
     private String materialId;
 }

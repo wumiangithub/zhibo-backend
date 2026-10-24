@@ -50,7 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 import java.util.stream.Collectors;
 
 @Service
@@ -96,7 +96,7 @@ public class CourseService {
         SysUserAccountEntity operator = requireOperator(operatorId);
 
         CourseEntity entity = new CourseEntity();
-        entity.setId(UUID.randomUUID().toString());
+        entity.setId(UuidIds.newId());
         entity.setTitle(title);
         entity.setIntroduction(introduction);
         entity.setDetailHtml(detailHtml);
@@ -342,14 +342,7 @@ public class CourseService {
     }
 
     private static String requireUuid(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("课程 id 无效");
-        }
-        try {
-            return UUID.fromString(id.trim()).toString();
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("课程 id 须为本站 UUID");
-        }
+        return UuidIds.require(id, "课程 id 无效", "课程 id 须为本站 UUID");
     }
 
     private SysUserAccountEntity requireOperator(long operatorId) {

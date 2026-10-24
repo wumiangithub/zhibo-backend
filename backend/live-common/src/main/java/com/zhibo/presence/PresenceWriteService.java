@@ -6,8 +6,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.zhibo.common.UuidIds;
+
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * 进出双写：名单 {@code room_attendance} + 流水 {@code presence_event}。
@@ -131,7 +132,7 @@ public class PresenceWriteService {
     private static RoomAttendanceEntity newRoom(
             String roomId, String userId, LocalDateTime enterTime, String nickname, String avatarUrl) {
         RoomAttendanceEntity row = new RoomAttendanceEntity();
-        row.setId(UUID.randomUUID().toString());
+        row.setId(UuidIds.newId());
         row.setRoomId(roomId);
         row.setUserId(userId);
         row.setNickname(nickname);

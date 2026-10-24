@@ -10,7 +10,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /** 活动风控审核记录。 */
 @Entity
@@ -20,10 +20,10 @@ import java.util.UUID;
 public class ActivityAuditEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
-    @Column(name = "activity_id", nullable = false, length = 36)
+    @Column(name = "activity_id", nullable = false, length = 32)
     private String activityId;
 
     /** submit 发起申请 / audit 审核 */
@@ -50,7 +50,7 @@ public class ActivityAuditEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }

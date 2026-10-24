@@ -49,7 +49,7 @@ class HostServiceTest {
 
     @Test
     void host_returnsPageUrlForHost() {
-        ActivityEntity entity = broadcastable("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        ActivityEntity entity = broadcastable("a1b2c3d4e5f67890abcdef1234567890");
         when(activityService.requireActivity(entity.getId())).thenReturn(entity);
         when(memberRepository.findById(new ActivityMemberId(entity.getId(), USER_ID)))
                 .thenReturn(Optional.empty());
@@ -70,7 +70,7 @@ class HostServiceTest {
 
     @Test
     void host_usesMemberNicknameAndAvatarWhenPresent() {
-        ActivityEntity entity = broadcastable("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        ActivityEntity entity = broadcastable("a1b2c3d4e5f67890abcdef1234567890");
         when(activityService.requireActivity(entity.getId())).thenReturn(entity);
 
         ActivityMemberEntity member = new ActivityMemberEntity();
@@ -101,7 +101,7 @@ class HostServiceTest {
 
     @Test
     void host_guestUsesMemberNicknameAndEmail() {
-        ActivityEntity entity = broadcastable("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        ActivityEntity entity = broadcastable("a1b2c3d4e5f67890abcdef1234567890");
         when(activityService.requireActivity(entity.getId())).thenReturn(entity);
 
         ActivityMemberEntity member = new ActivityMemberEntity();
@@ -133,7 +133,7 @@ class HostServiceTest {
     @Test
     void host_rejectsWhenCannotBroadcast() {
         ActivityEntity entity = new ActivityEntity();
-        entity.setId("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        entity.setId("a1b2c3d4e5f67890abcdef1234567890");
         entity.setProvider("vhall");
         entity.setProviderRoomId("100");
         entity.setRiskStatus("pending");

@@ -10,7 +10,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /** 进出流水：每次 Join/Leave 一行，不覆盖。 */
 @Entity
@@ -25,10 +25,10 @@ public class PresenceEventEntity {
     public static final String SOURCE_CLIENT = "client";
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
-    @Column(name = "room_id", nullable = false, length = 36)
+    @Column(name = "room_id", nullable = false, length = 32)
     private String roomId;
 
     @Column(name = "user_id", nullable = false, length = 128)
@@ -53,7 +53,7 @@ public class PresenceEventEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }

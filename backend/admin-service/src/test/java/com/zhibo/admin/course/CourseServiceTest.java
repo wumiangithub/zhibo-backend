@@ -33,8 +33,6 @@ import org.springframework.data.domain.Sort;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -283,7 +281,7 @@ class CourseServiceTest {
 
     private static CourseEntity outsideCourse(String shelf, String risk, LocalDateTime deletedTime) {
         CourseEntity entity = new CourseEntity();
-        entity.setId(UUID.randomUUID().toString());
+        entity.setId(com.zhibo.common.UuidIds.newId());
         entity.setTitle("课程");
         entity.setShelfStatus(shelf);
         entity.setRiskStatus(risk);
@@ -295,7 +293,7 @@ class CourseServiceTest {
 
     private CourseEntity stored(String shelf, String risk, boolean autoList) {
         CourseEntity entity = new CourseEntity();
-        entity.setId(UUID.randomUUID().toString());
+        entity.setId(com.zhibo.common.UuidIds.newId());
         entity.setShelfStatus(shelf);
         entity.setRiskStatus(risk);
         entity.setAutoList(autoList);

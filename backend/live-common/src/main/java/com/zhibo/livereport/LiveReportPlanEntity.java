@@ -17,7 +17,7 @@ public class LiveReportPlanEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "report_id", nullable = false, length = 36)
+    @Column(name = "report_id", nullable = false, length = 32)
     private String reportId;
 
     @Column(name = "start_time", nullable = false)

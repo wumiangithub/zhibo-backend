@@ -15,8 +15,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import com.zhibo.common.UuidIds;
+
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -76,15 +77,7 @@ public class WatchService {
     }
 
     ActivityEntity requireActivity(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("活动 id 无效");
-        }
-        String uuid;
-        try {
-            uuid = UUID.fromString(id.trim()).toString();
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("活动 id 须为本站 UUID");
-        }
+        String uuid = UuidIds.require(id, "活动 id 无效", "活动 id 须为本站 UUID");
         return activityRepository.findById(uuid)
                 .filter(activity -> activity.getDeletedTime() == null)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));

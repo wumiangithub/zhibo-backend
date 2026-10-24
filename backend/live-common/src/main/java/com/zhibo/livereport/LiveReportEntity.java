@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity @Table(name = "live_report") @Getter @Setter
 public class LiveReportEntity {
-    @Id @Column(length = 36) private String id;
+    @Id @Column(length = 32) private String id;
     @Column(nullable = false, length = 64) private String title;
     @Column(nullable = false, length = 500) private String content;
     @Column(name = "plan_times", nullable = false, columnDefinition = "json") private String planTimes;
@@ -19,7 +19,7 @@ public class LiveReportEntity {
     @Column(name = "cover_object_key", nullable = false, length = 1024) private String coverObjectKey;
     @Column(name = "cover_file_size", nullable = false) private Long coverFileSize;
     @Column(name = "cover_mime_type", nullable = false, length = 100) private String coverMimeType;
-    @Column(name = "cover_material_id", length = 36) private String coverMaterialId;
+    @Column(name = "cover_material_id", length = 32) private String coverMaterialId;
     @Column(name = "host_id", nullable = false) private Long hostId;
     @Column(name = "host_name", nullable = false, length = 50) private String hostName;
     @Column(name = "host_avatar", length = 2048) private String hostAvatar;

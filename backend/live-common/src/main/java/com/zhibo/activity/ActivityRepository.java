@@ -39,6 +39,11 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
 
     Optional<ActivityEntity> findByProviderAndProviderRoomId(String provider, String providerRoomId);
 
+    /** 口令开播：按唯一口令查未软删活动。 */
+    Optional<ActivityEntity> findByHostPasscodeAndDeletedTimeIsNull(String hostPasscode);
+
+    boolean existsByHostPasscode(String hostPasscode);
+
     /** 录播转码回调：挂该素材且仍未就绪的活动。 */
     List<ActivityEntity> findByRecordMaterialIdAndReadyAndDeletedTimeIsNull(
             String recordMaterialId, Integer ready);

@@ -7,6 +7,7 @@ import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
 import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
+import com.zhibo.admin.activity.dto.ActivityPasscodeResponse;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordDownloadResponse;
@@ -50,6 +51,7 @@ public class ActivityController {
 
     private final ActivityService activityService;
     private final HostService hostService;
+    private final HostPasscodeService hostPasscodeService;
 
     @PostMapping("/create")
     public ApiResponse<CreateActivityResponse> create(
@@ -227,5 +229,17 @@ public class ActivityController {
             @RequestParam(required = false) Integer role,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(hostService.host(id, role, currentUserId(httpRequest)));
+    }
+
+    /** 口令开播：查本场唯一口令（旧数据无码则补发）。 */
+    @GetMapping("/passcode/{id}")
+    public ApiResponse<ActivityPasscodeResponse> passcode(@PathVariable String id) {
+        return ApiResponse.ok(hostPasscodeService.getPasscode(id));
+    }
+
+    /** 口令开播：重置口令，旧码立刻失效。 */
+    @PostMapping("/passcode/reset/{id}")
+    public ApiResponse<ActivityPasscodeResponse> resetPasscode(@PathVariable String id) {
+        return ApiResponse.ok(hostPasscodeService.resetPasscode(id));
     }
 }

@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /** 课程表 {@code course}。 */
 @Entity
@@ -21,7 +21,7 @@ import java.util.UUID;
 public class CourseEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
     @Column(nullable = false, length = 45)
@@ -33,7 +33,7 @@ public class CourseEntity {
     @Column(name = "detail_html", columnDefinition = "MEDIUMTEXT")
     private String detailHtml;
 
-    @Column(name = "cover_material_id", nullable = false, length = 36)
+    @Column(name = "cover_material_id", nullable = false, length = 32)
     private String coverMaterialId;
 
     @Column(name = "cover_url", nullable = false, length = 2048)
@@ -79,7 +79,7 @@ public class CourseEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null || id.isBlank()) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }

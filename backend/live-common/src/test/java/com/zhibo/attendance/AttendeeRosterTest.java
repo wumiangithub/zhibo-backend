@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AttendeeRosterTest {
 
-    private static final String ROOM_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    private static final String ROOM_ID = "a1b2c3d4e5f67890abcdef1234567890";
     private static final String PROVIDER_ROOM = "1001";
 
     @Mock

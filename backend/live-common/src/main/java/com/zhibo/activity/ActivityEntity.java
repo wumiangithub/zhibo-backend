@@ -12,7 +12,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /** 本站直播活动表 {@code activity}。 */
 @Entity
@@ -23,11 +23,11 @@ public class ActivityEntity {
 
     /** 本站活动主键 UUID（对外 API / 路由），不是微吼 webinar_id。 */
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
     /** 绑定的已通过直播报备 ID；空表示未绑定。 */
-    @Column(name = "report_id", length = 36)
+    @Column(name = "report_id", length = 32)
     private String reportId;
 
     /** 直播服务商：vhall / aliyun / tencent。 */
@@ -37,6 +37,10 @@ public class ActivityEntity {
     /** 云侧房间号；微吼即 webinar_id。 */
     @Column(name = "provider_room_id", length = 64)
     private String providerRoomId;
+
+    /** 口令开播唯一口令（9 位数字）；H5 链接与 App 凭此进房。 */
+    @Column(name = "host_passcode", length = 16)
+    private String hostPasscode;
 
     /** 直播名称。 */
     @Column(nullable = false, length = 64)
@@ -67,7 +71,7 @@ public class ActivityEntity {
     private Integer ready = 1;
 
     /** 录播「素材视频」路径：本站素材 UUID；供转码回调挂钩 create-demand。 */
-    @Column(name = "record_material_id", length = 36)
+    @Column(name = "record_material_id", length = 32)
     private String recordMaterialId;
 
     /**
@@ -200,7 +204,7 @@ public class ActivityEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }

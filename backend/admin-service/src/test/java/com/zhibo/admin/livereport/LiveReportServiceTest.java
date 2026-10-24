@@ -21,11 +21,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,8 +34,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class LiveReportServiceTest {
-    private static final String REPORT_ID = "3f6d06e2-9f8d-4f5f-9f3a-2c9f7f0a1b01";
-    private static final String COVER_MATERIAL_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    private static final String REPORT_ID = "3f6d06e29f8d4f5f9f3a2c9f7f0a1b01";
+    private static final String COVER_MATERIAL_ID = "aaaaaaaabbbb4ccc8dddeeeeeeeeeeee";
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     /** 固定时钟：2026-10-17 14:00:00（未来第 7 天即 2026-10-24，当日 23:59:59 可用） */
@@ -132,7 +131,8 @@ class LiveReportServiceTest {
         LiveReportDtos.Result result = service.create(req, 7L);
 
         assertNotNull(result.id());
-        UUID.fromString(result.id());
+        assertEquals(32, result.id().length());
+        assertTrue(result.id().matches("[0-9a-f]{32}"));
         assertEquals("pending", result.status());
         verify(reports).save(argThat((LiveReportEntity e) ->
                 "pending".equals(e.getStatus()) && Long.valueOf(8L).equals(e.getHostId())));
@@ -191,7 +191,8 @@ class LiveReportServiceTest {
     void createAssignsServerUuid() {
         LiveReportDtos.Result result = service.create(validRequest(), 7L);
 
-        UUID.fromString(result.id());
+        assertEquals(32, result.id().length());
+        assertTrue(result.id().matches("[0-9a-f]{32}"));
         verify(reports).save(argThat((LiveReportEntity e) -> result.id().equals(e.getId())));
     }
 

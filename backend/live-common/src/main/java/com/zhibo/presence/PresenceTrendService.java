@@ -7,10 +7,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.zhibo.common.UuidIds;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 进出三线走势。watch / admin 共用。
@@ -53,15 +54,7 @@ public class PresenceTrendService {
     }
 
     private ActivityEntity requireActivity(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("活动 id 无效");
-        }
-        String uuid;
-        try {
-            uuid = UUID.fromString(id.trim()).toString();
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("活动 id 须为本站 UUID");
-        }
+        String uuid = UuidIds.require(id, "活动 id 无效", "活动 id 须为本站 UUID");
         return activityRepository.findById(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
     }

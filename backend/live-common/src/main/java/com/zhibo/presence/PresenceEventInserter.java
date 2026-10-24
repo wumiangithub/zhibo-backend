@@ -6,8 +6,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.zhibo.common.UuidIds;
+
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * 流水插入单独开事务：唯一键冲突只回滚本段，不把外层名单更新弄成 500。
@@ -38,7 +39,7 @@ public class PresenceEventInserter {
             return false;
         }
         PresenceEventEntity event = new PresenceEventEntity();
-        event.setId(UUID.randomUUID().toString());
+        event.setId(UuidIds.newId());
         event.setRoomId(roomId);
         event.setUserId(userId);
         event.setType(type);

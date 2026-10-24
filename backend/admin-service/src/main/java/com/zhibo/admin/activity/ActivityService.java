@@ -91,7 +91,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 import java.util.stream.Collectors;
 
 /**
@@ -116,6 +116,7 @@ public class ActivityService {
     private static final int RELATION_LIMIT = 20;
     private static final int COURSEWARE_LIMIT = 100;
     private final ActivityRepository activityRepository;
+    private final HostPasscodeService hostPasscodeService;
     private final LiveProviderRegistry providerRegistry;
     private final ActivityOwnerRepository ownerRepository;
     private final ActivityProductRepository productRepository;
@@ -194,8 +195,8 @@ public class ActivityService {
         }
 
         ActivityEntity entity = new ActivityEntity();
-        entity.setId(UUID.randomUUID().toString());
-        entity.setReportId(reportId);
+        entity.setId(UuidIds.newId());
+        entity.setReportId(boundReport.getId());
         entity.setProvider(provider);
         entity.setProviderRoomId(room == null ? null : room.providerRoomId());
         entity.setTitle(title);
@@ -228,6 +229,7 @@ public class ActivityService {
         entity.setPlaybackValidityDays(null);
         entity.setPlaybackSpeedAllow(Boolean.TRUE);
         entity.setPlaybackFastForwardAllow(Boolean.TRUE);
+        hostPasscodeService.assignOnCreate(entity);
 
         if (room != null) {
             try {
@@ -733,13 +735,14 @@ public class ActivityService {
             throw new IllegalArgumentException("审核结果无效");
         }
         String reason = null;
-        if ("rejected".equals(result)) {
-            reason = request.getReason() == null ? "" : request.getReason().trim();
-            if (reason.isEmpty() || reason.length() > 200) {
-                throw new IllegalArgumentException("驳回理由须为1～200字");
+        if (request.getReason() != null && !request.getReason().isBlank()) {
+            reason = request.getReason().trim();
+            if (reason.length() > 200) {
+                throw new IllegalArgumentException("理由不能超过200字");
             }
-        } else if (request.getReason() != null && !request.getReason().isBlank()) {
-            throw new IllegalArgumentException("通过时不要填写理由");
+        }
+        if ("rejected".equals(result) && (reason == null || reason.isEmpty())) {
+            throw new IllegalArgumentException("驳回理由须为1～200字");
         }
 
         ActivityEntity entity = requireActivity(id);
@@ -881,7 +884,7 @@ public class ActivityService {
             return item;
         }
         item.setResult(row.getResult());
-        if ("rejected".equals(row.getResult())) {
+        if (row.getReason() != null && !row.getReason().isBlank()) {
             item.setReason(row.getReason());
         }
         item.setOperatorId(row.getOperatorId());
@@ -1940,12 +1943,7 @@ public class ActivityService {
     }
 
     private LiveReportEntity requirePassedReport(String reportId) {
-        String id = reportId.trim();
-        try {
-            UUID.fromString(id);
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("reportId 无效");
-        }
+        String id = UuidIds.require(reportId, "reportId 无效", "reportId 无效");
         LiveReportEntity report = liveReportRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("直播报备不存在"));
         if (report.getDeletedTime() != null) {

@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /** 素材分组表 {@code material_group}。 */
 @Entity
@@ -21,7 +21,7 @@ import java.util.UUID;
 public class MaterialGroupEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
     /** image / video / document / article */
@@ -49,7 +49,7 @@ public class MaterialGroupEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }

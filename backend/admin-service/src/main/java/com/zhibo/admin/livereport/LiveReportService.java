@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.common.UuidIds;
 import com.zhibo.livereport.*;
 import com.zhibo.material.MaterialAudit;
 import com.zhibo.material.MaterialEntity;
@@ -38,7 +39,7 @@ public class LiveReportService {
 
     @Transactional
     public LiveReportDtos.Result create(LiveReportDtos.SaveRequest req, long userId) {
-        String id = UUID.randomUUID().toString();
+        String id = UuidIds.newId();
         SysUserAccountEntity operator = user(userId, "当前员工不存在");
         SysUserAccountEntity host = user(requireHostId(req.hostId()), "主播不存在");
         validateFull(id, req.title(), req.content(), req.planTimes(), req.coverUrl(),
@@ -272,7 +273,8 @@ public class LiveReportService {
     private LocalDateTime parse(String s){try{return LocalDateTime.parse(s,TIME);}catch(DateTimeParseException|NullPointerException ex){throw new IllegalArgumentException("时间格式须为 yyyy-MM-dd HH:mm:ss");}}
     private void requireFull(LiveReportDtos.UpdateRequest r){if(r.title()==null||r.content()==null||r.planTimes()==null||r.coverUrl()==null||r.coverObjectKey()==null||r.hostId()==null||r.attachments()==null)throw new IllegalArgumentException("驳回后重新提交需包含完整字段");}
     private LiveReportEntity report(String id) {
-        LiveReportEntity e = reports.findById(id).orElseThrow(() -> new IllegalArgumentException("报备不存在"));
+        String uuid = UuidIds.require(id, "报备不存在", "报备不存在");
+        LiveReportEntity e = reports.findById(uuid).orElseThrow(() -> new IllegalArgumentException("报备不存在"));
         if (e.getDeletedTime() != null) {
             throw new IllegalArgumentException("报备不存在");
         }

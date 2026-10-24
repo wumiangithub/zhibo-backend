@@ -17,7 +17,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+
+import com.zhibo.common.UuidIds;
 
 /**
  * 中控台名单。admin 旧路径和 live {@code /api/v1/watch/attendees/{id}} 共用。
@@ -140,15 +141,7 @@ public class AttendeeRoster {
     }
 
     private ActivityEntity requireActivity(String id) {
-        if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException("活动 id 无效");
-        }
-        String uuid;
-        try {
-            uuid = UUID.fromString(id.trim()).toString();
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("活动 id 须为本站 UUID");
-        }
+        String uuid = UuidIds.require(id, "活动 id 无效", "活动 id 须为本站 UUID");
         return activityRepository.findById(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
     }

@@ -19,7 +19,7 @@ import java.io.Serializable;
 @EqualsAndHashCode
 public class ActivityOwnerId implements Serializable {
 
-    @Column(name = "activity_id", length = 36)
+    @Column(name = "activity_id", length = 32)
     private String activityId;
 
     @Column(name = "user_id")

@@ -10,7 +10,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import com.zhibo.common.UuidIds;
 
 /**
  * 同一房间、同一用户只有一行。再次进入更新进入时间并清空离开时间，不插新行。
@@ -22,11 +22,11 @@ import java.util.UUID;
 public class RoomAttendanceEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 32)
     private String id;
 
     /** 本站活动 UUID。 */
-    @Column(name = "room_id", nullable = false, length = 36)
+    @Column(name = "room_id", nullable = false, length = 32)
     private String roomId;
 
     /** 微吼进出推送里的用户 id。 */
@@ -53,7 +53,7 @@ public class RoomAttendanceEntity {
     @PrePersist
     void assignIdIfMissing() {
         if (id == null) {
-            id = UUID.randomUUID().toString();
+            id = UuidIds.newId();
         }
     }
 }
