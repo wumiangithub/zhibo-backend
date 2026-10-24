@@ -79,7 +79,7 @@ class StatsServiceTest {
         when(activityService.requireActivity(ID)).thenReturn(entity);
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
-                "课", 1, 2, 88, null, null, null, null, null, null, null));
+                "课", 1, 2, 88, null, null, null, null, null, null));
         when(liveProvider.currentOnline("1001")).thenReturn(12);
 
         ActivityStatsResponse response = statsService.summary(ID);
@@ -96,7 +96,7 @@ class StatsServiceTest {
         when(activityService.requireActivity(ID)).thenReturn(entity);
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
-                "课", 1, 2, 1, null, null, null, null, null, null, null));
+                "课", 1, 2, 1, null, null, null, null, null, null));
         when(liveProvider.currentOnline("1001")).thenReturn(3);
 
         statsService.summary(ID);

@@ -2,6 +2,7 @@ package com.zhibo.admin.activity;
 
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
+import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
@@ -15,6 +16,7 @@ import com.zhibo.admin.activity.dto.AuditRequest;
 import com.zhibo.admin.activity.dto.AuditResultResponse;
 import com.zhibo.admin.activity.dto.CreateActivityRequest;
 import com.zhibo.admin.activity.dto.CreateActivityResponse;
+import com.zhibo.admin.activity.dto.DeleteActivityMembersRequest;
 import com.zhibo.admin.activity.dto.DeleteActivityResponse;
 import com.zhibo.admin.activity.dto.EndActivityResponse;
 import com.zhibo.admin.activity.dto.PlaybackUpdateRequest;
@@ -23,7 +25,7 @@ import com.zhibo.admin.activity.dto.SalesUpdateResponse;
 import com.zhibo.admin.activity.dto.ShelfRequest;
 import com.zhibo.admin.activity.dto.ShelfResponse;
 import com.zhibo.admin.activity.dto.StartActivityResponse;
-import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
+import com.zhibo.admin.activity.dto.UpdateActivityMemberRequest;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
@@ -175,11 +177,34 @@ public class ActivityController {
         return ApiResponse.ok(activityService.listMembers(id));
     }
 
-    @PutMapping("/members/save/{id}")
-    public ApiResponse<ActivityMemberListResponse> replaceMembers(
+    /**
+     * 更新一名已有开播成员的本场昵称、头像、标签。不改角色，不增删其他人。
+     */
+    @PutMapping("/members/update/{id}")
+    public ApiResponse<ActivityMemberListResponse> updateMember(
             @PathVariable String id,
-            @Valid @RequestBody UpdateActivityMembersRequest request) {
-        return ApiResponse.ok(activityService.replaceMembers(id, request));
+            @Valid @RequestBody UpdateActivityMemberRequest request) {
+        return ApiResponse.ok(activityService.updateMember(id, request));
+    }
+
+    /**
+     * 增量添加开播成员。只插入 body.members，不删除、不改已有成员。
+     */
+    @PostMapping("/members/add/{id}")
+    public ApiResponse<ActivityMemberListResponse> addMembers(
+            @PathVariable String id,
+            @Valid @RequestBody AddActivityMembersRequest request) {
+        return ApiResponse.ok(activityService.addMembers(id, request));
+    }
+
+    /**
+     * 按员工 id 删除开播成员。只删 body.ids，其余不动。
+     */
+    @DeleteMapping("/members/delete/{id}")
+    public ApiResponse<ActivityMemberListResponse> deleteMembers(
+            @PathVariable String id,
+            @Valid @RequestBody DeleteActivityMembersRequest request) {
+        return ApiResponse.ok(activityService.deleteMembers(id, request));
     }
 
     /** 打开角色邀约链接：当前登录员工加入本场指定开播角色。 */

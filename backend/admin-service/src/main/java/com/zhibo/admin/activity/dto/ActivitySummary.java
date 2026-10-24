@@ -25,7 +25,6 @@ public class ActivitySummary {
     /** 录播素材 UUID；非素材路径可空 */
     private String recordMaterialId;
     private String viewerStyle;
-    private String shareLink;
     private String createdTime;
     private String shelfStatus;
     private String riskStatus;

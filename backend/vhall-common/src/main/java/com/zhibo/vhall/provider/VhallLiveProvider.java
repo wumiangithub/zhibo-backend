@@ -594,7 +594,6 @@ public class VhallLiveProvider implements LiveProvider {
                 asInteger(raw.get("webinar_type")),
                 asInteger(raw.get("pv")),
                 asString(raw.get("full_embed_share_link")),
-                asString(raw.get("share_link")),
                 asString(raw.get("start_time")),
                 resolveEndTime(raw.get("end_time")),
                 asString(raw.get("introduction")),

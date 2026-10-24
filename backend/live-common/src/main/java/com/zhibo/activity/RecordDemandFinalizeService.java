@@ -96,9 +96,6 @@ public class RecordDemandFinalizeService {
                 if (snap.state() != null) {
                     activity.setState(snap.state());
                 }
-                if (snap.shareLink() != null) {
-                    activity.setShareLink(snap.shareLink());
-                }
                 if (activity.getCoverUrl() == null && snap.coverUrl() != null) {
                     activity.setCoverUrl(snap.coverUrl());
                 }

@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo admin-service",
     "description": "钱坤直播管理端 API（admin-service :8081）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现接口/建表校验的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 失败：业务 `code` —— `400` 参数、`401` 未登录、`403` 停用、`500` 服务器、`501` 服务商未接入、云侧失败透传或 `502`\n- 活动路径 `{id}` 均为本站 **UUID**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`",
-    "version": "2.3.4",
+    "version": "2.4.0",
     "contact": {
       "name": "zhibo-backend"
     }
@@ -1756,8 +1756,8 @@
         "tags": [
           "活动管理"
         ],
-        "summary": "主持人开播链接",
-        "description": "管理端拿到 hostUrl 后新窗口打开，不要 iframe。canBroadcast 不为真 → 400。",
+        "summary": "角色参会链接",
+        "description": "主持人、嘉宾、助理都用本接口取本人的参会 iframe 地址（hostUrl）。供本站 /live/studio/{id}?role= 页 iframe src，不要 window.open。role 省略按主播。嘉宾/助理须已是本场对应角色，否则 400。canBroadcast 不为真 → 400。",
         "operationId": "getActivityHost",
         "security": [
           {
@@ -1767,6 +1767,38 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1,
+                2,
+                3
+              ],
+              "default": 1,
+              "description": "1 主播 / 2 嘉宾 / 3 助理；省略按主播",
+              "x-apifox-enum": [
+                {
+                  "value": 1,
+                  "name": "主播",
+                  "description": "主播"
+                },
+                {
+                  "value": 2,
+                  "name": "嘉宾",
+                  "description": "嘉宾"
+                },
+                {
+                  "value": 3,
+                  "name": "助理；省略按主播",
+                  "description": "助理；省略按主播"
+                }
+              ]
+            }
           }
         ],
         "responses": {
@@ -1815,14 +1847,14 @@
         }
       }
     },
-    "/api/v1/activities/members/save/{id}": {
+    "/api/v1/activities/members/update/{id}": {
       "put": {
         "tags": [
           "活动管理"
         ],
-        "summary": "全量覆盖开播成员",
-        "description": "全量覆盖 activity_member；至少 1 名主播。不改归属人、不触发风控回 pending、不同步微吼。传 [] → 400。有 reportId 时主播须恰为报备主播 1 人。",
-        "operationId": "replaceActivityMembers",
+        "summary": "更新开播成员资料",
+        "description": "只改一名已有成员的本场昵称、头像、标签。不改 role，不增删其他人。不是本场成员 → 400。不改归属人、不触发风控回 pending、不同步微吼。",
+        "operationId": "updateActivityMember",
         "security": [
           {
             "BearerAuth": []
@@ -1838,22 +1870,112 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateActivityMembersRequest"
+                "$ref": "#/components/schemas/UpdateActivityMemberRequest"
+              },
+              "example": {
+                "id": 10001,
+                "nickname": "云奎",
+                "avatarUrl": "https://cdn.example/a.jpg",
+                "tag": "讲师"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMembers"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/members/add/{id}": {
+      "post": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "添加开播成员",
+        "description": "只插入请求里的人，不删除、不修改已有成员。已是本场成员、同一 id 重复、或加上已有人数后某角色超过 20 → 400。已绑报备时不能新增 role=1。不改归属人、不触发风控回 pending、不同步微吼。",
+        "operationId": "addActivityMembers",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddActivityMembersRequest"
               },
               "example": {
                 "members": [
                   {
-                    "id": 10001,
-                    "role": 1,
-                    "nickname": "云奎",
-                    "avatarUrl": "https://cdn.example/a.jpg",
-                    "tag": "讲师"
-                  },
-                  {
                     "id": 10002,
-                    "role": 2,
-                    "tag": "助理"
+                    "role": 3,
+                    "nickname": "小助",
+                    "avatarUrl": "https://cdn.example/a.jpg",
+                    "tag": "助教"
                   }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMembers"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/members/delete/{id}": {
+      "delete": {
+        "tags": [
+          "活动管理"
+        ],
+        "summary": "删除开播成员",
+        "description": "路径 id 是活动 UUID。只删 body.ids 里的员工，其余不动。同一 id 重复、不是本场成员、删完没有主播、或已绑报备时删主播 → 400。不改归属人、不触发风控回 pending、不同步微吼。",
+        "operationId": "deleteActivityMembers",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteActivityMembersRequest"
+              },
+              "example": {
+                "ids": [
+                  10002
                 ]
               }
             }
@@ -5256,11 +5378,6 @@
               }
             ]
           },
-          "shareLink": {
-            "type": "string",
-            "description": "本站观看页分享链接；库：VARCHAR(512)",
-            "maxLength": 512
-          },
           "createdTime": {
             "type": "string",
             "description": "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
@@ -5408,10 +5525,6 @@
                 "description": "第三方房间号（如微吼 webinar id）；库：VARCHAR(64)",
                 "maxLength": 64
               },
-              "vhallWebinarId": {
-                "type": "string",
-                "description": "兼容字段；仅 vhall 时等于 providerRoomId"
-              },
               "introduction": {
                 "type": "string",
                 "description": "简介；库：VARCHAR(256)",
@@ -5468,11 +5581,6 @@
               "pv": {
                 "type": "integer",
                 "description": "累计观看 PV；库：INT"
-              },
-              "fullEmbedShareLink": {
-                "type": "string",
-                "description": "全屏嵌入分享链接；库：VARCHAR(512)",
-                "maxLength": 512
               },
               "ultraLowLatency": {
                 "type": "boolean",
@@ -5790,6 +5898,11 @@
             "description": "员工姓名（实时查员工表，不落成员表）；库：VARCHAR(50)",
             "maxLength": 50
           },
+          "headimgurl": {
+            "type": "string",
+            "description": "员工微信头像（实时查 sys_useraccount.headimgurl，不落成员表）；空则不返回。本场头像仍是 avatarUrl；库：VARCHAR(500)",
+            "maxLength": 500
+          },
           "departmentName": {
             "type": "string",
             "description": "任职部门展示名；无则 \"\" 或不返回；库：VARCHAR(256)",
@@ -5848,16 +5961,45 @@
           }
         }
       },
-      "UpdateActivityMembersRequest": {
+      "UpdateActivityMemberRequest": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "description": "只改一名已有成员的本场昵称、头像、标签。不改 role，不增删其他人",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/EmployeeId",
+            "description": "员工 rs_mainkey_id（JSON 数字，D56）"
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 10,
+            "description": "本场昵称 ≤10；有值用请求值；省略或空 → 快照员工 user_name（超长截断至 10）；库：VARCHAR(64)"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "本场头像 ≤512；有值用请求值；省略或空 → 快照员工头像（headimgurl 优先，其次 user_avatar）；库：VARCHAR(512)"
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "标签 ≤32；省略或空 → 该角色默认标签；库：VARCHAR(32)"
+          }
+        }
+      },
+      "AddActivityMembersRequest": {
         "type": "object",
         "required": [
           "members"
         ],
+        "description": "只插入这些人，不删除、不修改已有成员",
         "properties": {
           "members": {
             "type": "array",
             "minItems": 1,
-            "description": "全量覆盖；至少 1 名主播（role=1）。同 id 不可重复；role=1 为 1～20，role=2/3 各 0～20",
+            "description": "本次要新增的人，至少 1 人，不是整份名单。同一 id 不可重复，且不能已是本场成员。加上已有人数后每个角色仍不超过 20",
             "items": {
               "type": "object",
               "required": [
@@ -5893,19 +6035,36 @@
                 "nickname": {
                   "type": "string",
                   "maxLength": 10,
-                  "description": "本场昵称 ≤10；省略或空 → 库存 NULL（读时回员工姓名）；库：VARCHAR(64)"
+                  "description": "本场昵称 ≤10；省略或空 → 快照员工 user_name；库：VARCHAR(64)"
                 },
                 "avatarUrl": {
                   "type": "string",
                   "maxLength": 512,
-                  "description": "省略或空 → NULL；库：VARCHAR(512)"
+                  "description": "本场头像 ≤512；省略或空 → 快照员工头像；库：VARCHAR(512)"
                 },
                 "tag": {
                   "type": "string",
                   "maxLength": 32,
-                  "description": "省略或空 → NULL；库：VARCHAR(32)"
+                  "description": "标签 ≤32；省略或空 → 该角色默认标签；库：VARCHAR(32)"
                 }
               }
+            }
+          }
+        }
+      },
+      "DeleteActivityMembersRequest": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "description": "只删除列出的员工，其余成员不动",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "description": "要删除的员工 rs_mainkey_id，至少 1 个。同一 id 不能重复；不是本场成员 → 400。删完至少留 1 名主播",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeId"
             }
           }
         }
@@ -5997,7 +6156,8 @@
         "type": "object",
         "required": [
           "provider",
-          "hostUrl"
+          "hostUrl",
+          "role"
         ],
         "properties": {
           "provider": {
@@ -6024,8 +6184,29 @@
           "hostUrl": {
             "type": "string",
             "format": "uri",
-            "description": "第三方主持人/开播页 URL；库：VARCHAR(1024)",
+            "description": "微吼 page_url；本站 /live/studio/{id}?role= 页的 iframe src；勿给观众；库：VARCHAR(1024)",
             "maxLength": 1024
+          },
+          "role": {
+            "$ref": "#/components/schemas/ActivityMemberRole",
+            "description": "1 主播 / 2 嘉宾 / 3 助理（D66，与微吼 get-role-url type 一致；JSON 只传数字）",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "主播",
+                "description": "主播"
+              },
+              {
+                "value": 2,
+                "name": "嘉宾",
+                "description": "嘉宾"
+              },
+              {
+                "value": 3,
+                "name": "助理",
+                "description": "助理"
+              }
+            ]
           }
         }
       },

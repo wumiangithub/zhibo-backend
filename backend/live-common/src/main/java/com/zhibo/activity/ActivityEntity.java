@@ -113,10 +113,6 @@ public class ActivityEntity {
     @Column(name = "detail_html", columnDefinition = "MEDIUMTEXT")
     private String detailHtml;
 
-    /** 云侧分享链接。 */
-    @Column(name = "share_link", length = 1024)
-    private String shareLink;
-
     /** pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁。 */
     @Column(name = "shelf_status", nullable = false, length = 16)
     private String shelfStatus;

@@ -10,13 +10,10 @@ import lombok.EqualsAndHashCode;
 public class ActivityDetailResponse extends ActivitySummary {
 
     private String providerRoomId;
-    /** 兼容字段：仅 vhall 时等于 providerRoomId */
-    private String vhallWebinarId;
     private String introduction;
     private String endTime;
     private Integer verify;
     private Integer pv;
-    private String fullEmbedShareLink;
     private Boolean ultraLowLatency;
     /** type=4：是否定时；非录播可空 */
     private Boolean isTiming;

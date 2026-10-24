@@ -13,7 +13,10 @@ import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
+import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
+import com.zhibo.admin.activity.dto.DeleteActivityMembersRequest;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
+import com.zhibo.admin.activity.dto.ActivityMemberListResponse;
 import com.zhibo.admin.activity.dto.ActivityPushStreamResponse;
 import com.zhibo.admin.activity.dto.ActivityRecordListResponse;
 import com.zhibo.admin.activity.dto.ActivityStreamStatusResponse;
@@ -28,7 +31,7 @@ import com.zhibo.admin.activity.dto.SalesUpdateRequest;
 import com.zhibo.admin.activity.dto.SalesUpdateResponse;
 import com.zhibo.admin.activity.dto.ShelfRequest;
 import com.zhibo.admin.activity.dto.StartActivityResponse;
-import com.zhibo.admin.activity.dto.UpdateActivityMembersRequest;
+import com.zhibo.admin.activity.dto.UpdateActivityMemberRequest;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
@@ -59,6 +62,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -141,7 +146,7 @@ class ActivityServiceTest {
         when(liveProvider.create(any(CreateRoomCommand.class)))
                 .thenReturn(new CreateRoomResult("123456"));
         when(liveProvider.fetchRoom("123456")).thenReturn(new ProviderRoomSnapshot(
-                "测试活动", 2, 2, 0, null, "https://share", request.getStartTime(),
+                "测试活动", 2, 2, 0, null, request.getStartTime(),
                 null, "一场简介", 0, null));
         when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -263,7 +268,7 @@ class ActivityServiceTest {
         when(liveProvider.create(any(CreateRoomCommand.class)))
                 .thenReturn(new CreateRoomResult("88"));
         when(liveProvider.fetchRoom("88")).thenReturn(new ProviderRoomSnapshot(
-                "录播", 4, 4, 0, null, null, "2026-10-01 20:00:00",
+                "录播", 4, 4, 0, null, "2026-10-01 20:00:00",
                 null, "简介", 0, null));
         when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -330,7 +335,7 @@ class ActivityServiceTest {
         when(liveProvider.create(any(CreateRoomCommand.class)))
                 .thenReturn(new CreateRoomResult("88"));
         when(liveProvider.fetchRoom("88")).thenReturn(new ProviderRoomSnapshot(
-                "录播", 4, 4, 0, null, null, "2026-10-01 20:00:00",
+                "录播", 4, 4, 0, null, "2026-10-01 20:00:00",
                 null, "简介", 0, null));
         when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -406,7 +411,7 @@ class ActivityServiceTest {
         when(liveProvider.create(any(CreateRoomCommand.class)))
                 .thenReturn(new CreateRoomResult("123456"));
         when(liveProvider.fetchRoom("123456")).thenReturn(new ProviderRoomSnapshot(
-                "活动", 2, 2, 0, null, null, "2026-10-01 20:00:00",
+                "活动", 2, 2, 0, null, "2026-10-01 20:00:00",
                 null, null, 0, null));
         when(activityRepository.saveAndFlush(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(liveReportRepository.save(any(LiveReportEntity.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -517,151 +522,137 @@ class ActivityServiceTest {
     }
 
     @Test
-    void replaceMembers_rejectsHostMismatchWhenBound() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-        String reportId = "11111111-1111-1111-1111-111111111111";
-        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
-        entity.setReportId(reportId);
-        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
-        UpdateActivityMembersRequest.MemberBinding host = new UpdateActivityMembersRequest.MemberBinding();
-        host.setId(20002L);
-        host.setRole(ActivityMemberRole.HOST.getCode());
-        request.setMembers(List.of(host));
-
-        SysUserAccountEntity other = new SysUserAccountEntity();
-        other.setId(20002L);
-        other.setUserName("他人");
-        other.setRsStatus(1);
-
-        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
-        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(other));
-        when(liveReportRepository.findById(reportId)).thenReturn(Optional.of(passedReport(reportId, OPERATOR_ID)));
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.replaceMembers(uuid, request));
-        assertEquals("已绑定直播报备不可修改", ex.getMessage());
-        verify(memberRepository, never()).deleteByIdActivityId(any());
-        verify(memberRepository, never()).saveAll(any());
-    }
-
-    @Test
-    void replaceMembers_requiresHost() {
+    void updateMember_changesNicknameAvatarAndTag() {
         String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
-        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
-        UpdateActivityMembersRequest.MemberBinding assistant = new UpdateActivityMembersRequest.MemberBinding();
-        assistant.setId(OPERATOR_ID);
-        assistant.setRole(ActivityMemberRole.ASSISTANT.getCode());
-        request.setMembers(List.of(assistant));
-
-        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.replaceMembers(uuid, request));
-        assertEquals("主播至少选择1人", ex.getMessage());
-        verify(memberRepository, never()).deleteByIdActivityId(any());
-    }
-
-    @Test
-    void replaceMembers_rejectsInvalidRole() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
-        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
-        UpdateActivityMembersRequest.MemberBinding bad = new UpdateActivityMembersRequest.MemberBinding();
-        bad.setId(OPERATOR_ID);
-        bad.setRole(9);
-        request.setMembers(List.of(bad));
-
-        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.replaceMembers(uuid, request));
-        assertEquals("开播角色无效", ex.getMessage());
-    }
-
-    @Test
-    void replaceMembers_rejectsDuplicateUser() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
-        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
-        UpdateActivityMembersRequest.MemberBinding host = new UpdateActivityMembersRequest.MemberBinding();
-        host.setId(OPERATOR_ID);
-        host.setRole(ActivityMemberRole.HOST.getCode());
-        UpdateActivityMembersRequest.MemberBinding again = new UpdateActivityMembersRequest.MemberBinding();
-        again.setId(OPERATOR_ID);
-        again.setRole(ActivityMemberRole.ASSISTANT.getCode());
-        request.setMembers(List.of(host, again));
-
-        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.replaceMembers(uuid, request));
-        assertEquals("同一员工不能重复担任开播角色", ex.getMessage());
-    }
-
-    @Test
-    void replaceMembers_savesHostAndAssistant() {
-        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
-        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
-        UpdateActivityMembersRequest.MemberBinding host = new UpdateActivityMembersRequest.MemberBinding();
-        host.setId(OPERATOR_ID);
-        host.setRole(ActivityMemberRole.HOST.getCode());
-        host.setNickname("主播昵称");
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        host.setNickname("旧昵称");
+        host.setAvatarUrl("https://cdn.example/old.png");
         host.setTag("讲师");
-        UpdateActivityMembersRequest.MemberBinding assistant = new UpdateActivityMembersRequest.MemberBinding();
-        assistant.setId(20002L);
-        assistant.setRole(ActivityMemberRole.ASSISTANT.getCode());
-        assistant.setTag("助教");
-        request.setMembers(List.of(host, assistant));
-
-        SysUserAccountEntity other = new SysUserAccountEntity();
-        other.setId(20002L);
-        other.setUserName("助理甲");
-        other.setRsStatus(1);
+        UpdateActivityMemberRequest request = new UpdateActivityMemberRequest();
+        request.setId(OPERATOR_ID);
+        request.setNickname("新昵称");
+        request.setAvatarUrl("https://cdn.example/new.png");
+        request.setTag("金牌讲师");
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
-        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator(), other));
-        when(memberRepository.findByActivityIds(anyCollection())).thenReturn(List.of());
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
 
-        activityService.replaceMembers(uuid, request);
+        ActivityMemberListResponse response = activityService.updateMember(uuid, request);
 
-        verify(memberRepository).deleteByIdActivityId(uuid);
-        ArgumentCaptor<List<ActivityMemberEntity>> captor = ArgumentCaptor.forClass(List.class);
-        verify(memberRepository).saveAll(captor.capture());
-        List<ActivityMemberEntity> saved = captor.getValue();
-        assertEquals(2, saved.size());
-        assertEquals(ActivityMemberRole.HOST.getCode(), saved.get(0).getRole());
-        assertEquals("主播昵称", saved.get(0).getNickname());
-        assertEquals(ActivityMemberRole.ASSISTANT.getCode(), saved.get(1).getRole());
-        assertEquals(20002L, saved.get(1).getId().getUserId());
-        assertEquals("助理甲", saved.get(1).getNickname());
+        assertEquals("新昵称", host.getNickname());
+        assertEquals("https://cdn.example/new.png", host.getAvatarUrl());
+        assertEquals("金牌讲师", host.getTag());
+        assertEquals(ActivityMemberRole.HOST.getCode(), host.getRole());
+        verify(memberRepository).save(host);
+        verify(memberRepository, never()).deleteByIdActivityId(uuid);
+        assertEquals("新昵称", response.getList().get(0).getNickname());
+        assertEquals("金牌讲师", response.getList().get(0).getTag());
     }
 
     @Test
-    void replaceMembers_backfillsNicknameAndAvatarWhenOmitted() {
+    void listMembers_returnsLiveHeadimgurl() {
         String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
         ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
-        UpdateActivityMembersRequest request = new UpdateActivityMembersRequest();
-        UpdateActivityMembersRequest.MemberBinding host = new UpdateActivityMembersRequest.MemberBinding();
-        host.setId(OPERATOR_ID);
-        host.setRole(ActivityMemberRole.HOST.getCode());
-        request.setMembers(List.of(host));
-
         SysUserAccountEntity hostUser = operator();
-        hostUser.setHeadimgurl("https://wx.example/a.jpg");
+        hostUser.setHeadimgurl("  https://wx.example/live.jpg  ");
+        ActivityMemberEntity row = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        row.setAvatarUrl("https://cdn.example/session.png");
+        row.setNickname("本场昵称");
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(row));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(hostUser));
-        when(memberRepository.findByActivityIds(anyCollection())).thenReturn(List.of());
 
-        activityService.replaceMembers(uuid, request);
+        ActivityMemberListResponse response = activityService.listMembers(uuid);
 
+        assertEquals(1, response.getList().size());
+        assertEquals("余灵巧", response.getList().get(0).getUserName());
+        assertEquals("https://wx.example/live.jpg", response.getList().get(0).getHeadimgurl());
+        assertEquals("https://cdn.example/session.png", response.getList().get(0).getAvatarUrl());
+    }
+
+    @Test
+    void addMembers_insertsAssistantWithoutReplacingHost() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        host.setNickname("余灵巧");
+        SysUserAccountEntity assistant = activeUser(20002L, "助理甲");
+
+        AddActivityMembersRequest request = new AddActivityMembersRequest();
+        AddActivityMembersRequest.MemberBinding binding = new AddActivityMembersRequest.MemberBinding();
+        binding.setId(20002L);
+        binding.setRole(ActivityMemberRole.ASSISTANT.getCode());
+        request.setMembers(List.of(binding));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host));
+        when(userRepository.findAllById(anyCollection())).thenAnswer(inv -> {
+            Collection<?> ids = inv.getArgument(0);
+            List<SysUserAccountEntity> users = new ArrayList<>();
+            if (ids.contains(OPERATOR_ID)) {
+                users.add(operator());
+            }
+            if (ids.contains(20002L)) {
+                users.add(assistant);
+            }
+            return users;
+        });
+
+        ActivityMemberListResponse response = activityService.addMembers(uuid, request);
+
+        verify(memberRepository, never()).deleteByIdActivityId(uuid);
         ArgumentCaptor<List<ActivityMemberEntity>> captor = ArgumentCaptor.forClass(List.class);
         verify(memberRepository).saveAll(captor.capture());
-        ActivityMemberEntity saved = captor.getValue().get(0);
-        assertEquals("余灵巧", saved.getNickname());
-        assertEquals("https://wx.example/a.jpg", saved.getAvatarUrl());
+        assertEquals(1, captor.getValue().size());
+        assertEquals(20002L, captor.getValue().get(0).getId().getUserId());
+        assertEquals(ActivityMemberRole.ASSISTANT.getCode(), captor.getValue().get(0).getRole());
+        assertEquals("助理甲", captor.getValue().get(0).getNickname());
+        assertEquals(2, response.getList().size());
+    }
+
+    @Test
+    void deleteMembers_removesAssistantAndKeepsHost() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        host.setNickname("余灵巧");
+        ActivityMemberEntity assistant = member(uuid, 20002L, ActivityMemberRole.ASSISTANT.getCode(), 0);
+        assistant.setNickname("助理甲");
+
+        DeleteActivityMembersRequest request = new DeleteActivityMembersRequest();
+        request.setIds(List.of(20002L));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host, assistant));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
+
+        ActivityMemberListResponse response = activityService.deleteMembers(uuid, request);
+
+        verify(memberRepository).deleteById(new ActivityMemberId(uuid, 20002L));
+        verify(memberRepository, never()).deleteByIdActivityId(uuid);
+        assertEquals(1, response.getList().size());
+        assertEquals(OPERATOR_ID, response.getList().get(0).getId());
+    }
+
+    @Test
+    void deleteMembers_rejectsRemovingLastHost() {
+        String uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        ActivityMemberEntity host = member(uuid, OPERATOR_ID, ActivityMemberRole.HOST.getCode(), 0);
+        DeleteActivityMembersRequest request = new DeleteActivityMembersRequest();
+        request.setIds(List.of(OPERATOR_ID));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(memberRepository.findByActivityIds(List.of(uuid))).thenReturn(List.of(host));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.deleteMembers(uuid, request));
+        assertEquals("主播至少选择1人", ex.getMessage());
+        verify(memberRepository, never()).deleteById(any(ActivityMemberId.class));
     }
 
     @Test

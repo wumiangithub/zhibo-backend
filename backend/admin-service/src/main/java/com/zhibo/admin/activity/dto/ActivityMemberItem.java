@@ -12,6 +12,8 @@ public class ActivityMemberItem {
     /** 员工 rs_mainkey_id */
     private Long id;
     private String userName;
+    /** 员工微信头像，实时查 sys_useraccount.headimgurl；空则不输出 */
+    private String headimgurl;
     /** 任职部门展示名；无则空串 */
     private String departmentName;
     /** 1 主播 / 2 嘉宾 / 3 助理 */

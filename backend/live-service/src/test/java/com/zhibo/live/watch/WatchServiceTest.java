@@ -56,7 +56,7 @@ class WatchServiceTest {
         when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
                 "直播课", 1, 2, null,
                 "https://live.example.com/watch/1001",
-                null, "2026-09-18 20:00:00", null, null, null, null));
+                "2026-09-18 20:00:00", null, null, null, null));
 
         WatchResponse response = watchService.watch(ID, "guest1", "小明");
         assertEquals(ID, response.getId());

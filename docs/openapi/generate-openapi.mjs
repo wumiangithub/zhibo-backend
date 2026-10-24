@@ -283,9 +283,8 @@ const FIELD_DESC_BY_NAME = {
   groupId: '分组 UUID',
   reportId: '直播报备 UUID',
   providerRoomId: '第三方房间号（如微吼 webinar id）',
-  shareLink: '本站观看页分享链接',
-  fullEmbedShareLink: '全屏嵌入分享链接',
-  hostUrl: '第三方主持人/开播页 URL',
+  hostUrl: '角色参会 iframe 地址（微吼 page_url）；本站开播页 iframe 的 src',
+  headimgurl: '员工微信头像（实时查 sys_useraccount.headimgurl，不落成员表）；空则不返回',
   embedUrl: '嵌入页 URL',
   pageUrl: '页面 URL',
   startTime: '开始时间，yyyy-MM-dd HH:mm:ss',
@@ -492,9 +491,8 @@ const FIELD_DB_BY_NAME = {
   ready: { db: 'INT' },
   captchaId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
   providerRoomId: { db: 'VARCHAR(64)', maxLength: 64 },
-  shareLink: { db: 'VARCHAR(512)', maxLength: 512 },
-  fullEmbedShareLink: { db: 'VARCHAR(512)', maxLength: 512 },
   hostUrl: { db: 'VARCHAR(1024)', maxLength: 1024 },
+  headimgurl: { db: 'VARCHAR(500)', maxLength: 500 },
   embedUrl: { db: 'VARCHAR(1024)', maxLength: 1024 },
   pageUrl: { db: 'VARCHAR(2048)', maxLength: 2048 },
   guestId: { db: 'VARCHAR(64)', maxLength: 64 },
@@ -596,15 +594,27 @@ const FIELD_DB_BY_PATH = {
   'MaterialRegisterRequest.items[].name': { db: 'VARCHAR(256)', maxLength: 256 },
   'CoursewareItem.name': { db: 'VARCHAR(256)', maxLength: 256 },
   'CourseMaterial.name': { db: 'VARCHAR(256)', maxLength: 256 },
-  'UpdateActivityMembersRequest.members[].nickname': {
+  'AddActivityMembersRequest.members[].nickname': {
     db: 'VARCHAR(64)',
     maxLength: 64,
   },
-  'UpdateActivityMembersRequest.members[].avatarUrl': {
+  'AddActivityMembersRequest.members[].avatarUrl': {
     db: 'VARCHAR(512)',
     maxLength: 512,
   },
-  'UpdateActivityMembersRequest.members[].tag': {
+  'AddActivityMembersRequest.members[].tag': {
+    db: 'VARCHAR(32)',
+    maxLength: 32,
+  },
+  'UpdateActivityMemberRequest.nickname': {
+    db: 'VARCHAR(64)',
+    maxLength: 64,
+  },
+  'UpdateActivityMemberRequest.avatarUrl': {
+    db: 'VARCHAR(512)',
+    maxLength: 512,
+  },
+  'UpdateActivityMemberRequest.tag': {
     db: 'VARCHAR(32)',
     maxLength: 32,
   },
@@ -1527,7 +1537,6 @@ function buildAdmin() {
         state: { $ref: '#/components/schemas/ActivityState' },
         type: { $ref: '#/components/schemas/ActivityType' },
         viewerStyle: { $ref: '#/components/schemas/ViewerStyle' },
-        shareLink: { type: 'string' },
         createdTime: { type: 'string' },
         shelfStatus: { $ref: '#/components/schemas/ShelfStatus' },
         riskStatus: { $ref: '#/components/schemas/RiskStatus' },
@@ -1563,10 +1572,6 @@ function buildAdmin() {
           type: 'object',
           properties: {
             providerRoomId: { type: 'string' },
-            vhallWebinarId: {
-              type: 'string',
-              description: '兼容字段；仅 vhall 时等于 providerRoomId',
-            },
             introduction: { type: 'string' },
             endTime: { type: 'string' },
             verify: {
@@ -1576,7 +1581,6 @@ function buildAdmin() {
                 '0 无验证 / 1 密码 / 2 白名单 / 3 付费 / 4 F码 / 6 付费+F码',
             },
             pv: { type: 'integer' },
-            fullEmbedShareLink: { type: 'string' },
             ultraLowLatency: { type: 'boolean' },
             isTiming: {
               type: 'boolean',
@@ -1718,6 +1722,11 @@ function buildAdmin() {
           type: 'string',
           description: '员工姓名（实时查员工表，不落成员表）',
         },
+        headimgurl: {
+          type: 'string',
+          description:
+            '员工微信头像（实时查 sys_useraccount.headimgurl，不落成员表）；空则不返回。本场头像仍是 avatarUrl',
+        },
         departmentName: {
           type: 'string',
           description: '任职部门展示名；无则 "" 或不返回',
@@ -1748,15 +1757,42 @@ function buildAdmin() {
         },
       },
     },
-    UpdateActivityMembersRequest: {
+    UpdateActivityMemberRequest: {
+      type: 'object',
+      required: ['id'],
+      description:
+        '只改一名已有成员的本场昵称、头像、标签。不改 role，不增删其他人',
+      properties: {
+        id: { $ref: '#/components/schemas/EmployeeId' },
+        nickname: {
+          type: 'string',
+          maxLength: 10,
+          description:
+            '本场昵称 ≤10；有值用请求值；省略或空 → 快照员工 user_name（超长截断至 10）',
+        },
+        avatarUrl: {
+          type: 'string',
+          maxLength: 512,
+          description:
+            '本场头像 ≤512；有值用请求值；省略或空 → 快照员工头像（headimgurl 优先，其次 user_avatar）',
+        },
+        tag: {
+          type: 'string',
+          maxLength: 32,
+          description: '标签 ≤32；省略或空 → 该角色默认标签',
+        },
+      },
+    },
+    AddActivityMembersRequest: {
       type: 'object',
       required: ['members'],
+      description: '只插入这些人，不删除、不修改已有成员',
       properties: {
         members: {
           type: 'array',
           minItems: 1,
           description:
-            '全量覆盖；至少 1 名主播（role=1）。同 id 不可重复；role=1 为 1～20，role=2/3 各 0～20',
+            '本次要新增的人，至少 1 人，不是整份名单。同一 id 不可重复，且不能已是本场成员。加上已有人数后每个角色仍不超过 20',
           items: {
             type: 'object',
             required: ['id', 'role'],
@@ -1766,20 +1802,34 @@ function buildAdmin() {
               nickname: {
                 type: 'string',
                 maxLength: 10,
-                description: '本场昵称 ≤10；省略或空 → 库存 NULL（读时回员工姓名）',
+                description: '本场昵称 ≤10；省略或空 → 快照员工 user_name',
               },
               avatarUrl: {
                 type: 'string',
                 maxLength: 512,
-                description: '省略或空 → NULL',
+                description: '本场头像 ≤512；省略或空 → 快照员工头像',
               },
               tag: {
                 type: 'string',
                 maxLength: 32,
-                description: '省略或空 → NULL',
+                description: '标签 ≤32；省略或空 → 该角色默认标签',
               },
             },
           },
+        },
+      },
+    },
+    DeleteActivityMembersRequest: {
+      type: 'object',
+      required: ['ids'],
+      description: '只删除列出的员工，其余成员不动',
+      properties: {
+        ids: {
+          type: 'array',
+          minItems: 1,
+          description:
+            '要删除的员工 rs_mainkey_id，至少 1 个。同一 id 不能重复；不是本场成员 → 400。删完至少留 1 名主播',
+          items: { $ref: '#/components/schemas/EmployeeId' },
         },
       },
     },
@@ -1807,10 +1857,16 @@ function buildAdmin() {
     },
     HostData: {
       type: 'object',
-      required: ['provider', 'hostUrl'],
+      required: ['provider', 'hostUrl', 'role'],
       properties: {
         provider: { $ref: '#/components/schemas/Provider' },
-        hostUrl: { type: 'string', format: 'uri' },
+        hostUrl: {
+          type: 'string',
+          format: 'uri',
+          description:
+            '微吼 page_url；本站 /live/studio/{id}?role= 页的 iframe src；勿给观众',
+        },
+        role: { $ref: '#/components/schemas/ActivityMemberRole' },
       },
     },
     PushStreamData: {
@@ -3179,11 +3235,25 @@ function buildAdmin() {
     '/api/v1/activities/host/{id}': {
       get: {
         tags: ['活动管理'],
-        summary: '主持人开播链接',
-        description: '管理端拿到 hostUrl 后新窗口打开，不要 iframe。canBroadcast 不为真 → 400。',
+        summary: '角色参会链接',
+        description:
+          '主持人、嘉宾、助理都用本接口取本人的参会 iframe 地址（hostUrl）。供本站 /live/studio/{id}?role= 页 iframe src，不要 window.open。role 省略按主播。嘉宾/助理须已是本场对应角色，否则 400。canBroadcast 不为真 → 400。',
         operationId: 'getActivityHost',
         security: bearer,
-        parameters: [activityId],
+        parameters: [
+          activityId,
+          {
+            name: 'role',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              enum: [1, 2, 3],
+              default: 1,
+              description: '1 主播 / 2 嘉宾 / 3 助理；省略按主播',
+            },
+          },
+        ],
         responses: ok200('#/components/schemas/ApiResponseHost'),
       },
     },
@@ -3199,13 +3269,13 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseMembers'),
       },
     },
-    '/api/v1/activities/members/save/{id}': {
+    '/api/v1/activities/members/update/{id}': {
       put: {
         tags: ['活动管理'],
-        summary: '全量覆盖开播成员',
+        summary: '更新开播成员资料',
         description:
-          '全量覆盖 activity_member；至少 1 名主播。不改归属人、不触发风控回 pending、不同步微吼。传 [] → 400。有 reportId 时主播须恰为报备主播 1 人。',
-        operationId: 'replaceActivityMembers',
+          '只改一名已有成员的本场昵称、头像、标签。不改 role，不增删其他人。不是本场成员 → 400。不改归属人、不触发风控回 pending、不同步微吼。',
+        operationId: 'updateActivityMember',
         security: bearer,
         parameters: [activityId],
         requestBody: {
@@ -3213,20 +3283,70 @@ function buildAdmin() {
           content: {
             'application/json': {
               schema: {
-                $ref: '#/components/schemas/UpdateActivityMembersRequest',
+                $ref: '#/components/schemas/UpdateActivityMemberRequest',
+              },
+              example: {
+                id: 10001,
+                nickname: '云奎',
+                avatarUrl: 'https://cdn.example/a.jpg',
+                tag: '讲师',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseMembers'),
+      },
+    },
+    '/api/v1/activities/members/add/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: '添加开播成员',
+        description:
+          '只插入请求里的人，不删除、不修改已有成员。已是本场成员、同一 id 重复、或加上已有人数后某角色超过 20 → 400。已绑报备时不能新增 role=1。不改归属人、不触发风控回 pending、不同步微吼。',
+        operationId: 'addActivityMembers',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/AddActivityMembersRequest',
               },
               example: {
                 members: [
                   {
-                    id: 10001,
-                    role: 1,
-                    nickname: '云奎',
+                    id: 10002,
+                    role: 3,
+                    nickname: '小助',
                     avatarUrl: 'https://cdn.example/a.jpg',
-                    tag: '讲师',
+                    tag: '助教',
                   },
-                  { id: 10002, role: 2, tag: '助理' },
                 ],
               },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseMembers'),
+      },
+    },
+    '/api/v1/activities/members/delete/{id}': {
+      delete: {
+        tags: ['活动管理'],
+        summary: '删除开播成员',
+        description:
+          '路径 id 是活动 UUID。只删 body.ids 里的员工，其余不动。同一 id 重复、不是本场成员、删完没有主播、或已绑报备时删主播 → 400。不改归属人、不触发风控回 pending、不同步微吼。',
+        operationId: 'deleteActivityMembers',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/DeleteActivityMembersRequest',
+              },
+              example: { ids: [10002] },
             },
           },
         },
@@ -3822,7 +3942,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.3.4',
+      version: '2.4.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4328,7 +4448,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.3.4',
+      version: '2.4.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4405,7 +4525,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.3.4',
+      version: '2.4.0',
       contact: { name: 'zhibo' },
     },
     servers: [

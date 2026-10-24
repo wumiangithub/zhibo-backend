@@ -6,7 +6,6 @@ public record ProviderRoomSnapshot(
         Integer type,
         Integer pv,
         String fullEmbedShareLink,
-        String shareLink,
         String startTime,
         String endTime,
         String introduction,
