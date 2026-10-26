@@ -111,8 +111,8 @@ public class ActivityController {
         return ApiResponse.ok(activityService.streamStatus(id));
     }
 
-    /** 第三方推流开始直播。当前登录员工可调。不是结束直播 {@code /end/{id}}。 */
-    @PostMapping("/live/start/{id}")
+    /** 第三方推流开始直播。当前登录员工可调。与 {@code /end/{id}} 对称；不是网页主持人开播。 */
+    @PostMapping("/start/{id}")
     public ApiResponse<StartActivityResponse> startLive(@PathVariable String id) {
         return ApiResponse.ok(activityService.startLive(id));
     }

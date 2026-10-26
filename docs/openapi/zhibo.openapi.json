@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo API（admin + live）",
     "description": "钱坤直播全站 OpenAPI，供 Apifox 一次导入。\n\n- admin-service：`http://127.0.0.1:8081`\n- live-service：`http://127.0.0.1:8082`\n\n契约：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。\n本文件亦是正式后端按文档反向实现接口与建表/校验的权威输入之一。\n分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。\n\n导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。",
-    "version": "2.4.0",
+    "version": "2.5.0",
     "contact": {
       "name": "zhibo"
     }
@@ -2117,14 +2117,14 @@
         }
       }
     },
-    "/api/v1/activities/live/start/{id}": {
+    "/api/v1/activities/start/{id}": {
       "post": {
         "tags": [
           "admin/活动管理"
         ],
         "summary": "开始直播（第三方推流 rtmp 按钮）",
-        "description": "无 body。对应管理后台「第三方推流到直播间」页的「开始直播」按钮：OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。",
-        "operationId": "admin_startActivityLivePush",
+        "description": "无 body。与 /activities/end/{id} 对称。对应管理后台「第三方推流到直播间」页的「开始直播」：OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播。本站活动即直播，path 不嵌 live。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。",
+        "operationId": "admin_startActivity",
         "security": [
           {
             "BearerAuth": []
@@ -6321,7 +6321,7 @@
           "id",
           "state"
         ],
-        "description": "结束直播 / 第三方推流开始直播（live/start）共用：返回本站活动 id 与写回后的 state",
+        "description": "结束直播 / 第三方推流开始直播（/activities/start）共用：返回本站活动 id 与写回后的 state",
         "properties": {
           "id": {
             "type": "string",
@@ -6331,7 +6331,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/ActivityState",
-            "description": "本站写回后的活动状态；结束多为 3，live/start 成功多为 1",
+            "description": "本站写回后的活动状态；结束多为 3，start 成功多为 1",
             "x-apifox-enum": [
               {
                 "value": 0,

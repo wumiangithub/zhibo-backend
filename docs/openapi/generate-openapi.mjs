@@ -1704,12 +1704,12 @@ function buildAdmin() {
       type: 'object',
       required: ['id', 'state'],
       description:
-        '结束直播 / 第三方推流开始直播（live/start）共用：返回本站活动 id 与写回后的 state',
+        '结束直播 / 第三方推流开始直播（/activities/start）共用：返回本站活动 id 与写回后的 state',
       properties: {
         id: { type: 'string', format: 'uuid', description: '本站活动 UUID' },
         state: {
           $ref: '#/components/schemas/ActivityState',
-          description: '本站写回后的活动状态；结束多为 3，live/start 成功多为 1',
+          description: '本站写回后的活动状态；结束多为 3，start 成功多为 1',
         },
       },
     },
@@ -3397,13 +3397,13 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseStreamStatus'),
       },
     },
-    '/api/v1/activities/live/start/{id}': {
+    '/api/v1/activities/start/{id}': {
       post: {
         tags: ['活动管理'],
         summary: '开始直播（第三方推流 rtmp 按钮）',
         description:
-          '无 body。对应管理后台「第三方推流到直播间」页的「开始直播」按钮：OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播，也不是 end。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。',
-        operationId: 'startActivityLivePush',
+          '无 body。与 /activities/end/{id} 对称。对应管理后台「第三方推流到直播间」页的「开始直播」：OBS 等三方推流真正开播（微吼 start_type=4），不是网页主持人开播。本站活动即直播，path 不嵌 live。已软删 → 400；非 vhall → 501。成功 data 为 {id, state}，state 多为 1。',
+        operationId: 'startActivity',
         security: bearer,
         parameters: [activityId],
         responses: ok200('#/components/schemas/ApiResponseLiveStart'),
@@ -3942,7 +3942,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.4.0',
+      version: '2.5.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4448,7 +4448,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.4.0',
+      version: '2.5.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4525,7 +4525,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.4.0',
+      version: '2.5.0',
       contact: { name: 'zhibo' },
     },
     servers: [
