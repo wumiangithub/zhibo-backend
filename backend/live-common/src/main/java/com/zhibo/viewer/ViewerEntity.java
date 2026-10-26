@@ -31,11 +31,11 @@ public class ViewerEntity {
     @Column(name = "phone_country_code", length = 8)
     private String phoneCountryCode;
 
-    /** 本轮登录不写。 */
+    /** 资料页写入；业务上限 16 字。 */
     @Column(length = 64)
     private String nickname;
 
-    /** 本轮登录不写。 */
+    /** 资料页头像 CDN URL。 */
     @Column(name = "avatar_url", length = 512)
     private String avatarUrl;
 

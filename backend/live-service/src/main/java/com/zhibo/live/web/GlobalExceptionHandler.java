@@ -1,6 +1,7 @@
 package com.zhibo.live.web;
 
 import com.zhibo.live.viewer.ViewerAuthException;
+import com.zhibo.live.volc.ViewerTosException;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,7 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 观看端全局异常 → {@link ApiResponse}。与 admin-service 对称，各自维护。
@@ -21,6 +23,17 @@ public class GlobalExceptionHandler {
     public ApiResponse<Void> handleViewerAuth(ViewerAuthException ex) {
         log.info("观众鉴权 code={} msg={}", ex.getCode(), ex.getMessage());
         return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(ViewerTosException.class)
+    public ApiResponse<Void> handleViewerTos(ViewerTosException ex) {
+        log.warn("观众 TOS code={} msg={}", ex.getCode(), ex.getMessage());
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ApiResponse<Void> handleMaxUpload(MaxUploadSizeExceededException ex) {
+        return ApiResponse.fail(400, "头像不能超过2MB");
     }
 
     @ExceptionHandler(ProviderNotAvailableException.class)

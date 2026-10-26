@@ -28,6 +28,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
 
 vhall:
   app-key: ${VHALL_APP_KEY:}
@@ -46,3 +50,14 @@ viewer:
   wechat:
     mp-app-id: ${WECHAT_MP_APP_ID:}
     mp-app-secret: ${WECHAT_MP_APP_SECRET:}
+
+# 火山 TOS（观众头像；与管理端共用 VOLC_*；缺省不拒启动）
+volc:
+  access-key: ${VOLC_ACCESS_KEY:}
+  secret-key: ${VOLC_SECRET_KEY:}
+  sts-role-trn: ${VOLC_STS_ROLE_TRN:trn:iam::2116729154:role/sts}
+  tos-region: ${VOLC_TOS_REGION:cn-shanghai}
+  tos-endpoint: ${VOLC_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
+  tos-bucket: ${VOLC_TOS_BUCKET:qky-live-sucai-test}
+  tos-cdn-url: ${VOLC_TOS_CDN_URL:https://qklive-testcos.cjs99.com}
+  sts-duration-seconds: ${VOLC_STS_DURATION_SECONDS:3600}

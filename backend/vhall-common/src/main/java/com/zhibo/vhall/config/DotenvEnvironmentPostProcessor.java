@@ -51,6 +51,7 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
             copyIfPresent(values, "VOLC_TOS_ENDPOINT", "volc.tos-endpoint");
             copyIfPresent(values, "VOLC_TOS_BUCKET", "volc.tos-bucket");
             copyIfPresent(values, "VOLC_STS_DURATION_SECONDS", "volc.sts-duration-seconds");
+            copyIfPresent(values, "VOLC_TOS_CDN_URL", "volc.tos-cdn-url");
             copyIfPresent(values, "AUTH_PASSWORD_AES_KEY_BASE64", "auth.password-aes-key-base64");
             copyIfPresent(values, "AUTH_JWT_SECRET", "auth.jwt-secret");
             copyIfPresent(values, "AUTH_JWT_EXPIRE_SECONDS", "auth.jwt-expire-seconds");
