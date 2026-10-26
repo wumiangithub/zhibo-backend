@@ -33,7 +33,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ApiResponse<Void> handleMaxUpload(MaxUploadSizeExceededException ex) {
-        return ApiResponse.fail(400, "头像不能超过2MB");
+        return ApiResponse.fail(400, "图片不能超过2MB");
     }
 
     @ExceptionHandler(ProviderNotAvailableException.class)

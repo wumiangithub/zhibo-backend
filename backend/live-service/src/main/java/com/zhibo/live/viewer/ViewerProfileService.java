@@ -6,24 +6,16 @@ import com.zhibo.live.volc.ViewerTosUploader;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Locale;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 /** 观众昵称 / 头像。 */
 @Service
 public class ViewerProfileService {
 
     static final int NICK_MAX = 16;
-    private static final long AVATAR_MAX_BYTES = 2L * 1024 * 1024;
-    private static final Set<String> ALLOWED_TYPES = Set.of(
-            "image/jpeg", "image/png", "image/gif", "image/webp");
     private static final String DISABLED = "账号已停用";
 
     private final ViewerRepository viewerRepository;
@@ -44,50 +36,23 @@ public class ViewerProfileService {
             throw new ViewerAuthException(400, "请填写昵称或头像");
         }
         boolean hasNick = request.getNickname() != null;
-        boolean hasAvatar = request.getAvatarUrl() != null;
-        if (!hasNick && !hasAvatar) {
+        boolean hasUrl = request.getAvatarUrl() != null;
+        boolean hasKey = request.getAvatarObjectKey() != null;
+        if (hasUrl != hasKey) {
+            throw new ViewerAuthException(400, "请同时提交头像地址和对象键");
+        }
+        if (!hasNick && !hasUrl) {
             throw new ViewerAuthException(400, "请填写昵称或头像");
         }
         if (hasNick) {
             applyNickname(viewer, request.getNickname());
         }
-        if (hasAvatar) {
-            applyAvatarUrl(viewer, request.getAvatarUrl());
+        if (hasUrl) {
+            applyAvatar(viewer, request.getAvatarUrl(), request.getAvatarObjectKey());
         }
         viewer.setUpdatedTime(LocalDateTime.now(clock));
         viewerRepository.save(viewer);
         return toUser(viewer);
-    }
-
-    @Transactional
-    public ViewerUserResponse uploadAvatar(long viewerId, MultipartFile file) {
-        ViewerEntity viewer = requireViewer(viewerId);
-        if (file == null || file.isEmpty()) {
-            throw new ViewerAuthException(400, "请选择头像");
-        }
-        if (file.getSize() > AVATAR_MAX_BYTES) {
-            throw new ViewerAuthException(400, "头像不能超过2MB");
-        }
-        String ext = resolveExt(file);
-        String contentType = resolveContentType(file, ext);
-        if (contentType == null) {
-            throw new ViewerAuthException(400, "仅支持 jpg/png/gif/webp 图片");
-        }
-        String objectKey = ViewerTosUploader.KEY_PREFIX
-                + viewerId
-                + "_"
-                + System.currentTimeMillis()
-                + "."
-                + ext;
-        try (InputStream in = file.getInputStream()) {
-            String url = tosUploader.put(objectKey, in, file.getSize(), contentType);
-            viewer.setAvatarUrl(url);
-            viewer.setUpdatedTime(LocalDateTime.now(clock));
-            viewerRepository.save(viewer);
-            return toUser(viewer);
-        } catch (IOException ex) {
-            throw new ViewerAuthException(500, "头像读取失败");
-        }
     }
 
     private ViewerEntity requireViewer(long viewerId) {
@@ -112,57 +77,23 @@ public class ViewerProfileService {
         viewer.setNickname(nickname);
     }
 
-    private void applyAvatarUrl(ViewerEntity viewer, String raw) {
-        String url = raw == null ? "" : raw.trim();
-        if (url.isEmpty()) {
+    private void applyAvatar(ViewerEntity viewer, String rawUrl, String rawKey) {
+        String url = rawUrl == null ? "" : rawUrl.trim();
+        String objectKey = rawKey == null ? "" : rawKey.trim();
+        if (url.isEmpty() || objectKey.isEmpty() || url.length() > 512 || objectKey.length() > 1024) {
             throw new ViewerAuthException(400, "头像地址无效");
         }
-        if (url.length() > 512) {
-            throw new ViewerAuthException(400, "头像地址过长");
+        if (!objectKey.startsWith(ViewerUploadBiz.AVATAR_PREFIX) || objectKey.contains("..")) {
+            throw new ViewerAuthException(400, "头像地址无效");
+        }
+        if (!url.endsWith("/" + objectKey)) {
+            throw new ViewerAuthException(400, "头像地址无效");
         }
         if (!tosUploader.isAllowedAvatarUrl(url)) {
             throw new ViewerAuthException(400, "头像地址无效");
         }
         viewer.setAvatarUrl(url);
-    }
-
-    private static String resolveExt(MultipartFile file) {
-        String name = file.getOriginalFilename();
-        if (name != null) {
-            int dot = name.lastIndexOf('.');
-            if (dot >= 0 && dot < name.length() - 1) {
-                String ext = name.substring(dot + 1).toLowerCase(Locale.ROOT);
-                if (ext.equals("jpg") || ext.equals("jpeg") || ext.equals("png")
-                        || ext.equals("gif") || ext.equals("webp")) {
-                    return ext.equals("jpeg") ? "jpg" : ext;
-                }
-            }
-        }
-        String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
-        return switch (type) {
-            case "image/jpeg" -> "jpg";
-            case "image/png" -> "png";
-            case "image/gif" -> "gif";
-            case "image/webp" -> "webp";
-            default -> null;
-        };
-    }
-
-    private static String resolveContentType(MultipartFile file, String ext) {
-        if (ext == null) {
-            return null;
-        }
-        String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
-        if (ALLOWED_TYPES.contains(type)) {
-            return type;
-        }
-        return switch (ext) {
-            case "jpg" -> "image/jpeg";
-            case "png" -> "image/png";
-            case "gif" -> "image/gif";
-            case "webp" -> "image/webp";
-            default -> null;
-        };
+        viewer.setAvatarObjectKey(objectKey);
     }
 
     static ViewerUserResponse toUser(ViewerEntity viewer) {
@@ -178,6 +109,9 @@ public class ViewerProfileService {
         }
         if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
             user.setAvatarUrl(viewer.getAvatarUrl().trim());
+        }
+        if (viewer.getAvatarObjectKey() != null && !viewer.getAvatarObjectKey().isBlank()) {
+            user.setAvatarObjectKey(viewer.getAvatarObjectKey().trim());
         }
         return user;
     }

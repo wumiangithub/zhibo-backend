@@ -35,9 +35,13 @@ public class ViewerEntity {
     @Column(length = 64)
     private String nickname;
 
-    /** 资料页头像 CDN URL。 */
+    /** 资料页头像访问地址。 */
     @Column(name = "avatar_url", length = 512)
     private String avatarUrl;
+
+    /** 头像 TOS 对象键，与 avatarUrl 成对。 */
+    @Column(name = "avatar_object_key", length = 1024)
+    private String avatarObjectKey;
 
     /** {@link ViewerStatus#NORMAL} / {@link ViewerStatus#DISABLED}。 */
     @Column(nullable = false)

@@ -48,7 +48,7 @@ class ViewerAuthInterceptorTest {
     @Test
     void refreshTokenAsBearer_rejectedOnMe() throws Exception {
         String refresh = jwtTokenService.issueRefresh(8L);
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/me");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/user-info");
         request.addHeader("Authorization", "Bearer " + refresh);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -68,7 +68,7 @@ class ViewerAuthInterceptorTest {
                 .expiration(Date.from(clock.instant().plusSeconds(7200)))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
                 .compact();
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/me");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/user-info");
         request.addHeader("Authorization", "Bearer " + adminLike);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -82,7 +82,7 @@ class ViewerAuthInterceptorTest {
         assertAllowed("POST", "/api/v1/viewer/auth/phone-login");
         assertAllowed("POST", "/api/v1/viewer/auth/refresh");
 
-        MockHttpServletRequest me = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/me");
+        MockHttpServletRequest me = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/user-info");
         MockHttpServletResponse response = new MockHttpServletResponse();
         assertFalse(interceptor.preHandle(me, response, new Object()));
         assertTrue(response.getContentAsString().contains("\"code\":401"));

@@ -2,7 +2,6 @@ package com.zhibo.live.viewer;
 
 import com.volcengine.model.response.AssumeRoleResponse;
 import com.zhibo.live.viewer.dto.ViewerTosStsResponse;
-import com.zhibo.live.volc.ViewerTosUploader;
 import com.zhibo.live.volc.ViewerTosException;
 import com.zhibo.live.volc.ViewerVolcStsClient;
 import com.zhibo.live.volc.VolcTosProperties;
@@ -29,7 +28,7 @@ public class ViewerTosStsService {
         this.stsClient = stsClient;
     }
 
-    public ViewerTosStsResponse issueCredentials() {
+    public ViewerTosStsResponse issueCredentials(int biz) {
         if (properties.stsCredentialsMissing()) {
             throw new IllegalArgumentException("未配置火山 TOS 凭证");
         }
@@ -59,7 +58,7 @@ public class ViewerTosStsService {
                 secretAccessKey,
                 sessionToken,
                 toUtcIso(credentials.getExpiredTime(), duration),
-                ViewerTosUploader.KEY_PREFIX,
+                ViewerUploadBiz.prefix(biz),
                 cdn);
     }
 

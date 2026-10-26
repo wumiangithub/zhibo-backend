@@ -2,13 +2,9 @@ package com.zhibo.live.viewer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.zhibo.live.viewer.dto.ViewerProfileUpdateRequest;
@@ -17,7 +13,6 @@ import com.zhibo.live.volc.ViewerTosUploader;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
-import java.io.ByteArrayInputStream;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -25,7 +20,6 @@ import java.time.ZoneId;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockMultipartFile;
 
 class ViewerProfileServiceTest {
 
@@ -80,27 +74,29 @@ class ViewerProfileServiceTest {
     void update_avatarUrlMustBeAllowed() {
         when(tosUploader.isAllowedAvatarUrl(anyString())).thenReturn(false);
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
-        req.setAvatarUrl("https://evil.example/a.jpg");
+        req.setAvatarUrl("https://evil.example/viewer/avatar/9_1.png");
+        req.setAvatarObjectKey("viewer/avatar/9_1.png");
         ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update(9L, req));
         assertEquals("头像地址无效", ex.getMessage());
     }
 
     @Test
-    void uploadAvatar_writesUrl() throws Exception {
-        when(tosUploader.put(anyString(), any(), anyLong(), eq("image/png")))
-                .thenReturn("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png");
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "a.png", "image/png", new ByteArrayInputStream(new byte[] {1, 2, 3}));
-        ViewerUserResponse user = service.uploadAvatar(9L, file);
-        assertEquals("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png", user.getAvatarUrl());
-        assertTrue(viewer.getAvatarUrl().contains("viewer/avatar/"));
-        verify(tosUploader).put(anyString(), any(), eq(3L), eq("image/png"));
+    void update_avatarRequiresObjectKey() {
+        ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
+        req.setAvatarUrl("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png");
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update(9L, req));
+        assertEquals("请同时提交头像地址和对象键", ex.getMessage());
     }
 
     @Test
-    void uploadAvatar_rejectsEmpty() {
-        MockMultipartFile file = new MockMultipartFile("file", new byte[0]);
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.uploadAvatar(9L, file));
-        assertEquals("请选择头像", ex.getMessage());
+    void update_avatarStoresUrlAndObjectKey() {
+        when(tosUploader.isAllowedAvatarUrl(anyString())).thenReturn(true);
+        ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
+        req.setAvatarUrl("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png");
+        req.setAvatarObjectKey("viewer/avatar/9_1.png");
+        ViewerUserResponse user = service.update(9L, req);
+        assertEquals("viewer/avatar/9_1.png", user.getAvatarObjectKey());
+        assertEquals(req.getAvatarUrl(), user.getAvatarUrl());
+        assertEquals("viewer/avatar/9_1.png", viewer.getAvatarObjectKey());
     }
 }

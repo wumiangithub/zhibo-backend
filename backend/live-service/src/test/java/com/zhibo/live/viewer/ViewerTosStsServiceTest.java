@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import com.volcengine.model.response.AssumeRoleResponse;
 import com.zhibo.live.viewer.dto.ViewerTosStsResponse;
-import com.zhibo.live.volc.ViewerTosUploader;
 import com.zhibo.live.volc.ViewerVolcStsClient;
 import com.zhibo.live.volc.VolcTosProperties;
 import org.junit.jupiter.api.Test;
@@ -37,12 +36,14 @@ class ViewerTosStsServiceTest {
         ViewerVolcStsClient client = mock(ViewerVolcStsClient.class);
         when(client.assumeRole(anyString(), anyInt())).thenReturn(cred);
 
-        ViewerTosStsResponse resp = new ViewerTosStsService(props, client).issueCredentials();
+        ViewerTosStsService service = new ViewerTosStsService(props, client);
+        ViewerTosStsResponse resp = service.issueCredentials(ViewerUploadBiz.AVATAR);
         assertEquals("cn-shanghai", resp.getRegion());
         assertEquals("tos-cn-shanghai.volces.com", resp.getEndpoint());
         assertEquals("qky-live-sucai-test", resp.getBucketName());
         assertEquals("tmp-ak", resp.getAccessKeyId());
-        assertEquals(ViewerTosUploader.KEY_PREFIX, resp.getKeyPrefix());
+        assertEquals(ViewerUploadBiz.AVATAR_PREFIX, resp.getKeyPrefix());
+        assertEquals(ViewerUploadBiz.FEEDBACK_PREFIX, service.issueCredentials(ViewerUploadBiz.FEEDBACK).getKeyPrefix());
         assertEquals("https://qklive-testcos.cjs99.com", resp.getCdnUrl());
         assertEquals("2026-10-26T12:00:00Z", resp.getExpiredTime());
     }
@@ -53,6 +54,6 @@ class ViewerTosStsServiceTest {
         ViewerVolcStsClient client = mock(ViewerVolcStsClient.class);
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new ViewerTosStsService(props, client).issueCredentials());
+                () -> new ViewerTosStsService(props, client).issueCredentials(ViewerUploadBiz.AVATAR));
     }
 }

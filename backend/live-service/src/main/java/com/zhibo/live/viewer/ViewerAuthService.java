@@ -105,7 +105,7 @@ public class ViewerAuthService {
     }
 
     @Transactional(readOnly = true)
-    public ViewerUserResponse me(long viewerId) {
+    public ViewerUserResponse userInfo(long viewerId) {
         ViewerEntity viewer = viewerRepository.findById(viewerId)
                 .orElseThrow(() -> new ViewerAuthException(401, "未登录"));
         if (!ViewerStatus.isNormal(viewer.getStatus())) {
@@ -226,6 +226,9 @@ public class ViewerAuthService {
         }
         if (!isBlank(viewer.getAvatarUrl())) {
             user.setAvatarUrl(viewer.getAvatarUrl().trim());
+        }
+        if (!isBlank(viewer.getAvatarObjectKey())) {
+            user.setAvatarObjectKey(viewer.getAvatarObjectKey().trim());
         }
         return user;
     }

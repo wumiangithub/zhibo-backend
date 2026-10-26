@@ -40,12 +40,12 @@ public class ViewerAuthController {
         return ApiResponse.ok(viewerAuthService.refresh(request));
     }
 
-    @GetMapping("/me")
-    public ApiResponse<ViewerUserResponse> me(HttpServletRequest request) {
+    @GetMapping("/user-info")
+    public ApiResponse<ViewerUserResponse> userInfo(HttpServletRequest request) {
         Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
         if (viewerId == null) {
             throw new ViewerAuthException(401, "未登录");
         }
-        return ApiResponse.ok(viewerAuthService.me(viewerId));
+        return ApiResponse.ok(viewerAuthService.userInfo(viewerId));
     }
 }

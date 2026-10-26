@@ -182,7 +182,7 @@ class ViewerAuthServiceTest {
         assertEquals("账号已停用", login.getMessage());
         assertEquals(original, store.viewer.getLastLoginTime());
 
-        ViewerAuthException me = assertThrows(ViewerAuthException.class, () -> service.me(5L));
+        ViewerAuthException me = assertThrows(ViewerAuthException.class, () -> service.userInfo(5L));
         assertEquals(403, me.getCode());
         assertEquals("账号已停用", me.getMessage());
 

@@ -10,13 +10,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 观众头像上传到火山 TOS。对象 key 前缀 {@code viewer/avatar/}。
+ * 观众文件上传到火山 TOS。对象 key 必须落在已登记前缀下。
  */
 @Slf4j
 @Component
 public class ViewerTosUploader {
 
+    /** 观众头像。 */
     public static final String KEY_PREFIX = "viewer/avatar/";
+
+    /** 意见反馈截图。 */
+    public static final String FEEDBACK_PREFIX = "viewer/feedback/";
 
     private final VolcTosProperties properties;
 
@@ -32,15 +36,10 @@ public class ViewerTosUploader {
         if (properties.credentialsMissing()) {
             throw new IllegalArgumentException("未配置火山 TOS 凭证");
         }
-        if (objectKey == null || !objectKey.startsWith(KEY_PREFIX)) {
-            throw new IllegalArgumentException("头像对象 key 非法");
+        if (!isRegisteredKey(objectKey)) {
+            throw new IllegalArgumentException("对象 key 非法");
         }
-        String endpoint = properties.getTosEndpoint().trim();
-        if (endpoint.startsWith("https://")) {
-            endpoint = endpoint.substring("https://".length());
-        } else if (endpoint.startsWith("http://")) {
-            endpoint = endpoint.substring("http://".length());
-        }
+        String endpoint = stripScheme(properties.getTosEndpoint().trim());
         TOSV2 tos = new TOSV2ClientBuilder()
                 .build(
                         properties.getTosRegion().trim(),
@@ -60,12 +59,19 @@ public class ViewerTosUploader {
         } catch (TosException ex) {
             log.warn("TOS putObject 失败 status={} code={} msg={}",
                     ex.getStatusCode(), ex.getCode(), ex.getMessage());
-            throw new ViewerTosException(502, "头像上传失败，请重试");
+            throw new ViewerTosException(502, "文件上传失败，请重试");
         } catch (RuntimeException ex) {
             log.warn("TOS putObject 异常: {}", ex.getMessage());
-            throw new ViewerTosException(502, "头像上传失败，请重试");
+            throw new ViewerTosException(502, "文件上传失败，请重试");
         }
         return publicUrl(objectKey);
+    }
+
+    /** 桶上的地址，对应直传 SDK 的 Location。 */
+    public String location(String objectKey) {
+        String endpoint = stripScheme(properties.getTosEndpoint() == null ? "" : properties.getTosEndpoint().trim());
+        String bucket = properties.getTosBucket() == null ? "" : properties.getTosBucket().trim();
+        return "https://" + bucket + "." + endpoint + "/" + objectKey;
     }
 
     public String publicUrl(String objectKey) {
@@ -103,12 +109,7 @@ public class ViewerTosUploader {
                 return true;
             }
         }
-        String endpoint = properties.getTosEndpoint() == null ? "" : properties.getTosEndpoint().trim();
-        if (endpoint.startsWith("https://")) {
-            endpoint = endpoint.substring("https://".length());
-        } else if (endpoint.startsWith("http://")) {
-            endpoint = endpoint.substring("http://".length());
-        }
+        String endpoint = stripScheme(properties.getTosEndpoint() == null ? "" : properties.getTosEndpoint().trim());
         String bucket = properties.getTosBucket() == null ? "" : properties.getTosBucket().trim();
         if (!bucket.isEmpty() && !endpoint.isEmpty()) {
             String nativeBase = "https://" + bucket + "." + endpoint;
@@ -117,5 +118,21 @@ public class ViewerTosUploader {
             }
         }
         return false;
+    }
+
+    private static boolean isRegisteredKey(String objectKey) {
+        return objectKey != null
+                && !objectKey.contains("..")
+                && (objectKey.startsWith(KEY_PREFIX) || objectKey.startsWith(FEEDBACK_PREFIX));
+    }
+
+    private static String stripScheme(String endpoint) {
+        if (endpoint.startsWith("https://")) {
+            return endpoint.substring("https://".length());
+        }
+        if (endpoint.startsWith("http://")) {
+            return endpoint.substring("http://".length());
+        }
+        return endpoint;
     }
 }
