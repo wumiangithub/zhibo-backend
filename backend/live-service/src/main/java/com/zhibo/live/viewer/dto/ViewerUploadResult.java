@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ViewerUploadResult {
 
-    /** TOS 对象键，如 viewer/avatar/9_171.jpg。 */
+    /** TOS 对象键，头像如 viewer/avatar/9.jpg（覆盖写）。 */
     private String objectKey;
 
     /** 业务落库用的访问地址。 */
