@@ -27,13 +27,11 @@ public class ViewerUploadController {
         this.viewerFileUploadService = viewerFileUploadService;
     }
 
-    /** biz：1 头像 / 2 意见反馈截图。缺省 1，兼容已发出的直传调用。 */
+    /** 直传临时凭证，对齐管理端：无 Query biz；前缀由前端拼 objectKey。 */
     @GetMapping("/tos-sts")
-    public ApiResponse<ViewerTosStsResponse> tosSts(
-            @RequestParam(value = "biz", required = false) Integer biz, HttpServletRequest request) {
+    public ApiResponse<ViewerTosStsResponse> tosSts(HttpServletRequest request) {
         requireViewerId(request);
-        int useBiz = biz == null ? ViewerUploadBiz.AVATAR : biz;
-        return ApiResponse.ok(viewerTosStsService.issueCredentials(useBiz));
+        return ApiResponse.ok(viewerTosStsService.issueCredentials());
     }
 
     /**

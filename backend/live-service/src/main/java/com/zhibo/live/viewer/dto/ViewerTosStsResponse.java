@@ -6,7 +6,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * {@code GET /api/v1/viewer/uploads/tos-sts}。
- * 前 7 项对齐管理端 tos-sts；另附 keyPrefix / cdnUrl 方便小程序。
+ * 前 7 项对齐管理端 tos-sts；另附 {@code cdnUrl}（管理端 CDN 走前端 env，小程序由本字段带回）。
  */
 @Data
 @NoArgsConstructor
@@ -21,8 +21,6 @@ public class ViewerTosStsResponse {
     private String sessionToken;
     /** ISO-8601 UTC，带 Z。 */
     private String expiredTime;
-    /** 固定 viewer/avatar/ */
-    private String keyPrefix;
     /** VOLC_TOS_CDN_URL；未配则为空串。 */
     private String cdnUrl;
 }

@@ -28,7 +28,8 @@ public class ViewerTosStsService {
         this.stsClient = stsClient;
     }
 
-    public ViewerTosStsResponse issueCredentials(int biz) {
+    /** 与管理端一致：只签发临时凭证，不按 biz 区分。前缀由前端拼 objectKey。 */
+    public ViewerTosStsResponse issueCredentials() {
         if (properties.stsCredentialsMissing()) {
             throw new IllegalArgumentException("未配置火山 TOS 凭证");
         }
@@ -58,7 +59,6 @@ public class ViewerTosStsService {
                 secretAccessKey,
                 sessionToken,
                 toUtcIso(credentials.getExpiredTime(), duration),
-                ViewerUploadBiz.prefix(biz),
                 cdn);
     }
 
