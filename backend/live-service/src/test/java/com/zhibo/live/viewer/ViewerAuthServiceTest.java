@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -17,10 +16,8 @@ import com.zhibo.live.viewer.dto.PhoneLoginRequest;
 import com.zhibo.live.viewer.dto.ViewerAuthResponse;
 import com.zhibo.live.viewer.dto.ViewerRefreshRequest;
 import com.zhibo.live.viewer.dto.WechatLoginRequest;
-import com.zhibo.viewer.ViewerChannel;
 import com.zhibo.viewer.ViewerEntity;
-import com.zhibo.viewer.ViewerIdentityEntity;
-import com.zhibo.viewer.ViewerIdentityRepository;
+import com.zhibo.viewer.ViewerRegisterChannel;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
 import java.time.Clock;
@@ -38,7 +35,6 @@ class ViewerAuthServiceTest {
     private MutableClock clock;
     private ViewerAuthProperties properties;
     private ViewerRepository viewerRepository;
-    private ViewerIdentityRepository identityRepository;
     private WechatMpClient wechatMpClient;
     private ViewerJwtTokenService jwtTokenService;
     private ViewerAuthService service;
@@ -58,12 +54,10 @@ class ViewerAuthServiceTest {
         properties.getWechat().setMpAppSecret("test-mp-secret");
 
         viewerRepository = mock(ViewerRepository.class);
-        identityRepository = mock(ViewerIdentityRepository.class);
         wechatMpClient = mock(WechatMpClient.class);
         jwtTokenService = new ViewerJwtTokenService(properties, clock);
         service = new ViewerAuthService(
                 viewerRepository,
-                identityRepository,
                 wechatMpClient,
                 jwtTokenService,
                 properties,
@@ -105,9 +99,9 @@ class ViewerAuthServiceTest {
         assertEquals(1L, second.getUser().getId());
         assertFalse(second.getUser().isHasPhone());
         assertNull(second.getUser().getPhoneMasked());
-        assertEquals(ViewerChannel.WECHAT_MP, store.identity.getChannel());
-        assertEquals("oid-1", store.identity.getOpenid());
-        assertEquals("union-1", store.identity.getUnionid());
+        assertEquals("oid-1", store.viewer.getMiniOpenid());
+        assertEquals("union-1", store.viewer.getUnionid());
+        assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
         assertNull(store.viewer.getPhone());
 
         String json = new ObjectMapper().writeValueAsString(second.getUser());
@@ -134,6 +128,7 @@ class ViewerAuthServiceTest {
         assertEquals("136****8079", response.getUser().getPhoneMasked());
         assertEquals("86", store.viewer.getPhoneCountryCode());
         assertEquals("13612348079", store.viewer.getPhone());
+        assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
 
         String json = new ObjectMapper().writeValueAsString(response);
         assertTrue(json.contains("136****8079"));
@@ -142,12 +137,11 @@ class ViewerAuthServiceTest {
 
     @Test
     void phoneLogin_rejectsPhoneOwnedByAnotherViewer() {
-        ViewerEntity self = viewer(1L, ViewerStatus.NORMAL, null);
+        ViewerEntity self = viewer(1L, ViewerStatus.NORMAL, null, "oid-self");
         LocalDateTime original = LocalDateTime.of(2020, 1, 1, 0, 0);
         self.setLastLoginTime(original);
         store.viewer = self;
-        store.identity = identity(1L, "oid-self");
-        ViewerEntity other = viewer(2L, ViewerStatus.DISABLED, "13612348079");
+        ViewerEntity other = viewer(2L, ViewerStatus.DISABLED, "13612348079", "oid-other");
         store.other = other;
         when(wechatMpClient.code2Session("login-1"))
                 .thenReturn(new WechatMpClient.WechatSession("oid-self", null));
@@ -169,11 +163,10 @@ class ViewerAuthServiceTest {
 
     @Test
     void disabledViewer_returns403OnLoginMeAndRefresh() {
-        ViewerEntity viewer = viewer(5L, ViewerStatus.DISABLED, null);
+        ViewerEntity viewer = viewer(5L, ViewerStatus.DISABLED, null, "oid-off");
         LocalDateTime original = LocalDateTime.of(2020, 1, 1, 0, 0);
         viewer.setLastLoginTime(original);
         store.viewer = viewer;
-        store.identity = identity(5L, "oid-off");
         when(wechatMpClient.code2Session("c-off"))
                 .thenReturn(new WechatMpClient.WechatSession("oid-off", null));
 
@@ -196,7 +189,7 @@ class ViewerAuthServiceTest {
 
     @Test
     void refresh_expiredAccessWithValidRefresh_issuesNewPair() {
-        store.viewer = viewer(1L, ViewerStatus.NORMAL, "13612348079");
+        store.viewer = viewer(1L, ViewerStatus.NORMAL, "13612348079", "oid-1");
         String access = jwtTokenService.issueAccess(1L);
         String refreshToken = jwtTokenService.issueRefresh(1L);
         clock.advanceSeconds(7201);
@@ -260,6 +253,16 @@ class ViewerAuthServiceTest {
             }
             return Optional.empty();
         });
+        when(viewerRepository.findByMiniOpenid(anyString())).thenAnswer(invocation -> {
+            String openid = invocation.getArgument(0);
+            if (store.viewer != null && openid.equals(store.viewer.getMiniOpenid())) {
+                return Optional.of(store.viewer);
+            }
+            if (store.other != null && openid.equals(store.other.getMiniOpenid())) {
+                return Optional.of(store.other);
+            }
+            return Optional.empty();
+        });
         when(viewerRepository.findByPhone(anyString())).thenAnswer(invocation -> {
             String phone = invocation.getArgument(0);
             if (store.other != null && phone.equals(store.other.getPhone())) {
@@ -267,25 +270,6 @@ class ViewerAuthServiceTest {
             }
             if (store.viewer != null && phone.equals(store.viewer.getPhone())) {
                 return Optional.of(store.viewer);
-            }
-            return Optional.empty();
-        });
-        when(identityRepository.save(ArgumentMatchers.any(ViewerIdentityEntity.class))).thenAnswer(invocation -> {
-            ViewerIdentityEntity entity = invocation.getArgument(0);
-            if (entity.getId() == null) {
-                entity.setId(store.nextIdentityId++);
-            }
-            store.identity = entity;
-            return entity;
-        });
-        when(identityRepository.findByChannelAndOpenid(anyInt(), anyString())).thenAnswer(invocation -> {
-            if (store.identity == null) {
-                return Optional.empty();
-            }
-            int channel = invocation.getArgument(0);
-            String openid = invocation.getArgument(1);
-            if (store.identity.getChannel() == channel && openid.equals(store.identity.getOpenid())) {
-                return Optional.of(store.identity);
             }
             return Optional.empty();
         });
@@ -298,29 +282,19 @@ class ViewerAuthServiceTest {
         return request;
     }
 
-    private static ViewerEntity viewer(long id, int status, String phone) {
+    private static ViewerEntity viewer(long id, int status, String phone, String miniOpenid) {
         ViewerEntity entity = new ViewerEntity();
         entity.setId(id);
         entity.setStatus(status);
         entity.setPhone(phone);
-        return entity;
-    }
-
-    private static ViewerIdentityEntity identity(long viewerId, String openid) {
-        ViewerIdentityEntity entity = new ViewerIdentityEntity();
-        entity.setId(viewerId);
-        entity.setViewerId(viewerId);
-        entity.setChannel(ViewerChannel.WECHAT_MP);
-        entity.setOpenid(openid);
+        entity.setMiniOpenid(miniOpenid);
         return entity;
     }
 
     private static final class Store {
         private long nextViewerId = 1;
-        private long nextIdentityId = 1;
         private ViewerEntity viewer;
         private ViewerEntity other;
-        private ViewerIdentityEntity identity;
     }
 
     private static final class MutableClock extends Clock {

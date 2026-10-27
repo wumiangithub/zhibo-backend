@@ -1,10 +1,14 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityProductEntity;
+import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityReady;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
+import com.zhibo.live.watch.dto.WatchProductItem;
+import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -24,6 +28,7 @@ import java.util.List;
 public class WatchService {
 
     private final ActivityRepository activityRepository;
+    private final ActivityProductRepository productRepository;
     private final LiveProviderRegistry providerRegistry;
 
     public WatchActivityListResponse listActivities(int page, int pageSize, Integer state) {
@@ -74,6 +79,26 @@ public class WatchService {
         response.setEndTime(entity.getEndTime() != null ? entity.getEndTime() : info.endTime());
         response.setEmbedUrl(embedUrl);
         return response;
+    }
+
+    /**
+     * 观看端小黄车元数据：本场绑定 spu 快照。
+     * 订单中心商品由前端直连 {@code viewer/product/list/by-ids}（body.spuIds）。
+     */
+    public WatchProductListResponse listProducts(String activityId) {
+        ActivityEntity entity = requireActivity(activityId);
+        requireReadyForWatch(entity);
+        List<ActivityProductEntity> rows = productRepository.findByActivityIds(List.of(entity.getId()));
+        WatchProductListResponse response = new WatchProductListResponse();
+        response.setList(rows.stream().map(this::toProductItem).toList());
+        return response;
+    }
+
+    private WatchProductItem toProductItem(ActivityProductEntity row) {
+        WatchProductItem item = new WatchProductItem();
+        item.setSpuId(row.getId().getSpuId());
+        item.setProductName(row.getProductName());
+        return item;
     }
 
     ActivityEntity requireActivity(String id) {

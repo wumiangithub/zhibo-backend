@@ -12,31 +12,26 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-/** 某个渠道的登录凭证。同一观众以后可以有多条（小程序、公众号等）。 */
+/** 观众标签分组 {@code viewer_tag_group}。 */
 @Entity
-@Table(name = "viewer_identity")
+@Table(name = "viewer_tag_group")
 @Getter
 @Setter
-public class ViewerIdentityEntity {
+public class ViewerTagGroupEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "viewer_id", nullable = false)
-    private Long viewerId;
+    @Column(nullable = false, length = 32)
+    private String name;
 
-    /** {@link ViewerChannel}。本轮只写微信小程序。 */
-    @Column(nullable = false)
-    private int channel;
+    /** 1 系统默认分组。 */
+    @Column(name = "is_default", nullable = false)
+    private int isDefault;
 
-    /** 该渠道 openid。不在这里存 session_key。 */
-    @Column(length = 64)
-    private String openid;
-
-    /** 有则写入；微信没带回时不要清空已有值。 */
-    @Column(length = 64)
-    private String unionid;
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
 
     @CreationTimestamp
     @Column(name = "created_time", nullable = false, updatable = false)
@@ -45,4 +40,7 @@ public class ViewerIdentityEntity {
     @UpdateTimestamp
     @Column(name = "updated_time", nullable = false)
     private LocalDateTime updatedTime;
+
+    @Column(name = "deleted_time")
+    private LocalDateTime deletedTime;
 }

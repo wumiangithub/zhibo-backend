@@ -1,7 +1,11 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityProductEntity;
+import com.zhibo.activity.ActivityProductId;
+import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -32,6 +36,8 @@ class WatchServiceTest {
 
     @Mock
     private ActivityRepository activityRepository;
+    @Mock
+    private ActivityProductRepository productRepository;
     @Mock
     private LiveProviderRegistry providerRegistry;
     @Mock
@@ -99,5 +105,24 @@ class WatchServiceTest {
 
         var response = watchService.listActivities(1, 20, null);
         assertEquals(0, response.getList().size());
+    }
+
+    @Test
+    void listProducts_returnsBoundSnapshots() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+
+        ActivityProductEntity row = new ActivityProductEntity();
+        row.setId(new ActivityProductId(ID, "20002"));
+        row.setProductName("满盈单化特训班");
+        row.setSortOrder(0);
+        when(productRepository.findByActivityIds(List.of(ID))).thenReturn(List.of(row));
+
+        WatchProductListResponse response = watchService.listProducts(ID);
+        assertEquals(1, response.getList().size());
+        assertEquals("20002", response.getList().get(0).getSpuId());
+        assertEquals("满盈单化特训班", response.getList().get(0).getProductName());
     }
 }

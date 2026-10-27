@@ -43,6 +43,8 @@ class ViewerAuthInterceptorTest {
         assertAllowed("GET", "/api/v1/watch/activities");
         assertAllowed("GET", "/api/v1/watch/detail/abc");
         assertAllowed("POST", "/api/v1/callbacks/vhall/presence");
+        assertAllowed("POST", "/api/v1/callbacks/vhall/live-state");
+        assertAllowed("POST", "/api/v1/callbacks/vhall/transcode");
     }
 
     @Test

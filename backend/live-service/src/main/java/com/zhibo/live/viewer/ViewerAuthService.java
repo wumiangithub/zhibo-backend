@@ -5,10 +5,8 @@ import com.zhibo.live.viewer.dto.ViewerAuthResponse;
 import com.zhibo.live.viewer.dto.ViewerRefreshRequest;
 import com.zhibo.live.viewer.dto.ViewerUserResponse;
 import com.zhibo.live.viewer.dto.WechatLoginRequest;
-import com.zhibo.viewer.ViewerChannel;
 import com.zhibo.viewer.ViewerEntity;
-import com.zhibo.viewer.ViewerIdentityEntity;
-import com.zhibo.viewer.ViewerIdentityRepository;
+import com.zhibo.viewer.ViewerRegisterChannel;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
 import java.time.Clock;
@@ -30,7 +28,6 @@ public class ViewerAuthService {
     private static final String UNAVAILABLE = "观众登录暂不可用";
 
     private final ViewerRepository viewerRepository;
-    private final ViewerIdentityRepository identityRepository;
     private final WechatMpClient wechatMpClient;
     private final ViewerJwtTokenService jwtTokenService;
     private final ViewerAuthProperties properties;
@@ -38,13 +35,11 @@ public class ViewerAuthService {
 
     public ViewerAuthService(
             ViewerRepository viewerRepository,
-            ViewerIdentityRepository identityRepository,
             WechatMpClient wechatMpClient,
             ViewerJwtTokenService jwtTokenService,
             ViewerAuthProperties properties,
             Clock clock) {
         this.viewerRepository = viewerRepository;
-        this.identityRepository = identityRepository;
         this.wechatMpClient = wechatMpClient;
         this.jwtTokenService = jwtTokenService;
         this.properties = properties;
@@ -62,7 +57,7 @@ public class ViewerAuthService {
         LocalDateTime now = LocalDateTime.now(clock);
         ViewerEntity viewer = findOrCreate(session, now);
         requireActive(viewer);
-        rememberUnionid(session, now);
+        rememberUnionid(viewer, session, now);
         markLoggedIn(viewer, now);
         return issue(viewer);
     }
@@ -82,7 +77,7 @@ public class ViewerAuthService {
         LocalDateTime now = LocalDateTime.now(clock);
         ViewerEntity viewer = findOrCreate(session, now);
         requireActive(viewer);
-        rememberUnionid(session, now);
+        rememberUnionid(viewer, session, now);
         bindPhone(viewer, phone, now);
         return issue(viewer);
     }
@@ -118,57 +113,45 @@ public class ViewerAuthService {
         if (session == null || isBlank(session.openid())) {
             throw new ViewerAuthException(400, WECHAT_FAIL);
         }
-        String openid = session.openid().trim();
-        return identityRepository.findByChannelAndOpenid(ViewerChannel.WECHAT_MP, openid)
-                .map(identity -> viewerRepository.findById(identity.getViewerId())
-                        .orElseThrow(() -> new ViewerAuthException(403, DISABLED)))
-                .orElseGet(() -> createViewer(openid, session.unionid(), now));
+        String miniOpenid = session.openid().trim();
+        return viewerRepository.findByMiniOpenid(miniOpenid)
+                .orElseGet(() -> createViewer(miniOpenid, session.unionid(), now));
     }
 
-    private ViewerEntity createViewer(String openid, String unionid, LocalDateTime now) {
+    private ViewerEntity createViewer(String miniOpenid, String unionid, LocalDateTime now) {
         ViewerEntity viewer = new ViewerEntity();
+        viewer.setMiniOpenid(miniOpenid);
+        if (!isBlank(unionid)) {
+            viewer.setUnionid(unionid.trim());
+        }
+        viewer.setRegisterChannel(ViewerRegisterChannel.WECHAT);
         viewer.setStatus(ViewerStatus.NORMAL);
         viewer.setAgreedTime(now);
         viewer.setLastLoginTime(now);
+        viewer.setLastVisitTime(now);
         viewer.setCreatedTime(now);
         viewer.setUpdatedTime(now);
-        viewer = viewerRepository.save(viewer);
-
-        ViewerIdentityEntity identity = new ViewerIdentityEntity();
-        identity.setViewerId(viewer.getId());
-        identity.setChannel(ViewerChannel.WECHAT_MP);
-        identity.setOpenid(openid);
-        if (!isBlank(unionid)) {
-            identity.setUnionid(unionid.trim());
-        }
-        identity.setCreatedTime(now);
-        identity.setUpdatedTime(now);
         try {
-            identityRepository.save(identity);
+            return viewerRepository.save(viewer);
         } catch (DataIntegrityViolationException ex) {
-            log.warn("观众身份已存在，改为读取已有小程序身份");
-            return identityRepository.findByChannelAndOpenid(ViewerChannel.WECHAT_MP, openid)
-                    .flatMap(existing -> viewerRepository.findById(existing.getViewerId()))
+            log.warn("观众 mini_openid 已存在，改为读取已有行");
+            return viewerRepository.findByMiniOpenid(miniOpenid)
                     .orElseThrow(() -> new ViewerAuthException(400, WECHAT_FAIL));
         }
-        return viewer;
     }
 
     /** 微信这次带回了 unionid 才写。没带回就保留原来的。 */
-    private void rememberUnionid(WechatMpClient.WechatSession session, LocalDateTime now) {
-        if (session == null || isBlank(session.unionid()) || isBlank(session.openid())) {
+    private void rememberUnionid(ViewerEntity viewer, WechatMpClient.WechatSession session, LocalDateTime now) {
+        if (viewer == null || session == null || isBlank(session.unionid())) {
             return;
         }
         String unionid = session.unionid().trim();
-        identityRepository.findByChannelAndOpenid(ViewerChannel.WECHAT_MP, session.openid().trim())
-                .ifPresent(identity -> {
-                    if (unionid.equals(identity.getUnionid())) {
-                        return;
-                    }
-                    identity.setUnionid(unionid);
-                    identity.setUpdatedTime(now);
-                    identityRepository.save(identity);
-                });
+        if (unionid.equals(viewer.getUnionid())) {
+            return;
+        }
+        viewer.setUnionid(unionid);
+        viewer.setUpdatedTime(now);
+        viewerRepository.save(viewer);
     }
 
     private void bindPhone(ViewerEntity viewer, WechatMpClient.WechatPhone phone, LocalDateTime now) {
@@ -199,6 +182,7 @@ public class ViewerAuthService {
     private void markLoggedIn(ViewerEntity viewer, LocalDateTime now) {
         viewer.setAgreedTime(now);
         viewer.setLastLoginTime(now);
+        viewer.setLastVisitTime(now);
         viewer.setUpdatedTime(now);
         viewerRepository.save(viewer);
     }
