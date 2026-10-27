@@ -3,6 +3,7 @@ package com.zhibo.admin.activity;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
+import com.zhibo.admin.activity.dto.ActivityChatFilterResponse;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
@@ -243,5 +244,14 @@ public class ActivityController {
     @PostMapping("/passcode/reset/{id}")
     public ApiResponse<ActivityPasscodeResponse> resetPasscode(@PathVariable String id) {
         return ApiResponse.ok(hostPasscodeService.resetPasscode(id));
+    }
+
+    /** 用户运营 · 评论管理：微吼聊天审核页 URL（D34，与 watch/chat-filter 同形）。 */
+    @GetMapping("/chat-filter/{id}")
+    public ApiResponse<ActivityChatFilterResponse> chatFilter(
+            @PathVariable String id,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String name) {
+        return ApiResponse.ok(activityService.chatFilter(id, email, name));
     }
 }

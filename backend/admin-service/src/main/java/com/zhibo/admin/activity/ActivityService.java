@@ -21,6 +21,7 @@ import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
 import com.zhibo.admin.activity.dto.DeleteActivityMembersRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
+import com.zhibo.admin.activity.dto.ActivityChatFilterResponse;
 import com.zhibo.admin.activity.dto.ActivityCoursewareView;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
@@ -855,6 +856,19 @@ public class ActivityService {
             throw new IllegalArgumentException("直播不存在");
         }
         return entity;
+    }
+
+    /**
+     * 管理端「用户运营 · 评论管理」嵌微吼聊天审核页（同 live {@code /watch/chat-filter}，D34）。
+     * 仅 {@code provider=vhall}；他厂由 {@link LiveProviderRegistry#require} 抛 501。
+     */
+    @Transactional(readOnly = true)
+    public ActivityChatFilterResponse chatFilter(String id, String email, String name) {
+        ActivityEntity entity = requireActivity(id);
+        String pageUrl = providerRegistry
+                .require(entity.getProvider())
+                .buildChatFilterUrl(entity.getProviderRoomId(), email, name);
+        return new ActivityChatFilterResponse(pageUrl);
     }
 
     private SysUserAccountEntity requireOperator(long operatorId) {

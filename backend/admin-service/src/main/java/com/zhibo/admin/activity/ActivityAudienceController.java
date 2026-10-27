@@ -12,6 +12,8 @@ import com.zhibo.admin.auth.AuthInterceptor;
 import com.zhibo.admin.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -39,12 +41,55 @@ public class ActivityAudienceController {
             @PathVariable String id,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
-            @RequestParam(required = false) String nickname,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tagIds,
+            @RequestParam(required = false) String tagMatch,
             @RequestParam(required = false) Integer entitlementStatus,
+            @RequestParam(required = false) String totalWatchDurationOp,
+            @RequestParam(required = false) Long totalWatchDurationSec,
+            @RequestParam(required = false) String liveWatchDurationOp,
+            @RequestParam(required = false) Long liveWatchDurationSec,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String order) {
-        return ApiResponse.ok(
-                audienceService.list(id, page, pageSize, nickname, entitlementStatus, sort, order));
+        return ApiResponse.ok(audienceService.list(
+                id,
+                page,
+                pageSize,
+                keywordType,
+                keyword,
+                parseTagIdsParam(tagIds),
+                tagMatch,
+                entitlementStatus,
+                totalWatchDurationOp,
+                totalWatchDurationSec,
+                liveWatchDurationOp,
+                liveWatchDurationSec,
+                sort,
+                order));
+    }
+
+    /** 支持 `1,2,3` 或单值；非法片段忽略。 */
+    static List<Long> parseTagIdsParam(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<Long> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            String p = part.trim();
+            if (p.isEmpty()) {
+                continue;
+            }
+            try {
+                long tagId = Long.parseLong(p);
+                if (tagId > 0) {
+                    out.add(tagId);
+                }
+            } catch (NumberFormatException ignored) {
+                // skip
+            }
+        }
+        return out;
     }
 
     @PostMapping("/create/{id}")
