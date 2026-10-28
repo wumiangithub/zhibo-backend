@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zhibo.live.viewer.dto.DevPhoneLoginRequest;
 import com.zhibo.live.viewer.dto.PhoneLoginRequest;
 import com.zhibo.live.viewer.dto.ViewerAuthResponse;
 import com.zhibo.live.viewer.dto.ViewerRefreshRequest;
@@ -227,6 +228,35 @@ class ViewerAuthServiceTest {
         assertEquals("观众登录暂不可用", ex.getMessage());
         assertFalse(ex.getMessage().contains("SECRET"));
         assertFalse(ex.getMessage().contains("VIEWER"));
+        verifyNoInteractions(wechatMpClient);
+    }
+
+    @Test
+    void devPhoneLogin_registersThenReusesSamePhone() {
+        DevPhoneLoginRequest request = new DevPhoneLoginRequest();
+        request.setPhone("13800138000");
+        request.setAgreed(true);
+
+        ViewerAuthResponse first = service.devPhoneLogin(request);
+        ViewerAuthResponse second = service.devPhoneLogin(request);
+
+        assertEquals(first.getUser().getId(), second.getUser().getId());
+        assertTrue(second.getUser().isHasPhone());
+        assertEquals("138****8000", second.getUser().getPhoneMasked());
+        assertEquals("13800138000", store.viewer.getPhone());
+        assertNull(store.viewer.getMiniOpenid());
+        assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
+        verifyNoInteractions(wechatMpClient);
+    }
+
+    @Test
+    void devPhoneLogin_rejectsBadPhone() {
+        DevPhoneLoginRequest request = new DevPhoneLoginRequest();
+        request.setPhone("12345");
+        request.setAgreed(true);
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.devPhoneLogin(request));
+        assertEquals(400, ex.getCode());
+        assertEquals("请输入正确的手机号", ex.getMessage());
         verifyNoInteractions(wechatMpClient);
     }
 

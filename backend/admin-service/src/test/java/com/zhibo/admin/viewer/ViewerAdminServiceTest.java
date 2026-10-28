@@ -9,6 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
+import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerStatusResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
@@ -73,7 +75,7 @@ class ViewerAdminServiceTest {
     }
 
     @Test
-    void list_defaultNicknameWhenBlank() {
+    void list_defaultNickname_noPhoneUsesId() {
         ViewerEntity row = baseViewer(8L);
         row.setNickname("  ");
         when(viewerRepository.findAll(ArgumentMatchers.<Specification<ViewerEntity>>any(), any(Pageable.class)))
@@ -81,7 +83,61 @@ class ViewerAdminServiceTest {
         when(memberRepository.findByViewerIdIn(List.of(8L))).thenReturn(List.of());
 
         ViewerListResponse res = service.list(1, 10, null, null, null, null, null, null, null, null, null, null);
-        assertEquals("用户8", res.getList().get(0).getNickname());
+        assertEquals("用户_8", res.getList().get(0).getNickname());
+    }
+
+    @Test
+    void list_defaultNickname_withPhoneUsesTail() {
+        ViewerEntity row = baseViewer(8L);
+        row.setNickname(null);
+        row.setPhone("13800138000");
+        when(viewerRepository.findAll(ArgumentMatchers.<Specification<ViewerEntity>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(row)));
+        when(memberRepository.findByViewerIdIn(List.of(8L))).thenReturn(List.of());
+
+        ViewerListResponse res = service.list(1, 10, null, null, null, null, null, null, null, null, null, null);
+        assertEquals("用户8000", res.getList().get(0).getNickname());
+    }
+
+    @Test
+    void learnDurationFilterMiss_gtEmpty_lteKeep() {
+        assertTrue(ViewerAdminService.learnDurationFilterMiss("gt", 0));
+        assertTrue(ViewerAdminService.learnDurationFilterMiss("gt", 60));
+        assertFalse(ViewerAdminService.learnDurationFilterMiss("lte", 0));
+        assertFalse(ViewerAdminService.learnDurationFilterMiss("lte", 100));
+        assertFalse(ViewerAdminService.learnDurationFilterMiss(null, null));
+        assertThrows(IllegalArgumentException.class, () -> ViewerAdminService.learnDurationFilterMiss("gt", null));
+        assertThrows(IllegalArgumentException.class, () -> ViewerAdminService.learnDurationFilterMiss(null, 1));
+    }
+
+    @Test
+    void learningSummary_gtDuration_empty() {
+        LearningSummaryListResponse res = service.learningSummary(
+                1, 10, null, null, null, null, "gt", 1, null, null);
+        assertEquals(0, res.getTotal());
+        assertTrue(res.getList().isEmpty());
+    }
+
+    @Test
+    void learningCourses_alwaysEmpty() {
+        LearningCourseListResponse res = service.learningCourses(1, 10, "nickname", "x", null, null);
+        assertEquals(0, res.getTotal());
+        assertTrue(res.getList().isEmpty());
+    }
+
+    @Test
+    void displayNickname_rules() {
+        ViewerEntity withNick = baseViewer(1L);
+        withNick.setNickname("阿坤");
+        withNick.setPhone("13800138000");
+        assertEquals("阿坤", ViewerAdminService.displayNickname(withNick));
+
+        ViewerEntity phoneOnly = baseViewer(2L);
+        phoneOnly.setPhone("13612348079");
+        assertEquals("用户8079", ViewerAdminService.displayNickname(phoneOnly));
+
+        ViewerEntity neither = baseViewer(3L);
+        assertEquals("用户_3", ViewerAdminService.displayNickname(neither));
     }
 
     @Test

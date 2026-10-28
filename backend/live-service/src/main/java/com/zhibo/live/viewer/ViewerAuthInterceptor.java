@@ -52,7 +52,7 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
         return path != null && (path.equals("/api/v1/viewer") || path.startsWith("/api/v1/viewer/"));
     }
 
-    /** 只有三个 POST：微信一键、手机号、刷新。{@code /user-info} 不在里面。 */
+    /** 白名单 POST：微信一键、手机号授权、local 明文手机号、刷新。{@code /user-info} 不在里面。 */
     static boolean isWhitelisted(HttpServletRequest request) {
         if (request == null || !"POST".equalsIgnoreCase(request.getMethod())) {
             return false;
@@ -60,6 +60,7 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
         String path = request.getRequestURI();
         return "/api/v1/viewer/auth/wechat-login".equals(path)
                 || "/api/v1/viewer/auth/phone-login".equals(path)
+                || "/api/v1/viewer/auth/dev-phone-login".equals(path)
                 || "/api/v1/viewer/auth/refresh".equals(path);
     }
 

@@ -82,6 +82,7 @@ class ViewerAuthInterceptorTest {
     void whitelist_allowsLoginAndRefreshWithoutBearer() throws Exception {
         assertAllowed("POST", "/api/v1/viewer/auth/wechat-login");
         assertAllowed("POST", "/api/v1/viewer/auth/phone-login");
+        assertAllowed("POST", "/api/v1/viewer/auth/dev-phone-login");
         assertAllowed("POST", "/api/v1/viewer/auth/refresh");
 
         MockHttpServletRequest me = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/user-info");

@@ -1,5 +1,7 @@
 package com.zhibo.admin.viewer;
 
+import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
+import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistRequest;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerStatusRequest;
@@ -20,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 顶栏用户管理 · 用户列表（D79 / D82）。 */
+/** 顶栏用户管理 · 用户列表 / 学习统计（D79 / D82 / D83）。 */
 @RestController
 @RequestMapping("/api/v1/viewers")
 @RequiredArgsConstructor
@@ -55,6 +57,43 @@ public class ViewerAdminController {
                 tagMatch,
                 sort,
                 order));
+    }
+
+    @GetMapping("/learning-stats/summary")
+    public ApiResponse<LearningSummaryListResponse> learningSummary(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tagIds,
+            @RequestParam(required = false) String tagMatch,
+            @RequestParam(required = false) String learnDurationOp,
+            @RequestParam(required = false) Integer learnDurationSec,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        return ApiResponse.ok(viewerAdminService.learningSummary(
+                page,
+                pageSize,
+                keywordType,
+                keyword,
+                parseTagIdsParam(tagIds),
+                tagMatch,
+                learnDurationOp,
+                learnDurationSec,
+                sort,
+                order));
+    }
+
+    @GetMapping("/learning-stats/courses")
+    public ApiResponse<LearningCourseListResponse> learningCourses(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tagIds,
+            @RequestParam(required = false) String tagMatch) {
+        return ApiResponse.ok(viewerAdminService.learningCourses(
+                page, pageSize, keywordType, keyword, parseTagIdsParam(tagIds), tagMatch));
     }
 
     /** 支持 `1,2,3` 或单值；非法片段忽略。 */

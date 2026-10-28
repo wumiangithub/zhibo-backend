@@ -1,5 +1,6 @@
 package com.zhibo.live.viewer;
 
+import com.zhibo.live.viewer.dto.DevPhoneLoginRequest;
 import com.zhibo.live.viewer.dto.PhoneLoginRequest;
 import com.zhibo.live.viewer.dto.ViewerAuthResponse;
 import com.zhibo.live.viewer.dto.ViewerRefreshRequest;
@@ -11,12 +12,13 @@ import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 观众登录：微信一键、手机号授权、双票刷新、当前观众。 */
+/** 观众登录：微信一键、手机号授权、本地明文手机号、双票刷新、当前观众。 */
 @Slf4j
 @Service
 public class ViewerAuthService {
@@ -26,6 +28,9 @@ public class ViewerAuthService {
     private static final String PHONE_TAKEN = "该手机号已绑定其他微信";
     private static final String DISABLED = "账号已停用";
     private static final String UNAVAILABLE = "观众登录暂不可用";
+    private static final String BAD_PHONE = "请输入正确的手机号";
+    /** 中国大陆手机号：1 开头 11 位。 */
+    private static final Pattern CN_MOBILE = Pattern.compile("^1\\d{10}$");
 
     private final ViewerRepository viewerRepository;
     private final WechatMpClient wechatMpClient;
@@ -79,6 +84,23 @@ public class ViewerAuthService {
         requireActive(viewer);
         rememberUnionid(viewer, session, now);
         bindPhone(viewer, phone, now);
+        return issue(viewer);
+    }
+
+    /**
+     * 仅 local 环境调用：按明文手机号登录；无账号则自动注册（无 mini_openid）。
+     * Controller 须先按 spring profile=local 拦掉 test/prod。
+     */
+    @Transactional
+    public ViewerAuthResponse devPhoneLogin(DevPhoneLoginRequest request) {
+        requireAgreed(request != null && request.isAgreed());
+        String phone = normalizeCnMobile(request == null ? null : request.getPhone());
+        requireJwtConfigured();
+        LocalDateTime now = LocalDateTime.now(clock);
+        ViewerEntity viewer = viewerRepository.findByPhone(phone)
+                .orElseGet(() -> createViewerByPhone(phone, now));
+        requireActive(viewer);
+        markLoggedIn(viewer, now);
         return issue(viewer);
     }
 
@@ -138,6 +160,38 @@ public class ViewerAuthService {
             return viewerRepository.findByMiniOpenid(miniOpenid)
                     .orElseThrow(() -> new ViewerAuthException(400, WECHAT_FAIL));
         }
+    }
+
+    /** local 造号：只写手机号，不写 mini_openid；渠道仍记微信（本地联调造数）。 */
+    private ViewerEntity createViewerByPhone(String phone, LocalDateTime now) {
+        ViewerEntity viewer = new ViewerEntity();
+        viewer.setPhone(phone);
+        viewer.setPhoneCountryCode("86");
+        viewer.setRegisterChannel(ViewerRegisterChannel.WECHAT);
+        viewer.setStatus(ViewerStatus.NORMAL);
+        viewer.setAgreedTime(now);
+        viewer.setLastLoginTime(now);
+        viewer.setLastVisitTime(now);
+        viewer.setCreatedTime(now);
+        viewer.setUpdatedTime(now);
+        try {
+            return viewerRepository.save(viewer);
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("观众手机号已存在，改为读取已有行");
+            return viewerRepository.findByPhone(phone)
+                    .orElseThrow(() -> new ViewerAuthException(400, BAD_PHONE));
+        }
+    }
+
+    private static String normalizeCnMobile(String raw) {
+        if (raw == null) {
+            throw new ViewerAuthException(400, BAD_PHONE);
+        }
+        String phone = raw.trim();
+        if (!CN_MOBILE.matcher(phone).matches()) {
+            throw new ViewerAuthException(400, BAD_PHONE);
+        }
+        return phone;
     }
 
     /** 微信这次带回了 unionid 才写。没带回就保留原来的。 */
@@ -246,6 +300,14 @@ public class ViewerAuthService {
             missing = true;
         }
         if (missing) {
+            throw new ViewerAuthException(500, UNAVAILABLE);
+        }
+    }
+
+    /** local 明文手机号登录只需 JWT；不依赖微信密钥。 */
+    private void requireJwtConfigured() {
+        if (properties.jwtSecretMissing()) {
+            log.warn("观众登录配置缺失: VIEWER_JWT_SECRET");
             throw new ViewerAuthException(500, UNAVAILABLE);
         }
     }

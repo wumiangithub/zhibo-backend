@@ -1,5 +1,8 @@
 package com.zhibo.admin.viewer;
 
+import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
+import com.zhibo.admin.viewer.dto.LearningSummaryListItem;
+import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerStatusResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
@@ -34,7 +37,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 顶栏用户管理 · 用户列表（D79 / D82）。 */
+/** 顶栏用户管理 · 用户列表 / 学习统计（D79 / D82 / D83）。 */
 @Service
 @RequiredArgsConstructor
 public class ViewerAdminService {
@@ -50,6 +53,9 @@ public class ViewerAdminService {
             "todayLearnDuration",
             "completedCourseCount",
             "firstPayTime");
+    private static final Set<String> LEARNING_SORT_KEYS = Set.of(
+            "id", "totalLearnDuration", "totalLearnDays", "viewedCourseCount", "completedCourseCount");
+    private static final Set<String> LEARN_DURATION_OPS = Set.of("gt", "lte");
     private static final Set<String> KEYWORD_TYPES = Set.of("nickname", "id", "phone");
     /** any=满足其一 / all=同时满足 / none=不包含（都不带所选标签） */
     private static final Set<String> TAG_MATCH_MODES = Set.of("any", "all", "none");
@@ -133,6 +139,72 @@ public class ViewerAdminService {
             response.getList().add(toItem(row, tagsByViewer.getOrDefault(row.getId(), List.of())));
         }
         return response;
+    }
+
+    /**
+     * 学习统计 · 汇总。学习时长本轮恒 0：{@code gt} 空列表，{@code lte} 不挡。
+     */
+    @Transactional(readOnly = true)
+    public LearningSummaryListResponse learningSummary(
+            int page,
+            int pageSize,
+            String keywordType,
+            String keyword,
+            List<Long> tagIds,
+            String tagMatch,
+            String learnDurationOp,
+            Integer learnDurationSec,
+            String sort,
+            String order) {
+        requirePage(page, pageSize);
+        if (learnDurationFilterMiss(learnDurationOp, learnDurationSec)) {
+            return emptyLearningSummary(page, pageSize);
+        }
+
+        String type = resolveKeywordType(keywordType);
+        String kw = keyword == null ? "" : keyword.trim();
+        List<Long> filterTagIds = normalizeFilterTagIds(tagIds);
+        String match = resolveTagMatch(tagMatch);
+
+        if ("id".equals(type) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
+            return emptyLearningSummary(page, pageSize);
+        }
+
+        Sort sortSpec = resolveLearningSort(sort, order);
+        Specification<ViewerEntity> spec = viewerKeywordTagSpec(type, kw, filterTagIds, match);
+        Page<ViewerEntity> result = viewerRepository.findAll(spec, PageRequest.of(page - 1, pageSize, sortSpec));
+        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(result.getContent());
+
+        LearningSummaryListResponse response = new LearningSummaryListResponse();
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        response.setTotal(result.getTotalElements());
+        for (ViewerEntity row : result.getContent()) {
+            response.getList().add(toLearningSummaryItem(row, tagsByViewer.getOrDefault(row.getId(), List.of())));
+        }
+        return response;
+    }
+
+    /**
+     * 学习统计 · 课程数据。本轮无流水，恒空表；仍校验分页与筛选参数。
+     */
+    @Transactional(readOnly = true)
+    public LearningCourseListResponse learningCourses(
+            int page,
+            int pageSize,
+            String keywordType,
+            String keyword,
+            List<Long> tagIds,
+            String tagMatch) {
+        requirePage(page, pageSize);
+        resolveKeywordType(keywordType);
+        resolveTagMatch(tagMatch);
+        normalizeFilterTagIds(tagIds);
+        String kw = keyword == null ? "" : keyword.trim();
+        if ("id".equals(resolveKeywordType(keywordType)) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
+            return emptyLearningCourses(page, pageSize);
+        }
+        return emptyLearningCourses(page, pageSize);
     }
 
     private static Predicate existsMember(
@@ -338,15 +410,126 @@ public class ViewerAdminService {
         return map;
     }
 
+    private void requirePage(int page, int pageSize) {
+        if (page < 1) {
+            throw new IllegalArgumentException("page 不能小于 1");
+        }
+        if (pageSize < 1 || pageSize > 100) {
+            throw new IllegalArgumentException("pageSize 需在 1~100");
+        }
+    }
+
+    /**
+     * 学习时长占位过滤。成对参数；{@code gt} → 应空表；{@code lte} → 不挡。
+     *
+     * @return true 表示直接返回空列表
+     */
+    static boolean learnDurationFilterMiss(String opRaw, Integer sec) {
+        boolean opBlank = opRaw == null || opRaw.isBlank();
+        boolean secNull = sec == null;
+        if (opBlank && secNull) {
+            return false;
+        }
+        if (opBlank || secNull) {
+            throw new IllegalArgumentException("learnDurationOp 与 learnDurationSec 须同时传");
+        }
+        if (sec < 0) {
+            throw new IllegalArgumentException("learnDurationSec 不能为负");
+        }
+        String op = opRaw.trim().toLowerCase(Locale.ROOT);
+        if (!LEARN_DURATION_OPS.contains(op)) {
+            throw new IllegalArgumentException("learnDurationOp 仅支持 gt / lte");
+        }
+        return "gt".equals(op);
+    }
+
+    private Specification<ViewerEntity> viewerKeywordTagSpec(
+            String type, String kw, List<Long> filterTagIds, String match) {
+        return (root, query, cb) -> {
+            List<Predicate> preds = new ArrayList<>();
+            if (!kw.isEmpty()) {
+                switch (type) {
+                    case "id" -> preds.add(cb.equal(root.get("id"), Long.parseLong(kw)));
+                    case "phone" -> preds.add(cb.like(root.get("phone"), "%" + kw + "%"));
+                    default -> preds.add(cb.like(root.get("nickname"), "%" + kw + "%"));
+                }
+            }
+            if (!filterTagIds.isEmpty() && query != null) {
+                if ("all".equals(match)) {
+                    for (Long tagId : filterTagIds) {
+                        preds.add(existsMember(root, query, cb, List.of(tagId)));
+                    }
+                } else if ("none".equals(match)) {
+                    preds.add(cb.not(existsMember(root, query, cb, filterTagIds)));
+                } else {
+                    preds.add(existsMember(root, query, cb, filterTagIds));
+                }
+            }
+            if (preds.isEmpty()) {
+                return cb.conjunction();
+            }
+            return cb.and(preds.toArray(Predicate[]::new));
+        };
+    }
+
+    private static Sort resolveLearningSort(String sort, String order) {
+        String key = sort == null || sort.isBlank() ? "id" : sort.trim();
+        if (!LEARNING_SORT_KEYS.contains(key)) {
+            throw new IllegalArgumentException("sort 不支持: " + key);
+        }
+        boolean asc = order != null && "asc".equalsIgnoreCase(order.trim());
+        if (order != null && !order.isBlank()) {
+            String o = order.trim().toLowerCase(Locale.ROOT);
+            if (!"asc".equals(o) && !"desc".equals(o)) {
+                throw new IllegalArgumentException("order 仅支持 asc 或 desc");
+            }
+        }
+        // 占位指标列库无字段，统一按 id 排
+        return asc ? Sort.by(Sort.Direction.ASC, "id") : Sort.by(Sort.Direction.DESC, "id");
+    }
+
+    private static LearningSummaryListItem toLearningSummaryItem(ViewerEntity viewer, List<TagRef> tags) {
+        LearningSummaryListItem item = new LearningSummaryListItem();
+        item.setId(viewer.getId());
+        item.setNickname(displayNickname(viewer));
+        if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
+            item.setAvatarUrl(viewer.getAvatarUrl().trim());
+        }
+        item.setTotalLearnDurationSec(0);
+        item.setTotalLearnDays(0);
+        item.setViewedCourseCount(0);
+        item.setCompletedCourseCount(0);
+        List<Long> tagIds = new ArrayList<>();
+        List<String> tagLabels = new ArrayList<>();
+        for (TagRef ref : tags) {
+            tagIds.add(ref.tagId());
+            tagLabels.add(ref.name());
+        }
+        item.setTagIds(tagIds);
+        item.setTagLabels(tagLabels);
+        return item;
+    }
+
+    private static LearningSummaryListResponse emptyLearningSummary(int page, int pageSize) {
+        LearningSummaryListResponse response = new LearningSummaryListResponse();
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        response.setTotal(0);
+        return response;
+    }
+
+    private static LearningCourseListResponse emptyLearningCourses(int page, int pageSize) {
+        LearningCourseListResponse response = new LearningCourseListResponse();
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        response.setTotal(0);
+        return response;
+    }
+
     private static ViewerListItem toItem(ViewerEntity viewer, List<TagRef> tags) {
         ViewerListItem item = new ViewerListItem();
         item.setId(viewer.getId());
-        String nick = viewer.getNickname();
-        if (nick == null || nick.isBlank()) {
-            item.setNickname("用户" + viewer.getId());
-        } else {
-            item.setNickname(nick.trim());
-        }
+        item.setNickname(displayNickname(viewer));
         if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
             item.setAvatarUrl(viewer.getAvatarUrl().trim());
         }
@@ -450,6 +633,28 @@ public class ViewerAdminService {
             uniq.put(id, Boolean.TRUE);
         }
         return new ArrayList<>(uniq.keySet());
+    }
+
+    /**
+     * 列表展示昵称：有昵称用昵称；无昵称有手机用「用户{尾号 4 位}」；都没有用「用户_{id}」。
+     */
+    public static String displayNickname(ViewerEntity viewer) {
+        if (viewer == null) {
+            return "用户_0";
+        }
+        String nick = viewer.getNickname();
+        if (nick != null && !nick.isBlank()) {
+            return nick.trim();
+        }
+        String phone = viewer.getPhone();
+        if (phone != null) {
+            String digits = phone.trim();
+            if (!digits.isEmpty()) {
+                String tail = digits.length() <= 4 ? digits : digits.substring(digits.length() - 4);
+                return "用户" + tail;
+            }
+        }
+        return "用户_" + viewer.getId();
     }
 
     /** 与 live-service ViewerPhoneMask 同规则。 */

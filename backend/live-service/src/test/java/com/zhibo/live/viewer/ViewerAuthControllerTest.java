@@ -13,6 +13,8 @@ import com.zhibo.live.viewer.dto.ViewerUserResponse;
 import com.zhibo.live.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -22,13 +24,16 @@ class ViewerAuthControllerTest {
 
     private MockMvc mockMvc;
     private ViewerAuthService viewerAuthService;
+    private Environment environment;
 
     @BeforeEach
     void setUp() {
         viewerAuthService = mock(ViewerAuthService.class);
+        environment = mock(Environment.class);
+        when(environment.acceptsProfiles(Profiles.of("local"))).thenReturn(true);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mockMvc = MockMvcBuilders.standaloneSetup(new ViewerAuthController(viewerAuthService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ViewerAuthController(viewerAuthService, environment))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .build();
@@ -67,5 +72,41 @@ class ViewerAuthControllerTest {
                 .andExpect(jsonPath("$.data.user.hasPhone").value(false))
                 .andExpect(jsonPath("$.data.user.phoneMasked").doesNotExist())
                 .andExpect(jsonPath("$.data.expiresIn").value(7200));
+    }
+
+    @Test
+    void devPhoneLogin_nonLocal_returns404WithoutCallingService() throws Exception {
+        when(environment.acceptsProfiles(Profiles.of("local"))).thenReturn(false);
+
+        mockMvc.perform(post("/api/v1/viewer/auth/dev-phone-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"13800138000\",\"agreed\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.msg").value("接口不存在"));
+        verifyNoInteractions(viewerAuthService);
+    }
+
+    @Test
+    void devPhoneLogin_local_ok() throws Exception {
+        ViewerUserResponse user = new ViewerUserResponse();
+        user.setId(9L);
+        user.setHasPhone(true);
+        user.setPhoneMasked("138****8000");
+        ViewerAuthResponse response = new ViewerAuthResponse();
+        response.setAccessToken("access");
+        response.setExpiresIn(7200);
+        response.setRefreshToken("refresh");
+        response.setRefreshExpiresIn(604800);
+        response.setUser(user);
+        when(viewerAuthService.devPhoneLogin(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/viewer/auth/dev-phone-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"13800138000\",\"agreed\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.user.id").value(9))
+                .andExpect(jsonPath("$.data.user.phoneMasked").value("138****8000"));
     }
 }

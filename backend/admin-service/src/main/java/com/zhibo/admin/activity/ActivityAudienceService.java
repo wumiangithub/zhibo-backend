@@ -1,6 +1,10 @@
 package com.zhibo.admin.activity;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.activity.ActivityAudienceEntity;
+import com.zhibo.activity.ActivityAudienceImportEntity;
+import com.zhibo.activity.ActivityAudienceImportRepository;
 import com.zhibo.activity.ActivityAudienceRepository;
 import com.zhibo.activity.ActivityCommentEntity;
 import com.zhibo.activity.ActivityCommentRepository;
@@ -8,13 +12,17 @@ import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.AudienceCommentListItem;
 import com.zhibo.admin.activity.dto.AudienceCommentListResponse;
+import com.zhibo.admin.activity.dto.AudienceImportHistoryItem;
+import com.zhibo.admin.activity.dto.AudienceImportHistoryListResponse;
 import com.zhibo.admin.activity.dto.AudienceImportResponse;
 import com.zhibo.admin.activity.dto.AudienceListItem;
 import com.zhibo.admin.activity.dto.AudienceListResponse;
+import com.zhibo.admin.activity.dto.CreateAudienceRequest;
 import com.zhibo.admin.activity.dto.CreateAudienceResponse;
 import com.zhibo.admin.activity.dto.UpdateEntitlementResponse;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.viewer.ViewerAdminService;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerTagEntity;
@@ -59,6 +67,9 @@ public class ActivityAudienceService {
     private static final Set<String> DURATION_OPS = Set.of("gte", "lte");
     /** 本轮占位：列表四时长恒 0（与 API约定一致）。 */
     private static final long PLACEHOLDER_DURATION_SEC = 0L;
+    private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+    private static final TypeReference<List<AudienceImportResponse.ErrorItem>> FAIL_DETAILS_TYPE =
+            new TypeReference<>() {};
 
     private final ActivityRepository activityRepository;
     private final ActivityAudienceRepository audienceRepository;
@@ -67,6 +78,8 @@ public class ActivityAudienceService {
     private final ViewerTagMemberRepository viewerTagMemberRepository;
     private final ViewerTagRepository viewerTagRepository;
     private final SysUserAccountRepository userRepository;
+    private final ActivityAudienceImportRepository importRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public AudienceListResponse list(
@@ -84,24 +97,79 @@ public class ActivityAudienceService {
             Long liveWatchDurationSec,
             String sort,
             String order) {
-        String uuid = requireActivity(activityId).getId();
         int p = Math.max(page, 1);
         int size = pageSize < 1 || pageSize > 100 ? 20 : pageSize;
+        PreparedList prepared = prepareList(
+                activityId,
+                keywordType,
+                keyword,
+                tagIds,
+                tagMatch,
+                entitlementStatus,
+                totalWatchDurationOp,
+                totalWatchDurationSec,
+                liveWatchDurationOp,
+                liveWatchDurationSec,
+                sort,
+                order);
+        List<ActivityAudienceEntity> all = prepared.rows();
+        Map<Long, Long> commentCounts = prepared.commentCounts();
 
+        long total = all.size();
+        int from = Math.min((p - 1) * size, all.size());
+        int to = Math.min(from + size, all.size());
+        List<ActivityAudienceEntity> pageRows = all.subList(from, to);
+
+        Map<Long, ViewerEntity> viewers = loadViewers(pageRows);
+        Map<Long, String> employeeNames = loadEmployeeNames(pageRows);
+        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(pageRows);
+
+        AudienceListResponse response = new AudienceListResponse();
+        response.setPage(p);
+        response.setPageSize(size);
+        response.setTotal(total);
+        for (ActivityAudienceEntity row : pageRows) {
+            response.getList()
+                    .add(toListItem(
+                            row,
+                            viewers,
+                            employeeNames,
+                            commentCounts,
+                            tagsByViewer.getOrDefault(row.getViewerId(), List.of())));
+        }
+        return response;
+    }
+
+    private PreparedList prepareList(
+            String activityId,
+            String keywordType,
+            String keyword,
+            List<Long> tagIds,
+            String tagMatch,
+            Integer entitlementStatus,
+            String totalWatchDurationOp,
+            Long totalWatchDurationSec,
+            String liveWatchDurationOp,
+            Long liveWatchDurationSec,
+            String sort,
+            String order) {
+        String uuid = requireActivity(activityId).getId();
         String type = resolveKeywordType(keywordType);
         String kw = keyword == null ? "" : keyword.trim();
         List<Long> filterTagIds = normalizeFilterTagIds(tagIds);
         String match = resolveTagMatch(tagMatch);
-        DurationFilter totalWatchFilter = resolveDurationFilter("totalWatchDuration", totalWatchDurationOp, totalWatchDurationSec);
-        DurationFilter liveWatchFilter = resolveDurationFilter("liveWatchDuration", liveWatchDurationOp, liveWatchDurationSec);
+        DurationFilter totalWatchFilter =
+                resolveDurationFilter("totalWatchDuration", totalWatchDurationOp, totalWatchDurationSec);
+        DurationFilter liveWatchFilter =
+                resolveDurationFilter("liveWatchDuration", liveWatchDurationOp, liveWatchDurationSec);
 
         if ("id".equals(type) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
-            return emptyPage(p, size);
+            return new PreparedList(List.of(), Map.of());
         }
 
         Set<Long> keywordViewerIds = resolveKeywordViewerIds(type, kw);
         if (keywordViewerIds != null && keywordViewerIds.isEmpty()) {
-            return emptyPage(p, size);
+            return new PreparedList(List.of(), Map.of());
         }
 
         final Set<Long> keywordFilter = keywordViewerIds;
@@ -131,13 +199,12 @@ public class ActivityAudienceService {
         };
 
         List<ActivityAudienceEntity> all = new ArrayList<>(audienceRepository.findAll(spec));
-        // 本轮时长占位恒 0；筛选用与列表字段相同的值，后续接真实管道时改 resolve*DurationSec。
         if (totalWatchFilter != null || liveWatchFilter != null) {
             all.removeIf(row -> !matchesDurationFilters(row, totalWatchFilter, liveWatchFilter));
         }
-        Map<Long, Long> commentCounts = loadCommentCounts(uuid, all.stream()
-                .map(ActivityAudienceEntity::getViewerId)
-                .collect(Collectors.toSet()));
+        Map<Long, Long> commentCounts = loadCommentCounts(
+                uuid,
+                all.stream().map(ActivityAudienceEntity::getViewerId).collect(Collectors.toSet()));
 
         String sortKey = sort == null ? "" : sort.trim();
         boolean asc = "asc".equalsIgnoreCase(order);
@@ -146,30 +213,7 @@ public class ActivityAudienceService {
             cmp = cmp.reversed();
         }
         all.sort(cmp.thenComparing(ActivityAudienceEntity::getId, Comparator.reverseOrder()));
-
-        long total = all.size();
-        int from = Math.min((p - 1) * size, all.size());
-        int to = Math.min(from + size, all.size());
-        List<ActivityAudienceEntity> pageRows = all.subList(from, to);
-
-        Map<Long, ViewerEntity> viewers = loadViewers(pageRows);
-        Map<Long, String> employeeNames = loadEmployeeNames(pageRows);
-        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(pageRows);
-
-        AudienceListResponse response = new AudienceListResponse();
-        response.setPage(p);
-        response.setPageSize(size);
-        response.setTotal(total);
-        for (ActivityAudienceEntity row : pageRows) {
-            response.getList()
-                    .add(toListItem(
-                            row,
-                            viewers,
-                            employeeNames,
-                            commentCounts,
-                            tagsByViewer.getOrDefault(row.getViewerId(), List.of())));
-        }
-        return response;
+        return new PreparedList(all, commentCounts);
     }
 
     private static Predicate existsMember(
@@ -312,12 +356,34 @@ public class ActivityAudienceService {
     }
 
     @Transactional
-    public CreateAudienceResponse create(String activityId, String phone, long operatorId) {
+    public CreateAudienceResponse create(String activityId, CreateAudienceRequest request, long operatorId) {
+        if (request == null) {
+            throw new IllegalArgumentException("请提供手机号或用户ID");
+        }
+        boolean hasPhone = request.getPhone() != null && !request.getPhone().isBlank();
+        boolean hasViewerId = request.getViewerId() != null;
+        if (hasPhone == hasViewerId) {
+            throw new IllegalArgumentException(
+                    hasPhone ? "手机号与用户ID不能同时传" : "请提供手机号或用户ID");
+        }
+
+        ViewerEntity viewer;
+        if (hasPhone) {
+            String normalized = normalizePhone(request.getPhone());
+            viewer = viewerRepository
+                    .findByPhone(normalized)
+                    .orElseThrow(() -> new IllegalArgumentException("未找到该手机号观众"));
+        } else {
+            long viewerId = request.getViewerId();
+            if (viewerId <= 0) {
+                throw new IllegalArgumentException("用户ID无效");
+            }
+            viewer = viewerRepository
+                    .findById(viewerId)
+                    .orElseThrow(() -> new IllegalArgumentException("未找到该用户"));
+        }
+
         String uuid = requireActivity(activityId).getId();
-        String normalized = normalizePhone(phone);
-        ViewerEntity viewer = viewerRepository
-                .findByPhone(normalized)
-                .orElseThrow(() -> new IllegalArgumentException("未找到该手机号观众"));
         requireActiveEmployee(operatorId);
 
         Optional<ActivityAudienceEntity> existing =
@@ -330,7 +396,7 @@ public class ActivityAudienceService {
                 row.setImportTime(now);
                 audienceRepository.save(row);
             }
-            return new CreateAudienceResponse(row.getId(), row.getViewerId());
+            return new CreateAudienceResponse(row.getId(), row.getViewerId(), false);
         }
 
         ActivityAudienceEntity row = new ActivityAudienceEntity();
@@ -340,7 +406,7 @@ public class ActivityAudienceService {
         row.setImporterId(operatorId);
         row.setImportTime(now);
         audienceRepository.save(row);
-        return new CreateAudienceResponse(row.getId(), row.getViewerId());
+        return new CreateAudienceResponse(row.getId(), row.getViewerId(), true);
     }
 
     @Transactional
@@ -358,51 +424,182 @@ public class ActivityAudienceService {
         List<PhoneRow> phones = parsePhoneCsv(file);
         AudienceImportResponse result = new AudienceImportResponse();
         result.setTotal(phones.size());
-        if (phones.isEmpty()) {
-            return result;
-        }
-
-        Set<String> uniquePhones = phones.stream().map(PhoneRow::phone).collect(Collectors.toSet());
-        Map<String, ViewerEntity> byPhone = viewerRepository.findByPhoneIn(uniquePhones).stream()
-                .filter(v -> v.getPhone() != null)
-                .collect(Collectors.toMap(ViewerEntity::getPhone, v -> v, (a, b) -> a));
-
+        List<AudienceImportResponse.ErrorItem> allFailures = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
-        for (PhoneRow pr : phones) {
-            ViewerEntity viewer = byPhone.get(pr.phone());
-            if (viewer == null) {
-                result.setFailed(result.getFailed() + 1);
-                addImportError(result, pr.row(), pr.phone(), "未找到该手机号观众");
-                continue;
-            }
-            Optional<ActivityAudienceEntity> existing =
-                    audienceRepository.findByActivityIdAndViewerId(uuid, viewer.getId());
-            if (existing.isPresent()) {
-                ActivityAudienceEntity row = existing.get();
-                if (row.getImporterId() == null) {
-                    row.setImporterId(operatorId);
-                    row.setImportTime(now);
-                    audienceRepository.save(row);
-                    result.setUpdated(result.getUpdated() + 1);
-                } else {
-                    result.setSkipped(result.getSkipped() + 1);
+
+        if (!phones.isEmpty()) {
+            Set<String> uniquePhones = phones.stream().map(PhoneRow::phone).collect(Collectors.toSet());
+            Map<String, ViewerEntity> byPhone = viewerRepository.findByPhoneIn(uniquePhones).stream()
+                    .filter(v -> v.getPhone() != null)
+                    .collect(Collectors.toMap(ViewerEntity::getPhone, v -> v, (a, b) -> a));
+
+            for (PhoneRow pr : phones) {
+                ViewerEntity viewer = byPhone.get(pr.phone());
+                if (viewer == null) {
+                    result.setFailed(result.getFailed() + 1);
+                    addImportError(result, allFailures, pr.row(), pr.phone(), "未找到该手机号观众");
+                    continue;
                 }
-                continue;
+                Optional<ActivityAudienceEntity> existing =
+                        audienceRepository.findByActivityIdAndViewerId(uuid, viewer.getId());
+                if (existing.isPresent()) {
+                    ActivityAudienceEntity row = existing.get();
+                    if (row.getImporterId() == null) {
+                        row.setImporterId(operatorId);
+                        row.setImportTime(now);
+                        audienceRepository.save(row);
+                        result.setUpdated(result.getUpdated() + 1);
+                    } else {
+                        result.setSkipped(result.getSkipped() + 1);
+                    }
+                    continue;
+                }
+                ActivityAudienceEntity row = new ActivityAudienceEntity();
+                row.setActivityId(uuid);
+                row.setViewerId(viewer.getId());
+                row.setEntitlementStatus(1);
+                row.setImporterId(operatorId);
+                row.setImportTime(now);
+                audienceRepository.save(row);
+                result.setCreated(result.getCreated() + 1);
             }
-            ActivityAudienceEntity row = new ActivityAudienceEntity();
-            row.setActivityId(uuid);
-            row.setViewerId(viewer.getId());
-            row.setEntitlementStatus(1);
-            row.setImporterId(operatorId);
-            row.setImportTime(now);
-            audienceRepository.save(row);
-            result.setCreated(result.getCreated() + 1);
         }
+
+        persistImportHistory(uuid, operatorId, now, result, allFailures);
         return result;
     }
 
     public byte[] importTemplateCsv() {
-        return "手机号\n".getBytes(StandardCharsets.UTF_8);
+        return csvBytes("手机号\n");
+    }
+
+    @Transactional(readOnly = true)
+    public AudienceImportHistoryListResponse listImportHistory(String activityId) {
+        String uuid = requireActivity(activityId).getId();
+        List<ActivityAudienceImportEntity> rows =
+                importRepository.findTop100ByActivityIdOrderByImportTimeDesc(uuid);
+        Set<Long> importerIds = new HashSet<>();
+        for (ActivityAudienceImportEntity row : rows) {
+            importerIds.add(row.getImporterId());
+        }
+        Map<Long, String> names = new HashMap<>();
+        if (!importerIds.isEmpty()) {
+            for (SysUserAccountEntity u : userRepository.findAllById(importerIds)) {
+                names.put(u.getId(), u.getUserName());
+            }
+        }
+        AudienceImportHistoryListResponse resp = new AudienceImportHistoryListResponse();
+        for (ActivityAudienceImportEntity row : rows) {
+            AudienceImportHistoryItem item = new AudienceImportHistoryItem();
+            item.setId(row.getId());
+            item.setImportTime(formatTime(row.getImportTime()));
+            item.setImporterId(row.getImporterId());
+            item.setImporterName(names.getOrDefault(row.getImporterId(), "员工" + row.getImporterId()));
+            item.setSuccessCount(row.getSuccessCount());
+            item.setFailCount(row.getFailCount());
+            resp.getList().add(item);
+        }
+        return resp;
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] importFailuresCsv(long importId) {
+        ActivityAudienceImportEntity row = importRepository
+                .findById(importId)
+                .orElseThrow(() -> new IllegalArgumentException("导入记录不存在"));
+        List<AudienceImportResponse.ErrorItem> failures = List.of();
+        if (row.getFailDetails() != null && !row.getFailDetails().isBlank()) {
+            try {
+                failures = objectMapper.readValue(row.getFailDetails(), FAIL_DETAILS_TYPE);
+            } catch (Exception ignored) {
+                failures = List.of();
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("行号,手机号,原因\n");
+        if (failures != null) {
+            for (AudienceImportResponse.ErrorItem err : failures) {
+                sb.append(err.getRow())
+                        .append(',')
+                        .append(csvCell(err.getPhone()))
+                        .append(',')
+                        .append(csvCell(err.getReason()))
+                        .append('\n');
+            }
+        }
+        return csvBytes(sb.toString());
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] exportCsv(
+            String activityId,
+            String keywordType,
+            String keyword,
+            List<Long> tagIds,
+            String tagMatch,
+            Integer entitlementStatus,
+            String totalWatchDurationOp,
+            Long totalWatchDurationSec,
+            String liveWatchDurationOp,
+            Long liveWatchDurationSec,
+            String sort,
+            String order) {
+        PreparedList prepared = prepareList(
+                activityId,
+                keywordType,
+                keyword,
+                tagIds,
+                tagMatch,
+                entitlementStatus,
+                totalWatchDurationOp,
+                totalWatchDurationSec,
+                liveWatchDurationOp,
+                liveWatchDurationSec,
+                sort,
+                order);
+        List<ActivityAudienceEntity> all = prepared.rows();
+        Map<Long, Long> commentCounts = prepared.commentCounts();
+        Map<Long, ViewerEntity> viewers = loadViewers(all);
+        Map<Long, String> employeeNames = loadEmployeeNames(all);
+        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(all);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("用户,用户ID,手机号,权益状态,所属邀请人,标签,直播间停留时长,累计观看时长,直播观看时长,回放观看时长,评论次数,直播间成交金额(元)\n");
+        for (ActivityAudienceEntity row : all) {
+            AudienceListItem item = toListItem(
+                    row,
+                    viewers,
+                    employeeNames,
+                    commentCounts,
+                    tagsByViewer.getOrDefault(row.getViewerId(), List.of()));
+            ViewerEntity viewer = viewers.get(row.getViewerId());
+            String phone = viewer != null && viewer.getPhone() != null ? viewer.getPhone() : "";
+            sb.append(csvCell(item.getNickname()))
+                    .append(',')
+                    .append(item.getViewerId() == null ? "" : item.getViewerId())
+                    .append(',')
+                    .append(csvCell(phone))
+                    .append(',')
+                    .append(item.getEntitlementStatus() == 1 ? "有效" : "无权益")
+                    .append(',')
+                    .append(csvCell(item.getInviterDisplayName()))
+                    .append(',')
+                    .append(csvCell(item.getTagLabels() == null ? "" : String.join("、", item.getTagLabels())))
+                    .append(',')
+                    .append(formatDurationSec(item.getStayDurationSec()))
+                    .append(',')
+                    .append(formatDurationSec(item.getTotalWatchDurationSec()))
+                    .append(',')
+                    .append(formatDurationSec(item.getLiveWatchDurationSec()))
+                    .append(',')
+                    .append(formatDurationSec(item.getReplayWatchDurationSec()))
+                    .append(',')
+                    .append(item.getCommentCount())
+                    .append(',')
+                    .append(csvCell(item.getDealAmount() == null ? "0.00" : item.getDealAmount()))
+                    .append('\n');
+        }
+        return csvBytes(sb.toString());
     }
 
     @Transactional
@@ -459,10 +656,11 @@ public class ActivityAudienceService {
         item.setId(row.getId());
         item.setViewerId(row.getViewerId());
         ViewerEntity viewer = viewers.get(row.getViewerId());
-        String nick = viewer != null && viewer.getNickname() != null && !viewer.getNickname().isBlank()
-                ? viewer.getNickname().trim()
-                : "用户" + row.getViewerId();
-        item.setNickname(nick);
+        if (viewer != null) {
+            item.setNickname(ViewerAdminService.displayNickname(viewer));
+        } else {
+            item.setNickname("用户_" + row.getViewerId());
+        }
         if (viewer != null && viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
             item.setAvatarUrl(viewer.getAvatarUrl());
         }
@@ -662,20 +860,72 @@ public class ActivityAudienceService {
         return rows;
     }
 
-    private static void addImportError(AudienceImportResponse result, int row, String phone, String reason) {
-        if (result.getErrors().size() >= ERRORS_CAP) {
-            return;
-        }
+    private static void addImportError(
+            AudienceImportResponse result,
+            List<AudienceImportResponse.ErrorItem> allFailures,
+            int row,
+            String phone,
+            String reason) {
         AudienceImportResponse.ErrorItem err = new AudienceImportResponse.ErrorItem();
         err.setRow(row);
         err.setPhone(phone);
         err.setReason(reason);
-        result.getErrors().add(err);
+        allFailures.add(err);
+        if (result.getErrors().size() < ERRORS_CAP) {
+            result.getErrors().add(err);
+        }
+    }
+
+    private void persistImportHistory(
+            String activityId,
+            long operatorId,
+            LocalDateTime importTime,
+            AudienceImportResponse result,
+            List<AudienceImportResponse.ErrorItem> allFailures) {
+        ActivityAudienceImportEntity row = new ActivityAudienceImportEntity();
+        row.setActivityId(activityId);
+        row.setImporterId(operatorId);
+        row.setImportTime(importTime);
+        row.setSuccessCount(result.getCreated() + result.getUpdated() + result.getSkipped());
+        row.setFailCount(result.getFailed());
+        try {
+            row.setFailDetails(objectMapper.writeValueAsString(allFailures));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("无法保存导入失败明细");
+        }
+        importRepository.save(row);
+        result.setImportId(row.getId());
     }
 
     private static String formatTime(LocalDateTime time) {
         return time == null ? null : TIME_FMT.format(time);
     }
 
+    private static String formatDurationSec(long sec) {
+        long n = Math.max(0, sec);
+        long h = n / 3600;
+        long m = (n % 3600) / 60;
+        long s = n % 60;
+        return String.format("%02d:%02d:%02d", h, m, s);
+    }
+
+    private static String csvCell(String raw) {
+        String s = raw == null ? "" : raw;
+        if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+            return '"' + s.replace("\"", "\"\"") + '"';
+        }
+        return s;
+    }
+
+    private static byte[] csvBytes(String body) {
+        byte[] raw = body.getBytes(StandardCharsets.UTF_8);
+        byte[] out = new byte[UTF8_BOM.length + raw.length];
+        System.arraycopy(UTF8_BOM, 0, out, 0, UTF8_BOM.length);
+        System.arraycopy(raw, 0, out, UTF8_BOM.length, raw.length);
+        return out;
+    }
+
     private record PhoneRow(int row, String phone) {}
+
+    private record PreparedList(List<ActivityAudienceEntity> rows, Map<Long, Long> commentCounts) {}
 }

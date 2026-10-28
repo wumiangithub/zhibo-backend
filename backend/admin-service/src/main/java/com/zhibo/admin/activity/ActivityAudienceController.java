@@ -1,6 +1,7 @@
 package com.zhibo.admin.activity;
 
 import com.zhibo.admin.activity.dto.AudienceCommentListResponse;
+import com.zhibo.admin.activity.dto.AudienceImportHistoryListResponse;
 import com.zhibo.admin.activity.dto.AudienceImportResponse;
 import com.zhibo.admin.activity.dto.AudienceListResponse;
 import com.zhibo.admin.activity.dto.CreateAudienceRequest;
@@ -95,9 +96,9 @@ public class ActivityAudienceController {
     @PostMapping("/create/{id}")
     public ApiResponse<CreateAudienceResponse> create(
             @PathVariable String id,
-            @Valid @RequestBody CreateAudienceRequest request,
+            @RequestBody CreateAudienceRequest request,
             HttpServletRequest httpRequest) {
-        return ApiResponse.ok(audienceService.create(id, request.getPhone(), currentUserId(httpRequest)));
+        return ApiResponse.ok(audienceService.create(id, request, currentUserId(httpRequest)));
     }
 
     @PostMapping(value = "/import/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -110,11 +111,47 @@ public class ActivityAudienceController {
 
     @GetMapping("/import-template")
     public ResponseEntity<byte[]> importTemplate() {
-        byte[] body = audienceService.importTemplateCsv();
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audience-import.csv\"")
-                .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
-                .body(body);
+        return csvAttachment("audience-import.csv", audienceService.importTemplateCsv());
+    }
+
+    @GetMapping("/imports/list/{activityId}")
+    public ApiResponse<AudienceImportHistoryListResponse> importHistory(@PathVariable String activityId) {
+        return ApiResponse.ok(audienceService.listImportHistory(activityId));
+    }
+
+    @GetMapping("/imports/failures/{importId}")
+    public ResponseEntity<byte[]> importFailures(@PathVariable long importId) {
+        return csvAttachment("audience-import-failures.csv", audienceService.importFailuresCsv(importId));
+    }
+
+    @GetMapping("/export/{id}")
+    public ResponseEntity<byte[]> export(
+            @PathVariable String id,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tagIds,
+            @RequestParam(required = false) String tagMatch,
+            @RequestParam(required = false) Integer entitlementStatus,
+            @RequestParam(required = false) String totalWatchDurationOp,
+            @RequestParam(required = false) Long totalWatchDurationSec,
+            @RequestParam(required = false) String liveWatchDurationOp,
+            @RequestParam(required = false) Long liveWatchDurationSec,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        byte[] body = audienceService.exportCsv(
+                id,
+                keywordType,
+                keyword,
+                parseTagIdsParam(tagIds),
+                tagMatch,
+                entitlementStatus,
+                totalWatchDurationOp,
+                totalWatchDurationSec,
+                liveWatchDurationOp,
+                liveWatchDurationSec,
+                sort,
+                order);
+        return csvAttachment("audience-export.csv", body);
     }
 
     @PutMapping("/entitlement/{rowId}")
@@ -130,6 +167,13 @@ public class ActivityAudienceController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String nickname) {
         return ApiResponse.ok(audienceService.listComments(id, page, pageSize, nickname));
+    }
+
+    private static ResponseEntity<byte[]> csvAttachment(String filename, byte[] body) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+                .body(body);
     }
 
     private static long currentUserId(HttpServletRequest request) {

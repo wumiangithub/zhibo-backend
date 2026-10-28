@@ -46,4 +46,19 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
     /** 录播转码回调：挂该素材且仍未就绪的活动。 */
     List<ActivityEntity> findByRecordMaterialIdAndReadyAndDeletedTimeIsNull(
             String recordMaterialId, Integer ready);
+
+    /**
+     * 观众「我的学习」：仅本站有观看权益（{@code activity_audience.entitlement_status=1}）且未软删的场次。
+     * {@code statesEmpty=true} 时不过滤 state；否则 {@code a.state IN :states}（不过滤时 states 仍须非空占位）。
+     */
+    @Query("SELECT a FROM ActivityEntity a WHERE "
+            + "a.deletedTime IS NULL AND "
+            + "EXISTS (SELECT 1 FROM ActivityAudienceEntity aa WHERE aa.activityId = a.id "
+            + "AND aa.viewerId = :viewerId AND aa.entitlementStatus = 1) AND "
+            + "(:statesEmpty = true OR a.state IN :states)")
+    Page<ActivityEntity> searchEntitledForViewer(
+            @Param("viewerId") long viewerId,
+            @Param("statesEmpty") boolean statesEmpty,
+            @Param("states") Collection<Integer> states,
+            Pageable pageable);
 }
