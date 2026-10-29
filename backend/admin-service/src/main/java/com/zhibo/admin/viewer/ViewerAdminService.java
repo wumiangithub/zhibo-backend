@@ -9,6 +9,7 @@ import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListItem;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
 import com.zhibo.viewer.ViewerEntity;
+import com.zhibo.viewer.ViewerDisplayNames;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
 import com.zhibo.viewer.ViewerTagEntity;
@@ -636,25 +637,11 @@ public class ViewerAdminService {
     }
 
     /**
-     * 列表展示昵称：有昵称用昵称；无昵称有手机用「用户{尾号 4 位}」；都没有用「用户_{id}」。
+     * 列表展示昵称：委托 live-common {@link com.zhibo.viewer.ViewerDisplayNames}
+     *（有昵称→昵称；无昵称有手机→「用户{尾号 4 位}」；都没有→「用户_{id}」）。
      */
     public static String displayNickname(ViewerEntity viewer) {
-        if (viewer == null) {
-            return "用户_0";
-        }
-        String nick = viewer.getNickname();
-        if (nick != null && !nick.isBlank()) {
-            return nick.trim();
-        }
-        String phone = viewer.getPhone();
-        if (phone != null) {
-            String digits = phone.trim();
-            if (!digits.isEmpty()) {
-                String tail = digits.length() <= 4 ? digits : digits.substring(digits.length() - 4);
-                return "用户" + tail;
-            }
-        }
-        return "用户_" + viewer.getId();
+        return ViewerDisplayNames.displayNickname(viewer);
     }
 
     /** 与 live-service ViewerPhoneMask 同规则。 */

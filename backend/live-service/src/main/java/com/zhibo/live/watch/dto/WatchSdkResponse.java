@@ -23,4 +23,6 @@ public class WatchSdkResponse {
     private SdkPayload sdk;
     /** 与旧 watch 接口相同，供 SDK 失败时 iframe 兜底。 */
     private String embedUrl;
+    /** 本站回放开关。结束态据此决定是否拉播放器。 */
+    private Boolean playbackEnabled;
 }

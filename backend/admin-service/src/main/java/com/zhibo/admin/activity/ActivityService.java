@@ -59,6 +59,7 @@ import com.zhibo.activity.ActivityReady;
 import com.zhibo.activity.RecordDemandFinalizeService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.presence.PresenceUserIds;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
@@ -118,8 +119,7 @@ public class ActivityService {
     private static final Set<String> PLAYBACK_VALIDITY = Set.of("forever", "days");
     private static final int RELATION_LIMIT = 20;
     private static final int COURSEWARE_LIMIT = 100;
-    /** 微吼 get-role-url 身份邮箱后缀；与 HostService 一致 */
-    private static final String ROLE_EMAIL_DOMAIN = "@qkzb.com";
+    /** 微吼 get-role-url 身份邮箱见 {@link com.zhibo.presence.PresenceUserIds#staffEmail(long)} */
     /** 微吼 get-role-url nickname 上限 */
     private static final int VHALL_NICKNAME_MAX = 30;
     private final ActivityRepository activityRepository;
@@ -1591,7 +1591,7 @@ public class ActivityService {
             return;
         }
         long userId = member.getId().getUserId();
-        String email = userId + ROLE_EMAIL_DOMAIN;
+        String email = PresenceUserIds.staffEmail(userId);
         String nickname = trimToNull(member.getNickname());
         if (nickname == null) {
             nickname = "用户" + userId;
@@ -1615,7 +1615,7 @@ public class ActivityService {
         if (roomId == null) {
             return;
         }
-        String email = member.getId().getUserId() + ROLE_EMAIL_DOMAIN;
+        String email = PresenceUserIds.staffEmail(member.getId().getUserId());
         providerRegistry.require(entity.getProvider()).cancelRole(roomId, email);
     }
 

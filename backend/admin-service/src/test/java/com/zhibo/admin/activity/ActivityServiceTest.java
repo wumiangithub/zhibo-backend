@@ -561,7 +561,7 @@ class ActivityServiceTest {
         verify(liveProvider).buildRoleJoinUrl(
                 eq("100"),
                 eq(ActivityMemberRole.HOST.getCode()),
-                eq(OPERATOR_ID + "@qkzb.com"),
+                eq("e" + OPERATOR_ID + "@qkzb.com"),
                 eq("新昵称"),
                 eq("https://cdn.example/new.png"));
         assertEquals("新昵称", response.getList().get(0).getNickname());
@@ -688,7 +688,7 @@ class ActivityServiceTest {
         verify(liveProvider).buildRoleJoinUrl(
                 eq("100"),
                 eq(ActivityMemberRole.GUEST.getCode()),
-                eq("20002@qkzb.com"),
+                eq("e20002@qkzb.com"),
                 eq("嘉宾甲"),
                 eq("https://cdn.example/g.png"));
     }
@@ -736,7 +736,7 @@ class ActivityServiceTest {
 
         activityService.deleteMembers(uuid, request);
 
-        verify(liveProvider).cancelRole(eq("100"), eq("20002@qkzb.com"));
+        verify(liveProvider).cancelRole(eq("100"), eq("e20002@qkzb.com"));
         verify(memberRepository).deleteById(new ActivityMemberId(uuid, 20002L));
     }
 
@@ -831,7 +831,7 @@ class ActivityServiceTest {
         verify(liveProvider).buildRoleJoinUrl(
                 eq("100"),
                 eq(ActivityMemberRole.ASSISTANT.getCode()),
-                eq(OPERATOR_ID + "@qkzb.com"),
+                eq("e" + OPERATOR_ID + "@qkzb.com"),
                 eq("余灵巧"),
                 any());
     }
@@ -910,7 +910,7 @@ class ActivityServiceTest {
         verify(liveProvider).buildRoleJoinUrl(
                 eq("100"),
                 eq(ActivityMemberRole.GUEST.getCode()),
-                eq(OPERATOR_ID + "@qkzb.com"),
+                eq("e" + OPERATOR_ID + "@qkzb.com"),
                 eq("本场嘉宾"),
                 eq("https://cdn.example/g.png"));
     }

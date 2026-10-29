@@ -79,7 +79,10 @@ public class VhallLiveProvider implements LiveProvider {
     static final int ROLE_JOIN_NICKNAME_MAX = 30;
 
     private static final Pattern GUEST_ID_PATTERN = Pattern.compile("^[A-Za-z0-9]+$");
+    /** 未登录观众的合成邮箱域名 */
     private static final String EMAIL_DOMAIN = "@zhibo.local";
+    /** 已登录观众：与开播角色同一域名，{@code {viewerId}@qkzb.com} */
+    public static final String VIEWER_EMAIL_DOMAIN = "@qkzb.com";
     private static final String DEFAULT_NICKNAME = "观众";
     private static final int NICKNAME_MAX = 50;
     /** 中控台评论审核默认身份（与助理昵称一致） */
@@ -413,7 +416,7 @@ public class VhallLiveProvider implements LiveProvider {
 
         String guestId = resolveGuestId(command.guestId());
         String nickname = resolveNickname(command.nickname());
-        String email = guestId + EMAIL_DOMAIN;
+        String email = resolveWatchEmail(command.viewerId(), guestId);
         String webinarId = command.providerRoomId();
 
         ProviderRoomSnapshot info = fetchRoom(webinarId);
@@ -421,7 +424,7 @@ public class VhallLiveProvider implements LiveProvider {
         if (baseEmbed == null || baseEmbed.isBlank()) {
             throw new IllegalStateException("活动缺少全屏嵌入地址 full_embed_share_link");
         }
-        String embedUrl = buildEmbedUrl(baseEmbed, guestId, nickname);
+        String embedUrl = buildEmbedUrlWithEmail(baseEmbed, email, nickname);
 
         String signedAt = Long.toString(clock.instant().getEpochSecond());
         Map<String, Object> signParams = new LinkedHashMap<>();
@@ -639,6 +642,20 @@ public class VhallLiveProvider implements LiveProvider {
         throw new IllegalArgumentException(field + "格式须为 yyyy-MM-dd HH:mm:ss");
     }
 
+    /**
+     * 观看身份邮箱。有观众 id 时为 {@code {id}@qkzb.com}（与签名、{@code new VhallSDK} 的 email 一致）；
+     * 没有则 {@code {guestId}@zhibo.local}。
+     */
+    public static String resolveWatchEmail(Long viewerId, String guestId) {
+        if (viewerId != null) {
+            if (viewerId <= 0) {
+                throw new IllegalArgumentException("viewerId 无效");
+            }
+            return viewerId + VIEWER_EMAIL_DOMAIN;
+        }
+        return resolveGuestId(guestId) + EMAIL_DOMAIN;
+    }
+
     public static String resolveGuestId(String guestId) {
         if (guestId == null || guestId.isBlank()) {
             return UUID.randomUUID().toString().replace("-", "");
@@ -662,8 +679,12 @@ public class VhallLiveProvider implements LiveProvider {
     }
 
     public static String buildEmbedUrl(String baseEmbed, String guestId, String nickname) {
+        return buildEmbedUrlWithEmail(baseEmbed, guestId + EMAIL_DOMAIN, nickname);
+    }
+
+    public static String buildEmbedUrlWithEmail(String baseEmbed, String email, String nickname) {
         return UriComponentsBuilder.fromUriString(baseEmbed)
-                .replaceQueryParam("email", guestId + EMAIL_DOMAIN)
+                .replaceQueryParam("email", email)
                 .replaceQueryParam("nickname", nickname)
                 .encode()
                 .build()

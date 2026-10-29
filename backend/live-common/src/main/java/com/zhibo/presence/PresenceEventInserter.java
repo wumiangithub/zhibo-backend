@@ -6,8 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.zhibo.common.UuidIds;
-
 import java.time.LocalDateTime;
 
 /**
@@ -29,19 +27,25 @@ public class PresenceEventInserter {
             String type,
             LocalDateTime eventTime,
             String mid,
-            String source) {
+            String source,
+            String socketId) {
         String normalizedMid = blankToNull(mid);
         if (normalizedMid != null && eventRepository.existsByMid(normalizedMid)) {
             return false;
         }
-        if (eventRepository.existsByRoomIdAndUserIdAndTypeAndEventTimeAndSource(
-                roomId, userId, type, eventTime, source)) {
+        String normalizedSocket = blankToNull(socketId);
+        boolean duplicate = normalizedSocket == null
+                ? eventRepository.existsByRoomIdAndUserIdAndTypeAndEventTimeAndSource(
+                        roomId, userId, type, eventTime, source)
+                : eventRepository.existsByRoomIdAndUserIdAndTypeAndEventTimeAndSourceAndSocketId(
+                        roomId, userId, type, eventTime, source, normalizedSocket);
+        if (duplicate) {
             return false;
         }
         PresenceEventEntity event = new PresenceEventEntity();
-        event.setId(UuidIds.newId());
         event.setRoomId(roomId);
         event.setUserId(userId);
+        event.setSocketId(normalizedSocket);
         event.setType(type);
         event.setEventTime(eventTime);
         event.setMid(normalizedMid);

@@ -29,6 +29,7 @@ class VhallPresenceCallbackServiceTest {
 
     private static final String ROOM = "a1b2c3d4e5f67890abcdef1234567890";
     private static final String SECRET = "callback-secret";
+    private static final String SOCKET = "sock-abc";
 
     @Mock
     private VhallProperties vhallProperties;
@@ -46,24 +47,25 @@ class VhallPresenceCallbackServiceTest {
     }
 
     @Test
-    void handle_joinDualWrites() {
+    void handle_joinDualWritesFromEmail() {
         Map<String, Object> body = baseBody("Join", 1_800_000_000L);
         body.put("signature", VhallCallbackSignUtil.sign(SECRET, body));
         when(roomIdResolver.resolveRoomId("287793338")).thenReturn(Optional.of(ROOM));
-        when(presenceWriteService.applyJoin(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(new PresenceWriteService.JoinResult("rec", true, true, false));
+        when(presenceWriteService.applyJoin(any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(new PresenceWriteService.JoinResult(1L, true, true, false));
 
         assertEquals(VhallPresenceCallbackService.HandleResult.OK, service.handle(body));
 
         ArgumentCaptor<LocalDateTime> time = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(presenceWriteService).applyJoin(
                 eq(ROOM),
-                eq("visit_v1"),
+                eq("12"),
                 time.capture(),
                 eq("小龙女"),
                 isNull(),
                 eq("mid-1"),
-                eq(PresenceEventEntity.SOURCE_CALLBACK));
+                eq(PresenceEventEntity.SOURCE_CALLBACK),
+                eq(SOCKET));
         assertEquals(LocalDateTime.of(2027, 1, 15, 16, 0, 0), time.getValue());
     }
 
@@ -73,7 +75,7 @@ class VhallPresenceCallbackServiceTest {
         body.put("signature", "deadbeef");
 
         assertEquals(VhallPresenceCallbackService.HandleResult.BAD_SIGNATURE, service.handle(body));
-        verify(presenceWriteService, never()).applyJoin(any(), any(), any(), any(), any(), any(), any());
+        verify(presenceWriteService, never()).applyJoin(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -83,7 +85,30 @@ class VhallPresenceCallbackServiceTest {
         when(roomIdResolver.resolveRoomId("287793338")).thenReturn(Optional.empty());
 
         assertEquals(VhallPresenceCallbackService.HandleResult.OK, service.handle(body));
-        verify(presenceWriteService, never()).applyLeave(any(), any(), any(), any(), any(), any());
+        verify(presenceWriteService, never()).applyLeave(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void handle_missingEmailStillOkWithoutWrite() {
+        Map<String, Object> body = baseBody("Join", 1_800_000_000L);
+        body.remove("email");
+        body.put("signature", VhallCallbackSignUtil.sign(SECRET, body));
+        when(roomIdResolver.resolveRoomId("287793338")).thenReturn(Optional.of(ROOM));
+
+        assertEquals(VhallPresenceCallbackService.HandleResult.OK, service.handle(body));
+        verify(presenceWriteService, never()).applyJoin(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void handle_guestEmailStillOkWithoutWrite() {
+        Map<String, Object> body = baseBody("Join", 1_800_000_000L);
+        body.put("email", "abc123@zhibo.local");
+        body.put("signature", VhallCallbackSignUtil.sign(SECRET, body));
+        when(roomIdResolver.resolveRoomId("287793338")).thenReturn(Optional.of(ROOM));
+
+        assertEquals(VhallPresenceCallbackService.HandleResult.OK, service.handle(body));
+        verify(presenceWriteService, never()).applyJoin(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(presenceWriteService, never()).applyLeave(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -91,18 +116,19 @@ class VhallPresenceCallbackServiceTest {
         Map<String, Object> body = baseBody("Leave", 1_800_000_100L);
         body.put("signature", VhallCallbackSignUtil.sign(SECRET, body));
         when(roomIdResolver.resolveRoomId("287793338")).thenReturn(Optional.of(ROOM));
-        when(presenceWriteService.applyLeave(any(), any(), any(), any(), any(), any()))
+        when(presenceWriteService.applyLeave(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new PresenceWriteService.LeaveResult(
                         PresenceWriteService.LeaveRosterOutcome.UPDATED, true, false));
 
         assertEquals(VhallPresenceCallbackService.HandleResult.OK, service.handle(body));
         verify(presenceWriteService).applyLeave(
                 eq(ROOM),
-                eq("visit_v1"),
+                eq("12"),
                 any(),
                 isNull(),
                 eq("mid-1"),
-                eq(PresenceEventEntity.SOURCE_CALLBACK));
+                eq(PresenceEventEntity.SOURCE_CALLBACK),
+                eq(SOCKET));
     }
 
     private static Map<String, Object> baseBody(String type, long time) {
@@ -110,6 +136,8 @@ class VhallPresenceCallbackServiceTest {
         body.put("method_id", 20);
         body.put("type", type);
         body.put("mid", "mid-1");
+        body.put("email", "12@qkzb.com");
+        body.put("socket_id", SOCKET);
         body.put("sender_id", "visit_v1");
         body.put("webinar_id", 287793338);
         body.put("time", time);

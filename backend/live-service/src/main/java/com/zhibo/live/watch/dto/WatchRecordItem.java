@@ -7,8 +7,8 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class EnterAttendanceResponse {
+public class WatchRecordItem {
 
-    /** 本站进出记录 UUID */
-    private String id;
+    /** 微吼回放 id，与 admin records list[].id 相同 */
+    private Long id;
 }

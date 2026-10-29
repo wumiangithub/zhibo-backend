@@ -5,8 +5,6 @@ import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.AttendanceTimes;
 import com.zhibo.activity.RoomAttendanceEntity;
 import com.zhibo.activity.RoomAttendanceRepository;
-import com.zhibo.liveprovider.LiveProvider;
-import com.zhibo.liveprovider.LiveProviderRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,18 +21,14 @@ import com.zhibo.common.UuidIds;
 /**
  * 中控台名单。admin 旧路径和 live {@code /api/v1/watch/attendees/{id}} 共用。
  * <p>
- * 离开时间只是少问一次在线：有 leave_time 直接当离线；空的继续 {@code batchUserOnline}。
- * 前端关掉离开上报后空 leave 会变多，这里不假设人人都有离开时间。结束 / 点播 / 回放全离线，不改库、不问服务商。
+ * 在线以本站未闭合连接为准：{@code leave_time} 为空即在线。结束 / 点播 / 回放全离线，不改库、不问服务商。
  */
 @Service
 @RequiredArgsConstructor
 public class AttendeeRoster {
 
-    static final int ONLINE_QUERY_BATCH = 100;
-
     private final ActivityRepository activityRepository;
     private final RoomAttendanceRepository attendanceRepository;
-    private final LiveProviderRegistry providerRegistry;
 
     @Transactional(readOnly = true)
     public AttendeePage list(String activityId, String tab, int page, int pageSize, String keyword) {
@@ -57,17 +51,13 @@ public class AttendeeRoster {
             }
         }
 
-        Map<String, Boolean> providerOnline = forceOffline
-                ? Map.of()
-                : queryProviderOnline(activity, byUser);
-
         List<RoomAttendanceEntity> matched = new ArrayList<>();
         Map<String, Boolean> onlineByUser = new HashMap<>();
         for (RoomAttendanceEntity row : byUser.values()) {
             if (!needle.isEmpty() && (row.getNickname() == null || !row.getNickname().contains(needle))) {
                 continue;
             }
-            boolean online = resolveOnline(row, forceOffline, providerOnline);
+            boolean online = resolveOnline(row, forceOffline);
             onlineByUser.put(row.getUserId(), online);
             if ("online".equals(normalizedTab) && !online) {
                 continue;
@@ -88,38 +78,8 @@ public class AttendeeRoster {
         return new AttendeePage(activity.getState(), matched.size(), page, pageSize, pageItems);
     }
 
-    /**
-     * 只把 leave_time 为空的人送给服务商。有离开时间的不进这批。
-     */
-    private Map<String, Boolean> queryProviderOnline(
-            ActivityEntity activity, Map<String, RoomAttendanceEntity> byUser) {
-        List<String> needCheck = new ArrayList<>();
-        for (RoomAttendanceEntity row : byUser.values()) {
-            if (row.getLeaveTime() == null && row.getUserId() != null && !row.getUserId().isBlank()) {
-                needCheck.add(row.getUserId());
-            }
-        }
-        if (needCheck.isEmpty()) {
-            return Map.of();
-        }
-
-        LiveProvider provider = providerRegistry.require(activity.getProvider());
-        String roomId = activity.getProviderRoomId();
-        Map<String, Boolean> merged = new LinkedHashMap<>();
-        for (int i = 0; i < needCheck.size(); i += ONLINE_QUERY_BATCH) {
-            int end = Math.min(i + ONLINE_QUERY_BATCH, needCheck.size());
-            merged.putAll(provider.batchUserOnline(roomId, needCheck.subList(i, end)));
-        }
-        return merged;
-    }
-
-    private static boolean resolveOnline(
-            RoomAttendanceEntity row, boolean forceOffline, Map<String, Boolean> providerOnline) {
-        if (forceOffline || row.getLeaveTime() != null) {
-            return false;
-        }
-        Boolean fromProvider = providerOnline.get(row.getUserId());
-        return fromProvider == null || fromProvider;
+    private static boolean resolveOnline(RoomAttendanceEntity row, boolean forceOffline) {
+        return !forceOffline && row.getLeaveTime() == null;
     }
 
     private static boolean isTerminal(Integer state) {

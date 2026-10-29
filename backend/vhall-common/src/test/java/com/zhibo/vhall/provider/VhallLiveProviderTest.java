@@ -86,7 +86,7 @@ class VhallLiveProviderTest {
         ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
         verify(vhallClient).postForData(
                 eq(VhallLiveProvider.PATH_CREATE_DEMAND), captor.capture(), eq(Map.class));
-        assertEquals("799703", captor.getValue().get("record_id"));
+        assertEquals(799703L, captor.getValue().get("record_id"));
         assertEquals(0, captor.getValue().get("webinar_curr_num"));
         assertEquals(0, captor.getValue().get("no_delay_webinar"));
         assertEquals(1, captor.getValue().get("is_timing"));
@@ -477,5 +477,12 @@ class VhallLiveProviderTest {
     void cancelRole_rejectsBlankEmail() {
         assertThrows(IllegalArgumentException.class, () -> provider.cancelRole("100", "  "));
         verify(vhallClient, never()).postForData(eq(VhallLiveProvider.PATH_CANCEL_ROLE), anyMap(), eq(Map.class));
+    }
+
+    @Test
+    void resolveWatchEmail_usesViewerIdWhenPresent() {
+        assertEquals("12@qkzb.com", VhallLiveProvider.resolveWatchEmail(12L, "guest1"));
+        assertEquals("guest1@zhibo.local", VhallLiveProvider.resolveWatchEmail(null, "guest1"));
+        assertThrows(IllegalArgumentException.class, () -> VhallLiveProvider.resolveWatchEmail(0L, "guest1"));
     }
 }

@@ -15,7 +15,7 @@ public class LiveReportController {
     private final LiveReportService service;
 
     @PostMapping("/create")
-    public ApiResponse<LiveReportDtos.Result> create(
+    public ApiResponse<LiveReportDtos.CreateResult> create(
             @Valid @RequestBody LiveReportDtos.SaveRequest body, HttpServletRequest r) {
         return ApiResponse.ok(service.create(body, userId(r)));
     }

@@ -9,9 +9,13 @@ import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchProductItem;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
+import com.zhibo.live.watch.dto.WatchRecordItem;
+import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.dto.ProviderRecordItem;
+import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 import com.zhibo.common.UuidIds;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -52,20 +57,22 @@ public class WatchService {
         return response;
     }
 
-    public WatchResponse watch(String activityId, String guestId, String nickname) {
+    public WatchResponse watch(String activityId, String guestId, String nickname, Long viewerId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
         LiveProvider provider = providerRegistry.require(entity.getProvider());
 
         String resolvedGuestId = VhallLiveProvider.resolveGuestId(guestId);
-        String resolvedNickname = VhallLiveProvider.resolveNickname(nickname);
+        // 与 /watch/sdk 一致：有 viewerId 时优先用客户端展示昵称（小程序 URL）
+        String resolvedNickname = WatchSdkService.resolveSdkNickname(nickname, viewerId);
+        String email = VhallLiveProvider.resolveWatchEmail(viewerId, resolvedGuestId);
 
         ProviderRoomSnapshot info = provider.fetchRoom(entity.getProviderRoomId());
         String baseEmbed = info.fullEmbedShareLink();
         if (baseEmbed == null || baseEmbed.isBlank()) {
             throw new IllegalStateException("活动缺少全屏嵌入地址 full_embed_share_link");
         }
-        String embedUrl = VhallLiveProvider.buildEmbedUrl(baseEmbed, resolvedGuestId, resolvedNickname);
+        String embedUrl = VhallLiveProvider.buildEmbedUrlWithEmail(baseEmbed, email, resolvedNickname);
 
         WatchResponse response = new WatchResponse();
         response.setId(entity.getId());
@@ -78,6 +85,28 @@ public class WatchService {
         response.setStartTime(entity.getStartTime() != null ? entity.getStartTime() : info.startTime());
         response.setEndTime(entity.getEndTime() != null ? entity.getEndTime() : info.endTime());
         response.setEmbedUrl(embedUrl);
+        return response;
+    }
+
+    /** 观看端回放 id 列表。start 上报用；不鉴权。 */
+    public WatchRecordListResponse listRecords(String activityId) {
+        ActivityEntity entity = requireActivity(activityId);
+        requireReadyForWatch(entity);
+        WatchRecordListResponse response = new WatchRecordListResponse();
+        String roomId = entity.getProviderRoomId();
+        if (roomId == null || roomId.isBlank()) {
+            return response;
+        }
+        ProviderRecordList records = providerRegistry.require(entity.getProvider()).listRecords(roomId);
+        List<WatchRecordItem> list = new ArrayList<>();
+        if (records != null && records.list() != null) {
+            for (ProviderRecordItem item : records.list()) {
+                if (item != null && item.id() != null && item.id() > 0) {
+                    list.add(new WatchRecordItem(item.id()));
+                }
+            }
+        }
+        response.setList(list);
         return response;
     }
 

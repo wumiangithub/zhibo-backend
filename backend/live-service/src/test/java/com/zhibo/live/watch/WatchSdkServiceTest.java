@@ -41,6 +41,7 @@ class WatchSdkServiceTest {
         entity.setType(2);
         entity.setState(1);
         entity.setStartTime("2026-09-18 20:00:00");
+        entity.setPlaybackEnabled(Boolean.TRUE);
 
         WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();
         sdk.setScriptUrl("https://cdn/VhallSDK.js");
@@ -65,10 +66,51 @@ class WatchSdkServiceTest {
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
 
-        WatchSdkResponse response = watchSdkService.sdk(ID, "guest1", null);
+        WatchSdkResponse response = watchSdkService.sdk(ID, "guest1", "用户8079", 12L);
         assertEquals(ID, response.getId());
         assertEquals("vhall", response.getProvider());
         assertEquals("1001", response.getSdk().getWebinarId());
         assertEquals("abc", response.getSdk().getSign());
+        assertEquals(Boolean.TRUE, response.getPlaybackEnabled());
+    }
+
+    @Test
+    void resolveSdkNickname_prefersClientWhenViewerId() {
+        assertEquals("用户8079", WatchSdkService.resolveSdkNickname("用户8079", 12L));
+        assertEquals("观众", WatchSdkService.resolveSdkNickname(null, 12L));
+        assertEquals("观众", WatchSdkService.resolveSdkNickname("  ", 12L));
+        assertEquals("本地昵称", WatchSdkService.resolveSdkNickname("本地昵称", null));
+    }
+
+    @Test
+    void sdk_nullPlaybackEnabled_defaultsTrue() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setTitle("直播课");
+        entity.setType(2);
+        entity.setState(3);
+
+        WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();
+        sdk.setScriptUrl("https://cdn/VhallSDK.js");
+        sdk.setAccount("guest1");
+        sdk.setEmail("guest1@zhibo.local");
+        sdk.setUsername("观众");
+        sdk.setWebinarId("1001");
+        sdk.setAppKey("key");
+        sdk.setSignedAt("1");
+        sdk.setSign("abc");
+
+        WatchSdkBundle bundle = new WatchSdkBundle();
+        bundle.setState(3);
+        bundle.setSdk(sdk);
+
+        when(watchService.requireActivity(ID)).thenReturn(entity);
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
+
+        WatchSdkResponse response = watchSdkService.sdk(ID, "guest1", null, null);
+        assertEquals(Boolean.TRUE, response.getPlaybackEnabled());
     }
 }

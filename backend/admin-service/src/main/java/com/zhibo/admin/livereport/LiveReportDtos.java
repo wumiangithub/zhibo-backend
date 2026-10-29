@@ -16,12 +16,14 @@ public final class LiveReportDtos {
             @NotBlank @Size(max=500) String content, @NotNull @Size(min=1,max=10) List<PlanTime> planTimes,
             @NotBlank String coverUrl, @NotBlank String coverObjectKey, Long coverFileSize,
             String coverMimeType, String coverMaterialId, @NotNull Long hostId,
-            @NotNull @Size(min=1,max=20) List<Attachment> attachments) {}
+            @NotNull @Size(min=1,max=1) List<Attachment> attachments) {}
     public record UpdateRequest(String title, String content, List<PlanTime> planTimes,
             String coverUrl, String coverObjectKey, Long coverFileSize, String coverMimeType,
             String coverMaterialId, Long hostId, List<Attachment> attachments) {}
     public record AuditRequest(@NotBlank String result, @Size(max=500) String reason) {}
     public record Result(String id, String status) {}
+    /** 新建成功：每段计划时间一条报备。 */
+    public record CreateResult(List<Result> list) {}
     /** 软删成功响应。 */
     public record DeleteResult(String id) {}
     public record Detail(String id, String title, String content, List<PlanTime> planTimes,

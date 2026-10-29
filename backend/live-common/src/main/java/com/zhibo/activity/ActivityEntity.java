@@ -58,6 +58,14 @@ public class ActivityEntity {
     @Column(name = "end_time", length = 32)
     private String endTime;
 
+    /** 开播回调首次写入的实际开始时间。 */
+    @Column(name = "live_actual_start_time")
+    private LocalDateTime liveActualStartTime;
+
+    /** 结束回调首次写入的实际结束时间。 */
+    @Column(name = "live_actual_end_time")
+    private LocalDateTime liveActualEndTime;
+
     /** 1 音频 / 2 视频 / 3 互动 / 4 录播。 */
     @Column(nullable = false)
     private Integer type;

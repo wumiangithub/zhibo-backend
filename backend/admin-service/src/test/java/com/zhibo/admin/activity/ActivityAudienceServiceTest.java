@@ -29,8 +29,13 @@ import com.zhibo.viewer.ViewerTagEntity;
 import com.zhibo.viewer.ViewerTagMemberEntity;
 import com.zhibo.viewer.ViewerTagMemberRepository;
 import com.zhibo.viewer.ViewerTagRepository;
+import com.zhibo.presence.PresenceEventRepository;
+import com.zhibo.replay.RoomReplayWatchRepository;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,12 +67,17 @@ class ActivityAudienceServiceTest {
     private SysUserAccountRepository userRepository;
     @Mock
     private ActivityAudienceImportRepository importRepository;
+    @Mock
+    private PresenceEventRepository presenceEventRepository;
+    @Mock
+    private RoomReplayWatchRepository replayWatchRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ActivityAudienceService service;
 
     @BeforeEach
     void setUp() {
+        Clock clock = Clock.fixed(Instant.parse("2026-10-29T04:00:00Z"), ZoneOffset.UTC);
         service = new ActivityAudienceService(
                 activityRepository,
                 audienceRepository,
@@ -77,7 +87,10 @@ class ActivityAudienceServiceTest {
                 viewerTagRepository,
                 userRepository,
                 importRepository,
-                objectMapper);
+                objectMapper,
+                presenceEventRepository,
+                replayWatchRepository,
+                clock);
         ActivityEntity activity = new ActivityEntity();
         activity.setId(ACTIVITY_ID);
         lenient().when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(activity));

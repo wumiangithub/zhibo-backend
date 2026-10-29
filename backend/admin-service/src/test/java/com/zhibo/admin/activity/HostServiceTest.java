@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 class HostServiceTest {
 
     private static final long USER_ID = 10001L;
-    private static final String ROLE_EMAIL = USER_ID + "@qkzb.com";
+    private static final String ROLE_EMAIL = "e" + USER_ID + "@qkzb.com";
 
     @Mock
     private ActivityService activityService;

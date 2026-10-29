@@ -2,15 +2,15 @@ package com.zhibo.activity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
-import com.zhibo.common.UuidIds;
 
 /**
  * 同一房间、同一用户只有一行。再次进入更新进入时间并清空离开时间，不插新行。
@@ -22,14 +22,14 @@ import com.zhibo.common.UuidIds;
 public class RoomAttendanceEntity {
 
     @Id
-    @Column(length = 32)
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     /** 本站活动 UUID。 */
     @Column(name = "room_id", nullable = false, length = 32)
     private String roomId;
 
-    /** 微吼进出推送里的用户 id。 */
+    /** 邮箱里的用户 id（观众数字 / 员工 e{id}）。 */
     @Column(name = "user_id", nullable = false, length = 128)
     private String userId;
 
@@ -49,11 +49,4 @@ public class RoomAttendanceEntity {
     @CreationTimestamp
     @Column(name = "created_time", nullable = false, updatable = false)
     private LocalDateTime createdTime;
-
-    @PrePersist
-    void assignIdIfMissing() {
-        if (id == null) {
-            id = UuidIds.newId();
-        }
-    }
 }

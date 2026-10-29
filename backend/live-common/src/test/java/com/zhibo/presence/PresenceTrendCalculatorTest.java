@@ -56,6 +56,23 @@ class PresenceTrendCalculatorTest {
     }
 
     @Test
+    void aggregate_leaveOneSocketKeepsUserOnline() {
+        LocalDateTime start = LocalDateTime.of(2026, 10, 29, 10, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 10, 29, 10, 3, 0);
+        List<PresenceEventEntity> events = List.of(
+                event("u1", PresenceEventEntity.TYPE_JOIN, "2026-10-29 10:00:10", "s1"),
+                event("u1", PresenceEventEntity.TYPE_JOIN, "2026-10-29 10:00:20", "s2"),
+                event("u1", PresenceEventEntity.TYPE_LEAVE, "2026-10-29 10:01:10", "s1"));
+
+        List<PresenceTrendPoint> points = PresenceTrendCalculator.aggregate(events, start, end, 60);
+
+        assertEquals(1, points.get(0).online());
+        assertEquals(1, points.get(1).online());
+        assertEquals(1, points.get(1).leave());
+        assertEquals(1, points.get(2).online());
+    }
+
+    @Test
     void aggregate_clampsOnlineAtZero() {
         LocalDateTime start = LocalDateTime.of(2026, 9, 30, 10, 0, 0);
         LocalDateTime end = LocalDateTime.of(2026, 9, 30, 10, 3, 0);
@@ -72,10 +89,15 @@ class PresenceTrendCalculatorTest {
     }
 
     private static PresenceEventEntity event(String userId, String type, String time) {
+        return event(userId, type, time, null);
+    }
+
+    private static PresenceEventEntity event(String userId, String type, String time, String socketId) {
         PresenceEventEntity e = new PresenceEventEntity();
-        e.setId(userId + "-" + type + "-" + time);
+        e.setId((long) Math.abs((userId + "-" + type + "-" + time + "-" + socketId).hashCode()));
         e.setUserId(userId);
         e.setType(type);
+        e.setSocketId(socketId);
         e.setEventTime(LocalDateTime.parse(time.replace(' ', 'T')));
         return e;
     }

@@ -29,13 +29,18 @@ import com.zhibo.viewer.ViewerTagEntity;
 import com.zhibo.viewer.ViewerTagMemberEntity;
 import com.zhibo.viewer.ViewerTagMemberRepository;
 import com.zhibo.viewer.ViewerTagRepository;
+import com.zhibo.presence.PresenceEventRepository;
+import com.zhibo.presence.WatchDurationCalculator;
+import com.zhibo.replay.RoomReplayWatchRepository;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -65,8 +70,7 @@ public class ActivityAudienceService {
     private static final Set<String> KEYWORD_TYPES = Set.of("nickname", "id", "phone");
     private static final Set<String> TAG_MATCH_MODES = Set.of("any", "all", "none");
     private static final Set<String> DURATION_OPS = Set.of("gte", "lte");
-    /** 本轮占位：列表四时长恒 0（与 API约定一致）。 */
-    private static final long PLACEHOLDER_DURATION_SEC = 0L;
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
     private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
     private static final TypeReference<List<AudienceImportResponse.ErrorItem>> FAIL_DETAILS_TYPE =
             new TypeReference<>() {};
@@ -80,6 +84,9 @@ public class ActivityAudienceService {
     private final SysUserAccountRepository userRepository;
     private final ActivityAudienceImportRepository importRepository;
     private final ObjectMapper objectMapper;
+    private final PresenceEventRepository presenceEventRepository;
+    private final RoomReplayWatchRepository replayWatchRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public AudienceListResponse list(
@@ -114,6 +121,7 @@ public class ActivityAudienceService {
                 order);
         List<ActivityAudienceEntity> all = prepared.rows();
         Map<Long, Long> commentCounts = prepared.commentCounts();
+        Map<Long, WatchDurationCalculator.Durations> durations = prepared.durations();
 
         long total = all.size();
         int from = Math.min((p - 1) * size, all.size());
@@ -135,7 +143,8 @@ public class ActivityAudienceService {
                             viewers,
                             employeeNames,
                             commentCounts,
-                            tagsByViewer.getOrDefault(row.getViewerId(), List.of())));
+                            tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
+                            durations.getOrDefault(row.getViewerId(), WatchDurationCalculator.zero())));
         }
         return response;
     }
@@ -153,7 +162,8 @@ public class ActivityAudienceService {
             Long liveWatchDurationSec,
             String sort,
             String order) {
-        String uuid = requireActivity(activityId).getId();
+        ActivityEntity activity = requireActivity(activityId);
+        String uuid = activity.getId();
         String type = resolveKeywordType(keywordType);
         String kw = keyword == null ? "" : keyword.trim();
         List<Long> filterTagIds = normalizeFilterTagIds(tagIds);
@@ -164,12 +174,12 @@ public class ActivityAudienceService {
                 resolveDurationFilter("liveWatchDuration", liveWatchDurationOp, liveWatchDurationSec);
 
         if ("id".equals(type) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
-            return new PreparedList(List.of(), Map.of());
+            return new PreparedList(List.of(), Map.of(), Map.of());
         }
 
         Set<Long> keywordViewerIds = resolveKeywordViewerIds(type, kw);
         if (keywordViewerIds != null && keywordViewerIds.isEmpty()) {
-            return new PreparedList(List.of(), Map.of());
+            return new PreparedList(List.of(), Map.of(), Map.of());
         }
 
         final Set<Long> keywordFilter = keywordViewerIds;
@@ -199,8 +209,13 @@ public class ActivityAudienceService {
         };
 
         List<ActivityAudienceEntity> all = new ArrayList<>(audienceRepository.findAll(spec));
+        Map<Long, WatchDurationCalculator.Durations> durations = WatchDurationCalculator.byViewer(
+                activity,
+                presenceEventRepository.findByRoomId(uuid),
+                replayWatchRepository.findByRoomId(uuid),
+                LocalDateTime.ofInstant(clock.instant(), SHANGHAI));
         if (totalWatchFilter != null || liveWatchFilter != null) {
-            all.removeIf(row -> !matchesDurationFilters(row, totalWatchFilter, liveWatchFilter));
+            all.removeIf(row -> !matchesDurationFilters(row, durations, totalWatchFilter, liveWatchFilter));
         }
         Map<Long, Long> commentCounts = loadCommentCounts(
                 uuid,
@@ -208,12 +223,12 @@ public class ActivityAudienceService {
 
         String sortKey = sort == null ? "" : sort.trim();
         boolean asc = "asc".equalsIgnoreCase(order);
-        Comparator<ActivityAudienceEntity> cmp = comparator(sortKey, commentCounts);
+        Comparator<ActivityAudienceEntity> cmp = comparator(sortKey, commentCounts, durations);
         if (!asc) {
             cmp = cmp.reversed();
         }
         all.sort(cmp.thenComparing(ActivityAudienceEntity::getId, Comparator.reverseOrder()));
-        return new PreparedList(all, commentCounts);
+        return new PreparedList(all, commentCounts, durations);
     }
 
     private static Predicate existsMember(
@@ -308,11 +323,16 @@ public class ActivityAudienceService {
     }
 
     private static boolean matchesDurationFilters(
-            ActivityAudienceEntity row, DurationFilter totalWatch, DurationFilter liveWatch) {
-        if (totalWatch != null && !matchesDuration(resolveTotalWatchDurationSec(row), totalWatch)) {
+            ActivityAudienceEntity row,
+            Map<Long, WatchDurationCalculator.Durations> durations,
+            DurationFilter totalWatch,
+            DurationFilter liveWatch) {
+        WatchDurationCalculator.Durations d =
+                durations.getOrDefault(row.getViewerId(), WatchDurationCalculator.zero());
+        if (totalWatch != null && !matchesDuration(d.totalSec(), totalWatch)) {
             return false;
         }
-        if (liveWatch != null && !matchesDuration(resolveLiveWatchDurationSec(row), liveWatch)) {
+        if (liveWatch != null && !matchesDuration(d.liveSec(), liveWatch)) {
             return false;
         }
         return true;
@@ -320,15 +340,6 @@ public class ActivityAudienceService {
 
     private static boolean matchesDuration(long actualSec, DurationFilter filter) {
         return "lte".equals(filter.op()) ? actualSec <= filter.sec() : actualSec >= filter.sec();
-    }
-
-    /** 本轮占位恒 0；接真实管道时从 row / 聚合表读取。 */
-    private static long resolveTotalWatchDurationSec(ActivityAudienceEntity row) {
-        return PLACEHOLDER_DURATION_SEC;
-    }
-
-    private static long resolveLiveWatchDurationSec(ActivityAudienceEntity row) {
-        return PLACEHOLDER_DURATION_SEC;
     }
 
     record DurationFilter(String op, long sec) {}
@@ -564,14 +575,15 @@ public class ActivityAudienceService {
         Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(all);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("用户,用户ID,手机号,权益状态,所属邀请人,标签,直播间停留时长,累计观看时长,直播观看时长,回放观看时长,评论次数,直播间成交金额(元)\n");
+        sb.append("用户,用户ID,手机号,权益状态,所属邀请人,标签,累计观看时长,直播观看时长,回放观看时长,评论次数,直播间成交金额(元)\n");
         for (ActivityAudienceEntity row : all) {
             AudienceListItem item = toListItem(
                     row,
                     viewers,
                     employeeNames,
                     commentCounts,
-                    tagsByViewer.getOrDefault(row.getViewerId(), List.of()));
+                    tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
+                    prepared.durations().getOrDefault(row.getViewerId(), WatchDurationCalculator.zero()));
             ViewerEntity viewer = viewers.get(row.getViewerId());
             String phone = viewer != null && viewer.getPhone() != null ? viewer.getPhone() : "";
             sb.append(csvCell(item.getNickname()))
@@ -585,8 +597,6 @@ public class ActivityAudienceService {
                     .append(csvCell(item.getInviterDisplayName()))
                     .append(',')
                     .append(csvCell(item.getTagLabels() == null ? "" : String.join("、", item.getTagLabels())))
-                    .append(',')
-                    .append(formatDurationSec(item.getStayDurationSec()))
                     .append(',')
                     .append(formatDurationSec(item.getTotalWatchDurationSec()))
                     .append(',')
@@ -651,7 +661,8 @@ public class ActivityAudienceService {
             Map<Long, ViewerEntity> viewers,
             Map<Long, String> employeeNames,
             Map<Long, Long> commentCounts,
-            List<TagRef> tags) {
+            List<TagRef> tags,
+            WatchDurationCalculator.Durations durations) {
         AudienceListItem item = new AudienceListItem();
         item.setId(row.getId());
         item.setViewerId(row.getViewerId());
@@ -690,10 +701,9 @@ public class ActivityAudienceService {
         item.setTagIds(tagIdList);
         item.setTagLabels(tagLabelList);
 
-        item.setStayDurationSec(PLACEHOLDER_DURATION_SEC);
-        item.setTotalWatchDurationSec(resolveTotalWatchDurationSec(row));
-        item.setLiveWatchDurationSec(resolveLiveWatchDurationSec(row));
-        item.setReplayWatchDurationSec(PLACEHOLDER_DURATION_SEC);
+        item.setTotalWatchDurationSec(durations.totalSec());
+        item.setLiveWatchDurationSec(durations.liveSec());
+        item.setReplayWatchDurationSec(durations.replaySec());
         item.setCommentCount(commentCounts.getOrDefault(row.getViewerId(), 0L));
         item.setDealAmount("0.00");
         return item;
@@ -786,12 +796,25 @@ public class ActivityAudienceService {
     }
 
     private static Comparator<ActivityAudienceEntity> comparator(
-            String sortKey, Map<Long, Long> commentCounts) {
+            String sortKey,
+            Map<Long, Long> commentCounts,
+            Map<Long, WatchDurationCalculator.Durations> durations) {
+        if ("stayDuration".equals(sortKey)) {
+            throw new IllegalArgumentException("stayDuration 已废除");
+        }
         return switch (sortKey) {
             case "commentCount" -> Comparator.comparingLong(
                     (ActivityAudienceEntity r) -> commentCounts.getOrDefault(r.getViewerId(), 0L));
-            case "stayDuration", "totalWatchDuration", "liveWatchDuration", "replayWatchDuration", "dealAmount" ->
-                    Comparator.comparingLong(ActivityAudienceEntity::getId);
+            case "totalWatchDuration" -> Comparator.comparingLong(
+                    (ActivityAudienceEntity r) ->
+                            durations.getOrDefault(r.getViewerId(), WatchDurationCalculator.zero()).totalSec());
+            case "liveWatchDuration" -> Comparator.comparingLong(
+                    (ActivityAudienceEntity r) ->
+                            durations.getOrDefault(r.getViewerId(), WatchDurationCalculator.zero()).liveSec());
+            case "replayWatchDuration" -> Comparator.comparingLong(
+                    (ActivityAudienceEntity r) ->
+                            durations.getOrDefault(r.getViewerId(), WatchDurationCalculator.zero()).replaySec());
+            case "dealAmount" -> Comparator.comparingLong(ActivityAudienceEntity::getId);
             default -> Comparator.comparing(
                     ActivityAudienceEntity::getCreatedTime, Comparator.nullsLast(Comparator.naturalOrder()));
         };
@@ -927,5 +950,8 @@ public class ActivityAudienceService {
 
     private record PhoneRow(int row, String phone) {}
 
-    private record PreparedList(List<ActivityAudienceEntity> rows, Map<Long, Long> commentCounts) {}
+    private record PreparedList(
+            List<ActivityAudienceEntity> rows,
+            Map<Long, Long> commentCounts,
+            Map<Long, WatchDurationCalculator.Durations> durations) {}
 }

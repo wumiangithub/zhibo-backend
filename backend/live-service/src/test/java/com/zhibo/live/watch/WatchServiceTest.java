@@ -6,9 +6,12 @@ import com.zhibo.activity.ActivityProductId;
 import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
+import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.dto.ProviderRecordItem;
+import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,7 +67,7 @@ class WatchServiceTest {
                 "https://live.example.com/watch/1001",
                 "2026-09-18 20:00:00", null, null, null, null));
 
-        WatchResponse response = watchService.watch(ID, "guest1", "小明");
+        WatchResponse response = watchService.watch(ID, "guest1", "小明", null);
         assertEquals(ID, response.getId());
         assertEquals("vhall", response.getProvider());
         assertEquals("直播课", response.getTitle());
@@ -89,7 +92,7 @@ class WatchServiceTest {
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> watchService.watch(ID, "guest1", "小明"));
+                () -> watchService.watch(ID, "guest1", "小明", null));
         assertEquals("活动不存在", ex.getMessage());
         verifyNoInteractions(providerRegistry, liveProvider);
     }
@@ -124,5 +127,37 @@ class WatchServiceTest {
         assertEquals(1, response.getList().size());
         assertEquals("20002", response.getList().get(0).getSpuId());
         assertEquals("满盈单化特训班", response.getList().get(0).getProductName());
+    }
+
+    @Test
+    void listRecords_mapsProviderIds() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.listRecords("1001")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        799703L, "回放A", "01:02:03", null, null, null, null))));
+
+        WatchRecordListResponse response = watchService.listRecords(ID);
+        assertEquals(1, response.getList().size());
+        assertEquals(799703L, response.getList().get(0).getId());
+    }
+
+    @Test
+    void listRecords_blankRoom_returnsEmpty() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+
+        WatchRecordListResponse response = watchService.listRecords(ID);
+        assertTrue(response.getList().isEmpty());
+        verifyNoInteractions(providerRegistry, liveProvider);
     }
 }

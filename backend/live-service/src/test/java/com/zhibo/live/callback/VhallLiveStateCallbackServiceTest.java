@@ -76,8 +76,24 @@ class VhallLiveStateCallbackServiceTest {
     }
 
     @Test
-    void handle_sameStateSkipsSave() {
+    void handle_sameStateStillWritesActualStartOnce() {
         ActivityEntity entity = activity(1);
+        when(roomIdResolver.resolveRoomId(WEBINAR_ID)).thenReturn(Optional.of(ACTIVITY_ID));
+        when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
+
+        Map<String, Object> body = liveStateBody(VhallLiveStateCallbackService.TYPE_START);
+        body.put("signature", VhallCallbackSignUtil.sign(SECRET, body));
+
+        assertEquals(VhallLiveStateCallbackService.HandleResult.OK, service.handle(body));
+        verify(activityRepository).save(entity);
+        assertEquals(1, entity.getState());
+        org.junit.jupiter.api.Assertions.assertNotNull(entity.getLiveActualStartTime());
+    }
+
+    @Test
+    void handle_sameStateAndActualTimeSkipsSave() {
+        ActivityEntity entity = activity(1);
+        entity.setLiveActualStartTime(LocalDateTime.of(2026, 10, 1, 12, 0));
         when(roomIdResolver.resolveRoomId(WEBINAR_ID)).thenReturn(Optional.of(ACTIVITY_ID));
         when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
 

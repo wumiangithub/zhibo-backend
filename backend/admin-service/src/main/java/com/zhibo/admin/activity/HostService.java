@@ -9,6 +9,7 @@ import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.presence.PresenceUserIds;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +23,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class HostService {
 
-    private static final String ROLE_EMAIL_DOMAIN = "@qkzb.com";
     private static final int VHALL_NICKNAME_MAX = 30;
 
     private final ActivityService activityService;
@@ -62,7 +62,7 @@ public class HostService {
                         role == ActivityMemberRole.HOST ? "用户无效" : "成员无效"));
 
         // 所有角色都传 email；本场昵称/头像优先（成员表有行则用），否则员工资料
-        String email = userId + ROLE_EMAIL_DOMAIN;
+        String email = PresenceUserIds.staffEmail(userId);
         ActivityMemberEntity member = memberOpt.orElse(null);
         String nickname = resolveNickname(member, user);
         String avatar = resolveAvatar(member, user);

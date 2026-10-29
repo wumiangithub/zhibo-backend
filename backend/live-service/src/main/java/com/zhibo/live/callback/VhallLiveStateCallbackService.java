@@ -9,6 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,6 +34,7 @@ public class VhallLiveStateCallbackService {
     static final int STATE_LIVE = 1;
     /** 本站：已结束 */
     static final int STATE_ENDED = 3;
+    static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     private final VhallProperties vhallProperties;
     private final VhallRoomIdResolver roomIdResolver;
@@ -98,14 +102,57 @@ public class VhallLiveStateCallbackService {
 
         int newState = type == TYPE_START ? STATE_LIVE : STATE_ENDED;
         Integer oldState = entity.getState();
-        if (oldState != null && oldState == newState) {
+        boolean changed = false;
+        if (oldState == null || oldState != newState) {
+            entity.setState(newState);
+            changed = true;
+        }
+        LocalDateTime eventTime = epochToShanghai(body.get("time"));
+        if (eventTime == null) {
+            eventTime = epochToShanghai(body.get("m_time"));
+        }
+        if (type == TYPE_START && entity.getLiveActualStartTime() == null && eventTime != null) {
+            entity.setLiveActualStartTime(eventTime);
+            changed = true;
+        }
+        if (type == TYPE_END && entity.getLiveActualEndTime() == null && eventTime != null) {
+            entity.setLiveActualEndTime(eventTime);
+            changed = true;
+        }
+        if (!changed) {
             return HandleResult.OK;
         }
-        entity.setState(newState);
         activityRepository.save(entity);
-        log.info("微吼开播/结束回调写回 state id={} webinar_id={} {}→{}",
-                entity.getId(), webinarId, oldState, newState);
+        log.info("微吼开播/结束回调写回 state id={} webinar_id={} {}→{} actualStart={} actualEnd={}",
+                entity.getId(), webinarId, oldState, entity.getState(),
+                entity.getLiveActualStartTime(), entity.getLiveActualEndTime());
         return HandleResult.OK;
+    }
+
+    private static LocalDateTime epochToShanghai(Object raw) {
+        Long epochSec = longVal(raw);
+        if (epochSec == null) {
+            return null;
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSec), SHANGHAI);
+    }
+
+    private static Long longVal(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            return n.longValue();
+        }
+        String s = stringVal(raw);
+        if (s == null) {
+            return null;
+        }
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private static String stringVal(Object raw) {

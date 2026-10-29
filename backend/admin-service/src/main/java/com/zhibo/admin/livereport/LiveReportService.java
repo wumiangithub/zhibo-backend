@@ -37,28 +37,46 @@ public class LiveReportService {
     private final ObjectMapper mapper;
     private final Clock clock;
 
+    /**
+     * 一次提交 1～10 段计划时间。校验通过后按段各插入一条报备：各自 UUID、各自一段计划时间、
+     * 各自一条 submit 审核记录，状态均为 pending。名称、内容、封面、主播、材料相同。
+     */
     @Transactional
-    public LiveReportDtos.Result create(LiveReportDtos.SaveRequest req, long userId) {
-        String id = UuidIds.newId();
+    public LiveReportDtos.CreateResult create(LiveReportDtos.SaveRequest req, long userId) {
         SysUserAccountEntity operator = user(userId, "当前员工不存在");
         SysUserAccountEntity host = user(requireHostId(req.hostId()), "主播不存在");
-        validateFull(id, req.title(), req.content(), req.planTimes(), req.coverUrl(),
+        // 新建封面走素材中心，校验用的 id 不会落库；客户端无法事先拼出 legacy 封面键。
+        validateFull(UuidIds.newId(), req.title(), req.content(), req.planTimes(), req.coverUrl(),
                 req.coverObjectKey(), req.coverFileSize(), req.coverMimeType(), req.coverMaterialId(),
                 req.attachments(), true);
-        LiveReportEntity e = new LiveReportEntity();
-        e.setId(id); e.setTitle(req.title().trim()); e.setContent(req.content().trim());
-        setPlans(e, req.planTimes());
-        applyCover(e, id, req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
-                req.coverMimeType(), req.coverMaterialId());
-        e.setHostId(host.getId()); e.setHostName(host.getUserName());
-        e.setHostAvatar(AuthService.resolveAvatar(host));
-        e.setAttachments(json(req.attachments())); e.setStatus("pending"); e.setBoundLiveCount(0);
-        e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
-        e.setDepartmentName(AuthService.resolveDepartmentName(operator)); e.setSubmittedTime(LocalDateTime.now(clock));
-        reports.save(e);
-        replacePlanRows(e.getId(), req.planTimes());
-        addAudit(e.getId(), "submit", null, null, operator);
-        return new LiveReportDtos.Result(e.getId(), e.getStatus());
+        LocalDateTime submitted = LocalDateTime.now(clock);
+        List<LiveReportDtos.Result> created = new ArrayList<>();
+        for (LiveReportDtos.PlanTime slot : req.planTimes()) {
+            String id = UuidIds.newId();
+            List<LiveReportDtos.PlanTime> one = List.of(slot);
+            LiveReportEntity e = new LiveReportEntity();
+            e.setId(id);
+            e.setTitle(req.title().trim());
+            e.setContent(req.content().trim());
+            setPlans(e, one);
+            applyCover(e, id, req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
+                    req.coverMimeType(), req.coverMaterialId());
+            e.setHostId(host.getId());
+            e.setHostName(host.getUserName());
+            e.setHostAvatar(AuthService.resolveAvatar(host));
+            e.setAttachments(json(req.attachments()));
+            e.setStatus("pending");
+            e.setBoundLiveCount(0);
+            e.setSubmitterId(operator.getId());
+            e.setSubmitterName(operator.getUserName());
+            e.setDepartmentName(AuthService.resolveDepartmentName(operator));
+            e.setSubmittedTime(submitted);
+            reports.save(e);
+            replacePlanRows(e.getId(), one);
+            addAudit(e.getId(), "submit", null, null, operator);
+            created.add(new LiveReportDtos.Result(e.getId(), e.getStatus()));
+        }
+        return new LiveReportDtos.CreateResult(created);
     }
 
     @Transactional(readOnly = true)
@@ -102,39 +120,11 @@ public class LiveReportService {
         return detailOf(e, hostDept.get(e.getHostId()));
     }
 
+    /** 创建之后任何状态都不可再改。不存在或已软删仍返回「报备不存在」。 */
     @Transactional
     public LiveReportDtos.Result update(String id, LiveReportDtos.UpdateRequest req, long userId) {
-        LiveReportEntity e = report(id);
-        SysUserAccountEntity operator = user(userId, "当前员工不存在");
-        if ("pending".equals(e.getStatus())) throw new IllegalArgumentException("待审核报备不可编辑");
-        if ("passed".equals(e.getStatus())) {
-            if (e.getBoundLiveCount() > 0) throw new IllegalArgumentException("已绑定直播的报备不可编辑");
-            if (req.planTimes() == null) throw new IllegalArgumentException("请提交计划时间");
-            List<LiveReportDtos.PlanTime> old = plans(e);
-            if (req.planTimes().size() <= old.size() || !req.planTimes().subList(0,old.size()).equals(old))
-                throw new IllegalArgumentException("已通过报备只能在末尾增加计划时间");
-            validatePlans(req.planTimes()); setPlans(e, req.planTimes());
-            reports.save(e);
-            replacePlanRows(id, req.planTimes());
-            addAudit(id,"append",null,"追加 "+(req.planTimes().size()-old.size())+" 段计划时间",operator);
-            return new LiveReportDtos.Result(id,e.getStatus());
-        }
-        if (!"rejected".equals(e.getStatus())) throw new IllegalArgumentException("当前状态不可编辑");
-        requireFull(req);
-        SysUserAccountEntity host = user(requireHostId(req.hostId()), "主播不存在");
-        validateFull(id,req.title(),req.content(),req.planTimes(),req.coverUrl(),req.coverObjectKey(),
-                req.coverFileSize(),req.coverMimeType(),req.coverMaterialId(),req.attachments(),false);
-        e.setTitle(req.title().trim()); e.setContent(req.content().trim()); setPlans(e, req.planTimes());
-        applyCover(e, id, req.coverUrl(), req.coverObjectKey(), req.coverFileSize(),
-                req.coverMimeType(), req.coverMaterialId());
-        e.setHostId(host.getId());
-        e.setHostName(host.getUserName()); e.setHostAvatar(AuthService.resolveAvatar(host));
-        e.setAttachments(json(req.attachments()));
-        e.setSubmitterId(operator.getId()); e.setSubmitterName(operator.getUserName());
-        e.setDepartmentName(AuthService.resolveDepartmentName(operator));
-        e.setStatus("pending"); e.setSubmittedTime(LocalDateTime.now(clock)); reports.save(e);
-        replacePlanRows(id, req.planTimes());
-        addAudit(id,"resubmit",null,null,operator); return new LiveReportDtos.Result(id,e.getStatus());
+        report(id);
+        throw new IllegalArgumentException("报备不可编辑");
     }
 
     @Transactional
@@ -201,17 +191,17 @@ public class LiveReportService {
         if(content==null||content.trim().isEmpty()||content.trim().length()>500) throw new IllegalArgumentException("报备内容需为 1~500 字");
         validatePlans(times);
         validateCover(id, coverUrl, coverKey, coverSize, coverMime, coverMaterialId);
-        // 材料统一落在 live-report/attachment/，对象名为 {batchPrefix}_{NN}_{filename}（同批前缀+递增序号，不建子目录）。
-        // 兼容历史：驳回重提仍可带旧键 live-report/{id}/attachment/。
+        // 新建材料只接受 live-report/attachment/。历史键 live-report/{id}/attachment/ 仅 create=false 时放行；更新接口已关闭。
         String shared = "live-report/attachment/";
         String scoped = "live-report/" + id + "/attachment/";
-        if(files==null||files.isEmpty()||files.size()>20) throw new IllegalArgumentException("材料需为 1~20 份");
+        if(files==null||files.size()!=1) throw new IllegalArgumentException("材料只能上传 1 份");
         for(var f:files){
-            if(f.name()==null||f.objectKey()==null) throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");
+            if(f.name()==null||f.objectKey()==null) throw new IllegalArgumentException("材料仅支持 doc、docx、pdf、txt，且大小不超过 10MB");
             String n=f.name().toLowerCase(Locale.ROOT);
             boolean prefixOk = f.objectKey().startsWith(shared) || (!create && f.objectKey().startsWith(scoped));
-            if(!prefixOk||!(n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf"))||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB)
-                throw new IllegalArgumentException("材料仅支持 doc/docx/pdf，单份不超过 10MB");
+            boolean typeOk = n.endsWith(".doc")||n.endsWith(".docx")||n.endsWith(".pdf")||n.endsWith(".txt");
+            if(!prefixOk||!typeOk||f.fileSize()==null||f.fileSize()<=0||f.fileSize()>10*MB)
+                throw new IllegalArgumentException("材料仅支持 doc、docx、pdf、txt，且大小不超过 10MB");
         }
     }
 
@@ -271,7 +261,6 @@ public class LiveReportService {
     }
     private void validatePlans(List<LiveReportDtos.PlanTime> xs){if(xs==null||xs.isEmpty()||xs.size()>10)throw new IllegalArgumentException("计划时间需为 1~10 段"); LocalDate max=LocalDate.now(clock).plusDays(7); for(var x:xs){LocalDateTime s=parse(x.startTime()),e=parse(x.endTime());if(!e.isAfter(s))throw new IllegalArgumentException("计划结束时间须晚于开始时间");if(e.toLocalDate().isAfter(max))throw new IllegalArgumentException("报备计划截止日期不能超过未来第 7 天");}}
     private LocalDateTime parse(String s){try{return LocalDateTime.parse(s,TIME);}catch(DateTimeParseException|NullPointerException ex){throw new IllegalArgumentException("时间格式须为 yyyy-MM-dd HH:mm:ss");}}
-    private void requireFull(LiveReportDtos.UpdateRequest r){if(r.title()==null||r.content()==null||r.planTimes()==null||r.coverUrl()==null||r.coverObjectKey()==null||r.hostId()==null||r.attachments()==null)throw new IllegalArgumentException("驳回后重新提交需包含完整字段");}
     private LiveReportEntity report(String id) {
         String uuid = UuidIds.require(id, "报备不存在", "报备不存在");
         LiveReportEntity e = reports.findById(uuid).orElseThrow(() -> new IllegalArgumentException("报备不存在"));

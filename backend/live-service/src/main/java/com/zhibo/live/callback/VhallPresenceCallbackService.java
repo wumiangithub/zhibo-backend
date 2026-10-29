@@ -1,6 +1,7 @@
 package com.zhibo.live.callback;
 
 import com.zhibo.presence.PresenceEventEntity;
+import com.zhibo.presence.PresenceUserIds;
 import com.zhibo.presence.PresenceWriteService;
 import com.zhibo.vhall.config.VhallProperties;
 import com.zhibo.vhall.util.VhallCallbackSignUtil;
@@ -16,13 +17,14 @@ import java.util.Map;
 
 /**
  * 微吼上下线回调（method_id=20）→ 双写。
+ * 本地开发模拟也走本类，保证校签与落库和微吼投递相同。
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class VhallPresenceCallbackService {
 
-    static final int METHOD_PRESENCE = 20;
+    public static final int METHOD_PRESENCE = 20;
     static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     private final VhallProperties vhallProperties;
@@ -72,9 +74,11 @@ public class VhallPresenceCallbackService {
             return HandleResult.BAD_REQUEST;
         }
 
-        String senderId = stringVal(body.get("sender_id"));
-        if (senderId == null || senderId.length() > 128) {
-            return HandleResult.BAD_REQUEST;
+        String email = stringVal(body.get("email"));
+        String userId = PresenceUserIds.parseEmail(email);
+        String socketId = stringVal(body.get("socket_id"));
+        if (socketId != null && socketId.length() > 64) {
+            socketId = socketId.substring(0, 64);
         }
 
         String webinarId = stringVal(body.get("webinar_id"));
@@ -98,10 +102,23 @@ public class VhallPresenceCallbackService {
             return HandleResult.OK;
         }
 
+        if (PresenceUserIds.isGuestEmail(email) || !PresenceUserIds.mayWriteRoom(userId)) {
+            log.info("微吼上下线回调游客/非可写邮箱，跳过 room_* mid={} email={}", mid, email);
+            return HandleResult.OK;
+        }
+        if (socketId == null) {
+            log.info("微吼上下线回调缺少 socket_id，跳过写库 mid={}", mid);
+            return HandleResult.OK;
+        }
+        if (userId.length() > 128) {
+            return HandleResult.BAD_REQUEST;
+        }
+
         String nickname = null;
         String avatarUrl = null;
         Object contextObj = body.get("context");
         if (contextObj instanceof Map<?, ?> context) {
+            // 观众 Join 的昵称由 PresenceWriteService 从 viewer 表覆盖；员工仍用回调 context
             nickname = truncate(stringVal(context.get("nickname")), 128);
             avatarUrl = truncate(stringVal(context.get("avatar")), 1024);
         }
@@ -109,20 +126,22 @@ public class VhallPresenceCallbackService {
         if (PresenceEventEntity.TYPE_JOIN.equals(type)) {
             presenceWriteService.applyJoin(
                     roomId.get(),
-                    senderId,
+                    userId,
                     eventTime,
                     nickname,
                     avatarUrl,
                     mid,
-                    PresenceEventEntity.SOURCE_CALLBACK);
+                    PresenceEventEntity.SOURCE_CALLBACK,
+                    socketId);
         } else {
             presenceWriteService.applyLeave(
                     roomId.get(),
-                    senderId,
+                    userId,
                     eventTime,
                     null,
                     mid,
-                    PresenceEventEntity.SOURCE_CALLBACK);
+                    PresenceEventEntity.SOURCE_CALLBACK,
+                    socketId);
         }
         return HandleResult.OK;
     }

@@ -15,8 +15,8 @@ import java.util.Set;
  * 把进出事件聚合成时间桶。
  * <ul>
  *   <li>{@code enter}/{@code leave}：该桶内 Join/Leave <strong>事件条数</strong></li>
- *   <li>{@code online}：桶结束时「当前在房」人数——按 {@code user_id} 去重
- *       （同一人反复 Join 不加人数；Leave 才移出）</li>
+ *   <li>{@code online}：桶结束时「当前在房」人数——按 {@code user_id} 去重。
+ *       有 {@code socket_id} 时，Leave 只在该人没有其它未闭合连接时移出</li>
  * </ul>
  */
 public final class PresenceTrendCalculator {
@@ -45,7 +45,7 @@ public final class PresenceTrendCalculator {
             List<PresenceEventEntity> ordered = new ArrayList<>(events);
             ordered.sort(Comparator
                     .comparing(PresenceEventEntity::getEventTime, Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(e -> e.getId() == null ? "" : e.getId()));
+                    .thenComparing(PresenceEventEntity::getId, Comparator.nullsLast(Comparator.naturalOrder())));
 
             for (PresenceEventEntity event : ordered) {
                 LocalDateTime t = event.getEventTime();
@@ -64,17 +64,17 @@ public final class PresenceTrendCalculator {
         }
 
         List<PresenceTrendPoint> points = new ArrayList<>();
-        Set<String> onlineUsers = new HashSet<>();
+        Map<String, Set<String>> openSockets = new HashMap<>();
         LocalDateTime cursor = start;
         while (cursor.isBefore(end)) {
             int[] pair = counts.getOrDefault(cursor, new int[]{0, 0});
             List<PresenceEventEntity> bucketEvents = byBucket.getOrDefault(cursor, List.of());
             for (PresenceEventEntity event : bucketEvents) {
-                applyToOnlineSet(onlineUsers, event);
+                applyToOnlineSet(openSockets, event);
             }
             points.add(new PresenceTrendPoint(
                     AttendanceTimes.format(cursor),
-                    onlineUsers.size(),
+                    openSockets.size(),
                     pair[0],
                     pair[1]));
             cursor = cursor.plusSeconds(bucketSeconds);
@@ -88,15 +88,25 @@ public final class PresenceTrendCalculator {
         return rangeStart.plusSeconds(bucketIndex * bucketSeconds);
     }
 
-    private static void applyToOnlineSet(Set<String> onlineUsers, PresenceEventEntity event) {
+    private static void applyToOnlineSet(Map<String, Set<String>> openSockets, PresenceEventEntity event) {
         String userId = event.getUserId();
         if (userId == null || userId.isBlank()) {
             return;
         }
+        String socketKey = event.getSocketId() == null || event.getSocketId().isBlank()
+                ? "_legacy"
+                : event.getSocketId().trim();
         if (PresenceEventEntity.TYPE_JOIN.equals(event.getType())) {
-            onlineUsers.add(userId);
+            openSockets.computeIfAbsent(userId, k -> new HashSet<>()).add(socketKey);
         } else if (PresenceEventEntity.TYPE_LEAVE.equals(event.getType())) {
-            onlineUsers.remove(userId);
+            Set<String> sockets = openSockets.get(userId);
+            if (sockets == null) {
+                return;
+            }
+            sockets.remove(socketKey);
+            if (sockets.isEmpty()) {
+                openSockets.remove(userId);
+            }
         }
     }
 }

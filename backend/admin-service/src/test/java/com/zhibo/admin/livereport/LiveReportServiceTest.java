@@ -21,20 +21,26 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.mockito.ArgumentCaptor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class LiveReportServiceTest {
     private static final String REPORT_ID = "3f6d06e29f8d4f5f9f3a2c9f7f0a1b01";
+    private static final String REPORT_ID_2 = "4a7e17f30a9e4b5c8d6e1f2a3b4c5d6e";
     private static final String COVER_MATERIAL_ID = "aaaaaaaabbbb4ccc8dddeeeeeeeeeeee";
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
@@ -59,66 +65,28 @@ class LiveReportServiceTest {
         when(planRows.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
     }
 
-    // ---------- 状态编辑门禁 ----------
+    // ---------- 创建后不可编辑 ----------
 
     @Test
-    void pendingReportCannotBeEdited() {
-        LiveReportEntity report = report("pending", 0);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+    void updateRejectedRegardlessOfStatus() {
+        for (String status : List.of("pending", "passed", "rejected")) {
+            LiveReportEntity entity = report(status, "passed".equals(status) ? 2 : 0);
+            when(reports.findById(REPORT_ID)).thenReturn(Optional.of(entity));
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> service.update(REPORT_ID, new LiveReportDtos.UpdateRequest(
+                            "标题", "内容", List.of(plan(1, 2)), null, null, null, null, null, null, null), 7L));
+            assertEquals("报备不可编辑", error.getMessage());
+        }
+        verify(reports, never()).save(any());
+    }
 
+    @Test
+    void updateMissingReport() {
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.empty());
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.update("r1", new LiveReportDtos.UpdateRequest(null, null, null,
+                () -> service.update(REPORT_ID, new LiveReportDtos.UpdateRequest(null, null, null,
                         null, null, null, null, null, null, null), 7L));
-
-        assertEquals("待审核报备不可编辑", error.getMessage());
-        verify(reports, never()).save(report);
-    }
-
-    @Test
-    void boundPassedReportCannotBeEdited() {
-        LiveReportEntity report = report("passed", 1);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
-
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.update("r1", new LiveReportDtos.UpdateRequest(null, null, List.of(plan(2, 3)),
-                        null, null, null, null, null, null, null), 7L));
-
-        assertEquals("已绑定直播的报备不可编辑", error.getMessage());
-    }
-
-    @Test
-    void passedReportOnlyAppendsPlanTimes() throws Exception {
-        LiveReportEntity report = report("passed", 0);
-        LiveReportDtos.PlanTime first = plan(1, 2);
-        report.setPlanTimes(mapper.writeValueAsString(List.of(first)));
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
-
-        LiveReportDtos.Result result = service.update("r1", new LiveReportDtos.UpdateRequest(
-                null, null, List.of(first, plan(3, 4)), null, null, null, null, null, null, null), 7L);
-
-        assertEquals("passed", result.status());
-        verify(reports).save(report);
-        verify(planRows).deleteByReportId("r1");
-        verify(planRows).saveAll(argThat((List<LiveReportPlanEntity> rows) -> rows.size() == 2));
-        // 追加计划时间须留审计记录
-        verify(audits).save(argThat((LiveReportAuditEntity a) ->
-                "append".equals(a.getAction()) && a.getReason() != null && a.getReason().contains("1 段")));
-    }
-
-    @Test
-    void passedAppendRejectsModifiedPrefix() throws Exception {
-        LiveReportEntity report = report("passed", 0);
-        LiveReportDtos.PlanTime first = plan(1, 2);
-        report.setPlanTimes(mapper.writeValueAsString(List.of(first)));
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
-
-        // 旧段被改动（结束时间不同），即使整体更长也必须拒绝
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.update("r1", new LiveReportDtos.UpdateRequest(null, null,
-                        List.of(plan(1, 3), plan(3, 4)), null, null, null, null, null, null, null), 7L));
-
-        assertEquals("已通过报备只能在末尾增加计划时间", error.getMessage());
-        verify(reports, never()).save(report);
+        assertEquals("报备不存在", error.getMessage());
     }
 
     // ---------- 新建校验 ----------
@@ -128,7 +96,9 @@ class LiveReportServiceTest {
         LiveReportDtos.SaveRequest req = validRequestWithTimes(
                 List.of(plan("2026-10-18 10:00:00", "2026-10-24 23:59:59")));
 
-        LiveReportDtos.Result result = service.create(req, 7L);
+        LiveReportDtos.CreateResult created = service.create(req, 7L);
+        assertEquals(1, created.list().size());
+        LiveReportDtos.Result result = created.list().get(0);
 
         assertNotNull(result.id());
         assertEquals(32, result.id().length());
@@ -147,21 +117,53 @@ class LiveReportServiceTest {
     }
 
     @Test
-    void createSyncsMultiplePlanRows() {
+    @SuppressWarnings("unchecked")
+    void createSplitsEachPlanTimeIntoItsOwnReport() {
         LiveReportDtos.SaveRequest req = validRequestWithTimes(List.of(
                 plan("2026-10-18 10:00:00", "2026-10-19 12:00:00"),
                 plan("2026-10-22 10:00:00", "2026-10-23 12:00:00")));
 
-        LiveReportDtos.Result result = service.create(req, 7L);
+        LiveReportDtos.CreateResult created = service.create(req, 7L);
 
-        verify(planRows).saveAll(argThat((List<LiveReportPlanEntity> rows) ->
-                rows.size() == 2
-                        && rows.get(0).getSortOrder() == 0
-                        && rows.get(1).getSortOrder() == 1
-                        && rows.get(0).getReportId().equals(result.id())
-                        && rows.get(1).getReportId().equals(result.id())
-                        && LocalDateTime.of(2026, 10, 18, 10, 0).equals(rows.get(0).getStartTime())
-                        && LocalDateTime.of(2026, 10, 22, 10, 0).equals(rows.get(1).getStartTime())));
+        assertEquals(2, created.list().size());
+        assertNotEquals(created.list().get(0).id(), created.list().get(1).id());
+        assertEquals("pending", created.list().get(0).status());
+        assertEquals("pending", created.list().get(1).status());
+
+        ArgumentCaptor<LiveReportEntity> saved = ArgumentCaptor.forClass(LiveReportEntity.class);
+        verify(reports, times(2)).save(saved.capture());
+        List<LiveReportEntity> rows = saved.getAllValues();
+        assertEquals(created.list().get(0).id(), rows.get(0).getId());
+        assertEquals(created.list().get(1).id(), rows.get(1).getId());
+        assertEquals("标题", rows.get(0).getTitle());
+        assertEquals(rows.get(0).getTitle(), rows.get(1).getTitle());
+        assertEquals(rows.get(0).getContent(), rows.get(1).getContent());
+        assertEquals(rows.get(0).getCoverObjectKey(), rows.get(1).getCoverObjectKey());
+        assertEquals(rows.get(0).getHostId(), rows.get(1).getHostId());
+        assertEquals(rows.get(0).getAttachments(), rows.get(1).getAttachments());
+        assertEquals(NOW, rows.get(0).getSubmittedTime());
+        assertEquals(rows.get(0).getSubmittedTime(), rows.get(1).getSubmittedTime());
+        assertTrue(rows.get(0).getPlanTimes().contains("2026-10-18 10:00:00"));
+        assertFalse(rows.get(0).getPlanTimes().contains("2026-10-22"));
+        assertTrue(rows.get(1).getPlanTimes().contains("2026-10-22 10:00:00"));
+        assertFalse(rows.get(1).getPlanTimes().contains("2026-10-18 10:00:00"));
+
+        ArgumentCaptor<List<LiveReportPlanEntity>> planCap = ArgumentCaptor.forClass(List.class);
+        verify(planRows, times(2)).saveAll(planCap.capture());
+        assertEquals(1, planCap.getAllValues().get(0).size());
+        assertEquals(rows.get(0).getId(), planCap.getAllValues().get(0).get(0).getReportId());
+        assertEquals(0, planCap.getAllValues().get(0).get(0).getSortOrder());
+        assertEquals(LocalDateTime.of(2026, 10, 18, 10, 0), planCap.getAllValues().get(0).get(0).getStartTime());
+        assertEquals(1, planCap.getAllValues().get(1).size());
+        assertEquals(rows.get(1).getId(), planCap.getAllValues().get(1).get(0).getReportId());
+        assertEquals(LocalDateTime.of(2026, 10, 22, 10, 0), planCap.getAllValues().get(1).get(0).getStartTime());
+
+        ArgumentCaptor<LiveReportAuditEntity> auditCap = ArgumentCaptor.forClass(LiveReportAuditEntity.class);
+        verify(audits, times(2)).save(auditCap.capture());
+        assertEquals("submit", auditCap.getAllValues().get(0).getAction());
+        assertEquals(rows.get(0).getId(), auditCap.getAllValues().get(0).getReportId());
+        assertEquals("submit", auditCap.getAllValues().get(1).getAction());
+        assertEquals(rows.get(1).getId(), auditCap.getAllValues().get(1).getReportId());
     }
 
     @Test
@@ -189,7 +191,8 @@ class LiveReportServiceTest {
 
     @Test
     void createAssignsServerUuid() {
-        LiveReportDtos.Result result = service.create(validRequest(), 7L);
+        LiveReportDtos.CreateResult created = service.create(validRequest(), 7L);
+        LiveReportDtos.Result result = created.list().get(0);
 
         assertEquals(32, result.id().length());
         assertTrue(result.id().matches("[0-9a-f]{32}"));
@@ -204,7 +207,7 @@ class LiveReportServiceTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.create(validRequestWithAttachments(List.of(bad)), 7L));
 
-        assertEquals("材料仅支持 doc/docx/pdf，单份不超过 10MB", error.getMessage());
+        assertEquals("材料仅支持 doc、docx、pdf、txt，且大小不超过 10MB", error.getMessage());
     }
 
     @Test
@@ -214,7 +217,7 @@ class LiveReportServiceTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.create(validRequestWithAttachments(List.of(bad)), 7L));
 
-        assertEquals("材料仅支持 doc/docx/pdf，单份不超过 10MB", error.getMessage());
+        assertEquals("材料仅支持 doc、docx、pdf、txt，且大小不超过 10MB", error.getMessage());
     }
 
     @Test
@@ -224,7 +227,7 @@ class LiveReportServiceTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.create(validRequestWithAttachments(List.of(bad)), 7L));
 
-        assertEquals("材料仅支持 doc/docx/pdf，单份不超过 10MB", error.getMessage());
+        assertEquals("材料仅支持 doc、docx、pdf、txt，且大小不超过 10MB", error.getMessage());
     }
 
     @Test
@@ -235,7 +238,28 @@ class LiveReportServiceTest {
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> service.create(validRequestWithAttachments(List.of(bad)), 7L));
 
-        assertEquals("材料仅支持 doc/docx/pdf，单份不超过 10MB", error.getMessage());
+        assertEquals("材料仅支持 doc、docx、pdf、txt，且大小不超过 10MB", error.getMessage());
+    }
+
+    @Test
+    void createRejectsMoreThanOneAttachment() {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.create(validRequestWithAttachments(List.of(
+                        attachment("a.pdf", 1024L), attachment("b.pdf", 1024L))), 7L));
+
+        assertEquals("材料只能上传 1 份", error.getMessage());
+        verify(reports, never()).save(any());
+    }
+
+    @Test
+    void createAcceptsTxtAttachment() {
+        LiveReportDtos.CreateResult created = service.create(
+                validRequestWithAttachments(List.of(attachment("说明.txt", 1024L))), 7L);
+
+        assertEquals(1, created.list().size());
+        assertEquals("pending", created.list().get(0).status());
+        verify(reports).save(argThat((LiveReportEntity e) ->
+                e.getAttachments() != null && e.getAttachments().contains("说明.txt")));
     }
 
     @Test
@@ -274,41 +298,14 @@ class LiveReportServiceTest {
         assertEquals("请选择报备封面", error.getMessage());
     }
 
-    // ---------- 驳回后重新提交 ----------
-
-    @Test
-    void rejectedResubmitRefreshesSubmitterAndStatus() {
-        LiveReportEntity report = report("rejected", 0);
-        report.setSubmitterId(99L);
-        report.setSubmitterName("旧提交人");
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
-
-        // 附件对象键须以实际报备 ID 组织（编辑不改变报备 ID）
-        LiveReportDtos.Attachment file = new LiveReportDtos.Attachment("a.pdf", "https://cdn/a.pdf",
-                "live-report/r1/attachment/a.pdf", 1024L, "application/pdf");
-        LiveReportDtos.Result result = service.update("r1", new LiveReportDtos.UpdateRequest(
-                "标题", "内容", List.of(plan("2026-10-18 10:00:00", "2026-10-18 12:00:00")),
-                "https://cdn/x.jpg", "material/image/x.jpg", 1024L, "image/jpeg", COVER_MATERIAL_ID, 8L,
-                List.of(file)), 7L);
-
-        assertEquals("pending", result.status());
-        assertEquals("pending", report.getStatus());
-        // 重新提交须刷新提交人快照为当前操作人
-        assertEquals(7L, report.getSubmitterId());
-        assertEquals("审核员", report.getSubmitterName());
-        assertEquals(NOW, report.getSubmittedTime());
-        verify(reports).save(report);
-        verify(audits).save(argThat((LiveReportAuditEntity a) -> "resubmit".equals(a.getAction())));
-    }
-
     // ---------- 审核 ----------
 
     @Test
     void auditAllowsReAuditAfterPassedOrRejected() {
         LiveReportEntity passed = report("passed", 0);
-        when(reports.findById("r1")).thenReturn(Optional.of(passed));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(passed));
 
-        LiveReportDtos.Result reReject = service.audit("r1",
+        LiveReportDtos.Result reReject = service.audit(REPORT_ID,
                 new LiveReportDtos.AuditRequest("rejected", "资料不全"), 7L);
 
         assertEquals("rejected", reReject.status());
@@ -318,9 +315,9 @@ class LiveReportServiceTest {
                         && "资料不全".equals(a.getReason())));
 
         LiveReportEntity rejected = report("rejected", 0);
-        when(reports.findById("r2")).thenReturn(Optional.of(rejected));
+        when(reports.findById(REPORT_ID_2)).thenReturn(Optional.of(rejected));
 
-        LiveReportDtos.Result rePass = service.audit("r2",
+        LiveReportDtos.Result rePass = service.audit(REPORT_ID_2,
                 new LiveReportDtos.AuditRequest("passed", null), 7L);
 
         assertEquals("passed", rePass.status());
@@ -330,10 +327,10 @@ class LiveReportServiceTest {
     @Test
     void auditRejectRequiresReason() {
         LiveReportEntity report = report("pending", 0);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(report));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.audit("r1", new LiveReportDtos.AuditRequest("rejected", "   "), 7L));
+                () -> service.audit(REPORT_ID, new LiveReportDtos.AuditRequest("rejected", "   "), 7L));
 
         assertEquals("驳回原因不能为空", error.getMessage());
         verify(reports, never()).save(report);
@@ -342,9 +339,9 @@ class LiveReportServiceTest {
     @Test
     void auditPassedWritesRecord() {
         LiveReportEntity report = report("pending", 0);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(report));
 
-        LiveReportDtos.Result result = service.audit("r1",
+        LiveReportDtos.Result result = service.audit(REPORT_ID,
                 new LiveReportDtos.AuditRequest("passed", null), 7L);
 
         assertEquals("passed", result.status());
@@ -357,9 +354,9 @@ class LiveReportServiceTest {
     @Test
     void auditPassedWithReasonPersistsReason() {
         LiveReportEntity report = report("pending", 0);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(report));
 
-        service.audit("r1", new LiveReportDtos.AuditRequest("passed", "  内容合规  "), 7L);
+        service.audit(REPORT_ID, new LiveReportDtos.AuditRequest("passed", "  内容合规  "), 7L);
 
         verify(audits).save(argThat((LiveReportAuditEntity a) ->
                 "audit".equals(a.getAction())
@@ -370,11 +367,11 @@ class LiveReportServiceTest {
     @Test
     void softDelete_setsActorAndTime() {
         LiveReportEntity report = report("passed", 2);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(report));
 
-        LiveReportDtos.DeleteResult result = service.softDelete("r1", 7L);
+        LiveReportDtos.DeleteResult result = service.softDelete(REPORT_ID, 7L);
 
-        assertEquals("r1", result.id());
+        assertEquals(REPORT_ID, result.id());
         assertNotNull(report.getDeletedTime());
         assertEquals(7L, report.getDeletedBy());
         assertEquals("审核员", report.getDeletedByName());
@@ -386,10 +383,10 @@ class LiveReportServiceTest {
     void softDelete_alreadyDeleted_rejects() {
         LiveReportEntity report = report("pending", 0);
         report.setDeletedTime(NOW);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(report));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.softDelete("r1", 7L));
+                () -> service.softDelete(REPORT_ID, 7L));
         assertEquals("报备不存在", error.getMessage());
         verify(reports, never()).save(report);
     }
@@ -398,10 +395,10 @@ class LiveReportServiceTest {
     void detail_softDeleted_rejects() {
         LiveReportEntity report = report("pending", 0);
         report.setDeletedTime(NOW);
-        when(reports.findById("r1")).thenReturn(Optional.of(report));
+        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(report));
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> service.detail("r1"));
+                () -> service.detail(REPORT_ID));
         assertEquals("报备不存在", error.getMessage());
     }
 
@@ -417,7 +414,7 @@ class LiveReportServiceTest {
 
     private LiveReportEntity report(String status, int boundCount) {
         LiveReportEntity report = new LiveReportEntity();
-        report.setId("r1");
+        report.setId(REPORT_ID);
         report.setStatus(status);
         report.setBoundLiveCount(boundCount);
         report.setPlanTimes("[]");

@@ -25,7 +25,6 @@ public class AudienceListItem {
     /** 观众全局标签 id（与 tagLabels 同序；来自 viewer_tag_member） */
     private List<Long> tagIds = new ArrayList<>();
     private List<String> tagLabels = new ArrayList<>();
-    private long stayDurationSec;
     private long totalWatchDurationSec;
     private long liveWatchDurationSec;
     private long replayWatchDurationSec;

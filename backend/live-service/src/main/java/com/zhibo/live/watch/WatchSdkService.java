@@ -10,6 +10,10 @@ import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * 观看 SDK。有 {@code viewerId} 时 email 签成 {@code {id}@qkzb.com}；
+ * {@code sdk.username} 优先用请求里非空的展示昵称（小程序 URL 已按通则算好），避免 H5 再拉 user-info。
+ */
 @Service
 @RequiredArgsConstructor
 public class WatchSdkService {
@@ -17,19 +21,21 @@ public class WatchSdkService {
     private final WatchService watchService;
     private final LiveProviderRegistry providerRegistry;
 
-    public WatchSdkResponse sdk(String activityId, String guestId, String nickname) {
+    public WatchSdkResponse sdk(String activityId, String guestId, String nickname, Long viewerId) {
         ActivityEntity entity = watchService.requireActivity(activityId);
         watchService.requireReadyForWatch(entity);
+
+        String sdkNickname = resolveSdkNickname(nickname, viewerId);
         WatchSdkBundle bundle = providerRegistry.require(entity.getProvider())
                 .buildWatchSdk(new WatchSdkCommand(
-                        entity.getProviderRoomId(), guestId, nickname));
+                        entity.getProviderRoomId(), guestId, sdkNickname, viewerId));
 
         String resolvedGuestId = bundle.getSdk() != null && bundle.getSdk().getAccount() != null
                 ? bundle.getSdk().getAccount()
                 : VhallLiveProvider.resolveGuestId(guestId);
         String resolvedNickname = bundle.getSdk() != null && bundle.getSdk().getUsername() != null
                 ? bundle.getSdk().getUsername()
-                : VhallLiveProvider.resolveNickname(nickname);
+                : sdkNickname;
 
         WatchSdkResponse response = new WatchSdkResponse();
         response.setId(entity.getId());
@@ -42,8 +48,22 @@ public class WatchSdkService {
         response.setStartTime(entity.getStartTime() != null ? entity.getStartTime() : bundle.getStartTime());
         response.setEndTime(entity.getEndTime() != null ? entity.getEndTime() : bundle.getEndTime());
         response.setEmbedUrl(bundle.getEmbedUrl());
+        response.setPlaybackEnabled(!Boolean.FALSE.equals(entity.getPlaybackEnabled()));
         response.setSdk(toSdkPayload(bundle.getSdk()));
         return response;
+    }
+
+    /**
+     * 有 viewerId 且客户端传了非空 nickname（小程序展示规则串）→ 直接用；
+     * 否则走微吼默认解析（空则「观众」）。本路径不做 viewer 表查询。
+     */
+    static String resolveSdkNickname(String nickname, Long viewerId) {
+        if (viewerId != null && viewerId > 0) {
+            if (nickname != null && !nickname.isBlank()) {
+                return VhallLiveProvider.resolveNickname(nickname.trim());
+            }
+        }
+        return VhallLiveProvider.resolveNickname(nickname);
     }
 
     private static SdkPayload toSdkPayload(WatchSdkBundle.SdkInit sdk) {
