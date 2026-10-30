@@ -46,6 +46,8 @@ public class VhallLiveProvider implements LiveProvider {
     /** 推流方式：4 = 三方推拉流（OBS）。1 是浏览器主持人开播，不要用 */
     static final String START_TYPE_THIRD_PARTY = "4";
     static final String PATH_END = "/v3/webinars/live/end";
+    /** 结束时固定创建回放：1=创建 / 0=否。见 https://vhall.apifox.cn/234257714e0 */
+    static final int END_CREATE_RECORD = 1;
     static final String PATH_DELETE = "/v3/webinars/webinar/delete";
     static final String PATH_ROLE_URL = "/v3/webinars/live/get-role-url";
     /** 取消嘉宾/助理身份；官方不含主持人。见 https://vhall.apifox.cn/234257712e0 */
@@ -345,7 +347,10 @@ public class VhallLiveProvider implements LiveProvider {
     @Override
     public int end(String providerRoomId) {
         requireRoomId(providerRoomId);
-        vhallClient.postForData(PATH_END, Map.of("webinar_id", providerRoomId), Map.class);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("webinar_id", providerRoomId);
+        params.put("create_record", END_CREATE_RECORD);
+        vhallClient.postForData(PATH_END, params, Map.class);
         ProviderRoomSnapshot info = fetchRoom(providerRoomId);
         return info.state() != null ? info.state() : 3;
     }

@@ -369,6 +369,36 @@ class VhallLiveProviderTest {
     }
 
     @Test
+    void end_callsVhallEndWithCreateRecordThenReadsState() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_END), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of());
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of("webinar_state", 3, "subject", "标题"));
+
+        int state = provider.end("752172335");
+        assertEquals(3, state);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_END), captor.capture(), eq(Map.class));
+        assertEquals("752172335", captor.getValue().get("webinar_id"));
+        assertEquals(VhallLiveProvider.END_CREATE_RECORD, captor.getValue().get("create_record"));
+        assertEquals(2, captor.getValue().size());
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_INFO), anyMap(), eq(Map.class));
+    }
+
+    @Test
+    void end_propagatesVhallFailure() {
+        VhallException failure = new VhallException(512002, "rid", "活动不存在");
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_END), anyMap(), eq(Map.class)))
+                .thenThrow(failure);
+
+        VhallException thrown = assertThrows(VhallException.class, () -> provider.end("99"));
+        assertEquals(failure, thrown);
+        verify(vhallClient, never()).postForData(eq(VhallLiveProvider.PATH_INFO), anyMap(), eq(Map.class));
+    }
+
+    @Test
     void start_propagatesVhallFailure() {
         VhallException failure = new VhallException(512002, "rid", "活动不存在");
         when(vhallClient.postForData(eq(VhallLiveProvider.PATH_START), anyMap(), eq(Map.class)))
