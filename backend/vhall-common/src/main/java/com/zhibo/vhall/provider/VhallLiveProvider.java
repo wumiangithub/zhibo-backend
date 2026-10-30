@@ -5,6 +5,7 @@ import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
+import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
@@ -53,6 +54,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
     /** 某场活动的回放列表；{@code id} 即 create-demand 的 record_id */
     static final String PATH_RECORD_LIST = "/v3/webinars/record/get-list";
+    /** 回放详情；业务参数仅 record_id。见 https://vhall.apifox.cn/234257690e0 */
+    static final String PATH_RECORD_GET_INFO = "/v3/webinars/record/get-info";
     /** 回放下载 URL；业务参数仅 record_id */
     static final String PATH_RECORD_CHECK_DOWNLOAD = "/v3/webinars/record/check-download";
     /**
@@ -478,6 +481,36 @@ public class VhallLiveProvider implements LiveProvider {
     }
 
     @Override
+    public ProviderRecordInfo getRecordInfo(long recordId) {
+        if (recordId <= 0) {
+            throw new IllegalArgumentException("recordId 无效");
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.getForData(
+                PATH_RECORD_GET_INFO, Map.of("record_id", recordId), Map.class);
+        if (data == null) {
+            throw new IllegalStateException("微吼未返回回放详情");
+        }
+        long id = asLong(data.get("id"));
+        if (id <= 0) {
+            id = recordId;
+        }
+        long webinarRaw = asLong(data.get("webinar_id"));
+        Long webinarId = webinarRaw > 0 ? webinarRaw : null;
+        Object storageRaw = data.get("storage");
+        Long storageKb = storageRaw == null ? null : asLong(storageRaw);
+        return new ProviderRecordInfo(
+                id,
+                webinarId,
+                trimToNull(asString(data.get("name"))),
+                asInteger(data.get("duration")),
+                trimToNull(asString(data.get("img_url"))),
+                storageKb,
+                trimToNull(asString(data.get("created_at")))
+        );
+    }
+
+    @Override
     public ProviderRecordDownload checkRecordDownload(long recordId) {
         if (recordId <= 0) {
             throw new IllegalArgumentException("recordId 无效");
@@ -494,9 +527,7 @@ public class VhallLiveProvider implements LiveProvider {
         }
         Integer status = asInteger(data.get("status"));
         Integer progress = asInteger(data.get("progress"));
-        if (status != null && status == 0) {
-            submitRecordDownload(id);
-        }
+        // status=0 不在此自动 submit：由列表/下载/事件 4 等调用方显式分支，避免「以为 check 已完成打包」
         return new ProviderRecordDownload(
                 id,
                 trimToNull(asString(data.get("download_url"))),
@@ -507,9 +538,13 @@ public class VhallLiveProvider implements LiveProvider {
 
     /**
      * 回放尚未打包时向微吼提交下载任务（原画）。
-     * 成功后本次检查结果仍是未开始；需再次 check-download，status=1 才有下载地址。
+     * 成功后需再次 check-download，status=1 才有下载地址。
      */
-    void submitRecordDownload(long recordId) {
+    @Override
+    public void submitRecordDownload(long recordId) {
+        if (recordId <= 0) {
+            throw new IllegalArgumentException("recordId 无效");
+        }
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("record_id", recordId);
         params.put("quality", RECORD_DOWNLOAD_QUALITY_SAME);

@@ -1,12 +1,9 @@
-package com.zhibo.live.callback;
-
-import com.zhibo.activity.ActivityEntity;
-import com.zhibo.activity.ActivityRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+package com.zhibo.activity;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 /**
  * webinar_id → 本站活动 UUID。只查本站表，不打微吼。进程内缓存。

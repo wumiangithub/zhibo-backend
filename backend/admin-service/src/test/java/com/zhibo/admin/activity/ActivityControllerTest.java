@@ -154,7 +154,9 @@ class ActivityControllerTest {
         response.setList(java.util.List.of(
                 new com.zhibo.admin.activity.dto.ActivityRecordItem(
                         799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover",
-                        "1024", "2027-09-01 10:00:00")));
+                        "1024", com.zhibo.activity.ActivityRecordEntity.STATUS_READY,
+                        "https://cdn.example/activity/record/vhall_x_799703.mp4",
+                        "https://cdn.example/activity/record/vhall_x_799703.mp4")));
         when(activityService.listRecords(eq(UUID))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/activities/records/" + UUID).accept(MediaType.APPLICATION_JSON))
@@ -164,22 +166,32 @@ class ActivityControllerTest {
                 .andExpect(jsonPath("$.data.list[0].id").value(799703))
                 .andExpect(jsonPath("$.data.list[0].title").value("回放A"))
                 .andExpect(jsonPath("$.data.list[0].storage").value("1024"))
-                .andExpect(jsonPath("$.data.list[0].saveTime").value("2027-09-01 10:00:00"));
+                .andExpect(jsonPath("$.data.list[0].status").value(4))
+                .andExpect(jsonPath("$.data.list[0].downloadUrl")
+                        .value("https://cdn.example/activity/record/vhall_x_799703.mp4"))
+                .andExpect(jsonPath("$.data.list[0].tosUrl")
+                        .value("https://cdn.example/activity/record/vhall_x_799703.mp4"))
+                .andExpect(jsonPath("$.data.list[0].saveTime").doesNotExist());
     }
 
     @Test
     void recordDownload_returnsUrl() throws Exception {
         when(activityService.recordDownload(eq(UUID), eq(5541984L))).thenReturn(
-                new com.zhibo.admin.activity.dto.ActivityRecordDownloadResponse(
-                        5541984L, "https://vod-download.vhall.com/a.zip", 1, 100));
+                com.zhibo.admin.activity.dto.ActivityRecordDownloadResponse.ready(
+                        5541984L,
+                        "https://cdn.example/activity/record/vhall_x_5541984.mp4"));
 
         mockMvc.perform(get("/api/v1/activities/records/" + UUID + "/download/5541984")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.recordId").value(5541984))
-                .andExpect(jsonPath("$.data.downloadUrl").value("https://vod-download.vhall.com/a.zip"))
-                .andExpect(jsonPath("$.data.status").value(1))
+                .andExpect(jsonPath("$.data.downloadUrl")
+                        .value("https://cdn.example/activity/record/vhall_x_5541984.mp4"))
+                .andExpect(jsonPath("$.data.tosUrl")
+                        .value("https://cdn.example/activity/record/vhall_x_5541984.mp4"))
+                .andExpect(jsonPath("$.data.packStatus").value(1))
+                .andExpect(jsonPath("$.data.status").doesNotExist())
                 .andExpect(jsonPath("$.data.progress").value(100));
     }
 }

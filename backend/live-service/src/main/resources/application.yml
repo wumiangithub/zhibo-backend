@@ -51,6 +51,11 @@ viewer:
     mp-app-id: ${WECHAT_MP_APP_ID:}
     mp-app-secret: ${WECHAT_MP_APP_SECRET:}
 
+# 回放 downloading in-flight 僵尸阈值（分钟）：按 JVM map 开始时间；重启后不在 map 立刻恢复
+zhibo:
+  activity-record:
+    downloading-stale-minutes: ${ZHIBO_ACTIVITY_RECORD_DOWNLOADING_STALE_MINUTES:30}
+
 # 火山 TOS（观众头像；与管理端共用 VOLC_*；缺省不拒启动）
 volc:
   access-key: ${VOLC_ACCESS_KEY:}

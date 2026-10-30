@@ -2,6 +2,7 @@ package com.zhibo.live.callback;
 
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.activity.VhallRoomIdResolver;
 import com.zhibo.vhall.config.VhallProperties;
 import com.zhibo.vhall.util.VhallCallbackSignUtil;
 import org.junit.jupiter.api.BeforeEach;

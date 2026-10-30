@@ -10,7 +10,10 @@ import com.zhibo.activity.ActivityMemberRepository;
 import com.zhibo.activity.ActivityMemberRole;
 import com.zhibo.activity.ActivityOwnerRepository;
 import com.zhibo.activity.ActivityProductRepository;
+import com.zhibo.activity.ActivityRecordEntity;
+import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.activity.record.ActivityRecordTosIngestService;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
@@ -77,6 +80,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -119,6 +123,10 @@ class ActivityServiceTest {
     private RecordDemandFinalizeService recordDemandFinalizeService;
     @Mock
     private HostPasscodeService hostPasscodeService;
+    @Mock
+    private ActivityRecordRepository activityRecordRepository;
+    @Mock
+    private ActivityRecordTosIngestService activityRecordTosIngestService;
 
     @InjectMocks
     private ActivityService activityService;
@@ -131,6 +139,10 @@ class ActivityServiceTest {
         org.mockito.Mockito.lenient()
                 .when(liveReportRepository.save(any(LiveReportEntity.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+        // 列表/下载投递 ingest 前会 tryMarkInFlight；默认允许投递
+        org.mockito.Mockito.lenient()
+                .when(activityRecordTosIngestService.tryMarkInFlight(anyLong()))
+                .thenReturn(true);
     }
 
     @Test
@@ -1098,34 +1110,52 @@ class ActivityServiceTest {
     }
 
     @Test
-    void listRecords_mapsProviderRecords() {
+    void listRecords_mergesLocalReadyOverProvider() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
         entity.setProvider("vhall");
         entity.setProviderRoomId("666781572");
 
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(799703L);
+        local.setTitle("本库标题");
+        local.setDurationSec(3723);
+        local.setCoverUrl("https://local-cover");
+        local.setStorageKb(4096L);
+        local.setStatus(ActivityRecordEntity.STATUS_READY);
+        local.setTosUrl("https://cdn.example/activity/record/vhall_x_799703.mp4");
+        local.setProviderCreatedTime(LocalDateTime.of(2026, 9, 1, 10, 0, 0));
+
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
         when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
                 1,
                 List.of(new ProviderRecordItem(
-                        799703L, "回放A", "01:02:03", "2026-09-01 10:00:00", "https://cover",
+                        799703L, "云侧标题", "00:00:01", "2026-01-01 00:00:00", "https://cover",
                         "2048", "2027-09-01 10:00:00"))
         ));
 
         ActivityRecordListResponse response = activityService.listRecords(uuid);
         assertEquals(1, response.getTotal());
-        assertEquals(1, response.getList().size());
         assertEquals(799703L, response.getList().get(0).getId());
-        assertEquals("回放A", response.getList().get(0).getTitle());
-        assertEquals("https://cover", response.getList().get(0).getCoverUrl());
-        assertEquals("2048", response.getList().get(0).getStorage());
-        assertEquals("2027-09-01 10:00:00", response.getList().get(0).getSaveTime());
+        assertEquals("本库标题", response.getList().get(0).getTitle());
+        assertEquals("01:02:03", response.getList().get(0).getDuration());
+        assertEquals("2026-09-01 10:00:00", response.getList().get(0).getCreatedTime());
+        assertEquals("4096", response.getList().get(0).getStorage());
+        assertEquals(ActivityRecordEntity.STATUS_READY, response.getList().get(0).getStatus());
+        assertEquals("https://cdn.example/activity/record/vhall_x_799703.mp4",
+                response.getList().get(0).getDownloadUrl());
+        assertEquals("https://cdn.example/activity/record/vhall_x_799703.mp4",
+                response.getList().get(0).getTosUrl());
+        verify(liveProvider, never()).checkRecordDownload(anyLong());
     }
 
     @Test
-    void recordDownload_mapsProviderDownload() {
+    void listRecords_missingLocal_insertsThenAsyncIngest() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = new ActivityEntity();
         entity.setId(uuid);
@@ -1134,14 +1164,571 @@ class ActivityServiceTest {
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of());
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "回放B", "00:10:00", "2026-09-02 11:00:00", "https://cover-b",
+                        "1024", null))
+        ));
+        java.util.ArrayList<Integer> savedStatuses = new java.util.ArrayList<>();
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> {
+                    ActivityRecordEntity e = inv.getArgument(0);
+                    savedStatuses.add(e.getStatus());
+                    return e;
+                });
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, "https://vod.example/b.zip", 1, 100));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(1, response.getTotal());
+        assertEquals(5541984L, response.getList().get(0).getId());
+        assertEquals("回放B", response.getList().get(0).getTitle());
+        assertEquals(ActivityRecordEntity.STATUS_DOWNLOADING, response.getList().get(0).getStatus());
+        assertNull(response.getList().get(0).getDownloadUrl());
+        assertEquals(ActivityRecordEntity.STATUS_PENDING_PACKAGE, savedStatuses.get(0));
+        assertTrue(savedStatuses.contains(ActivityRecordEntity.STATUS_DOWNLOADING));
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(activityRecordTosIngestService)
+                .processDownloadAsync(5541984L, "https://vod.example/b.zip");
+    }
+
+    @Test
+    void listRecords_getListFails_fallsBackToLocal() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(100L);
+        local.setTitle("仅本库");
+        local.setDurationSec(5);
+        local.setStatus(ActivityRecordEntity.STATUS_PENDING_PACKAGE);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
+        when(liveProvider.listRecords("666781572"))
+                .thenThrow(new VhallException(500, "rid", "get-list down"));
+        // get-list 失败仍会对本库 pending 行再 check；此处 check 返回 null → 保持 pending
+        when(liveProvider.checkRecordDownload(100L)).thenReturn(null);
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(1, response.getTotal());
+        assertEquals(100L, response.getList().get(0).getId());
+        assertEquals("仅本库", response.getList().get(0).getTitle());
+        assertEquals("00:00:05", response.getList().get(0).getDuration());
+        assertEquals(ActivityRecordEntity.STATUS_PENDING_PACKAGE, response.getList().get(0).getStatus());
+        assertNull(response.getList().get(0).getDownloadUrl());
+        verify(liveProvider).checkRecordDownload(100L);
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_missingLocal_packStatus0_insertsPendingThenPackagingAndSubmit() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of());
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "回放未打包", "00:05:00", "2026-09-03 12:00:00", "https://cover-0",
+                        "512", null))
+        ));
+        java.util.ArrayList<Integer> savedStatuses = new java.util.ArrayList<>();
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> {
+                    ActivityRecordEntity e = inv.getArgument(0);
+                    savedStatuses.add(e.getStatus());
+                    return e;
+                });
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, null, 0, 0));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(1, response.getTotal());
+        assertEquals(5541984L, response.getList().get(0).getId());
+        assertEquals(ActivityRecordEntity.STATUS_PACKAGING, response.getList().get(0).getStatus());
+        assertEquals(ActivityRecordEntity.STATUS_PENDING_PACKAGE, savedStatuses.get(0));
+        assertTrue(savedStatuses.contains(ActivityRecordEntity.STATUS_PACKAGING));
+        assertFalse(savedStatuses.contains(ActivityRecordEntity.STATUS_DOWNLOADING));
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(liveProvider).submitRecordDownload(5541984L);
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_missingLocal_packStatus3_insertsThenPackaging() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of());
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "回放C", "00:05:00", "2026-09-03 12:00:00", "https://cover-c",
+                        "512", null))
+        ));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, null, 3, 0));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(1, response.getTotal());
+        assertEquals(5541984L, response.getList().get(0).getId());
+        assertEquals("回放C", response.getList().get(0).getTitle());
+        assertEquals(ActivityRecordEntity.STATUS_PACKAGING, response.getList().get(0).getStatus());
+        assertNull(response.getList().get(0).getDownloadUrl());
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(liveProvider).submitRecordDownload(5541984L);
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_mergesLocalPendingWithProvider_advancesViaCheck() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(799703L);
+        local.setTitle("本库 pending");
+        local.setDurationSec(90);
+        local.setCoverUrl("https://local-cover-p");
+        local.setStorageKb(128L);
+        local.setStatus(ActivityRecordEntity.STATUS_PENDING_PACKAGE);
+        local.setProviderCreatedTime(LocalDateTime.of(2026, 9, 1, 10, 0, 0));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        799703L, "云侧标题", "00:01:30", "2026-01-01 00:00:00", "https://cover",
+                        "2048", null))
+        ));
+        when(liveProvider.checkRecordDownload(799703L)).thenReturn(new ProviderRecordDownload(
+                799703L, null, 2, 40));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(1, response.getTotal());
+        assertEquals(799703L, response.getList().get(0).getId());
+        assertEquals("本库 pending", response.getList().get(0).getTitle());
+        assertEquals("00:01:30", response.getList().get(0).getDuration());
+        assertEquals("2026-09-01 10:00:00", response.getList().get(0).getCreatedTime());
+        assertEquals("128", response.getList().get(0).getStorage());
+        assertEquals(ActivityRecordEntity.STATUS_PACKAGING, response.getList().get(0).getStatus());
+        assertNull(response.getList().get(0).getDownloadUrl());
+        verify(liveProvider).checkRecordDownload(799703L);
+        verify(liveProvider, never()).submitRecordDownload(anyLong());
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_pack1WithoutUrl_mustNotMarkDownloading() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of());
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "回放无URL", "00:01:00", "2026-09-02 11:00:00", null,
+                        "100", null))
+        ));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, null, 1, 100));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(1, response.getTotal());
+        assertEquals(ActivityRecordEntity.STATUS_PACKAGING, response.getList().get(0).getStatus());
+        assertNull(response.getList().get(0).getDownloadUrl());
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_stuckDownloading_rechecksAndReingests() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setTitle("卡死 downloading");
+        local.setDurationSec(60);
+        local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+        local.setTosUrl(null);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "云侧", "00:01:00", "2026-01-01 00:00:00", null, "100", null))
+        ));
+        when(activityRecordTosIngestService.isIngestInFlight(5541984L)).thenReturn(false);
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, "https://vod.example/stuck.zip", 1, 100));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(ActivityRecordEntity.STATUS_DOWNLOADING, response.getList().get(0).getStatus());
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(activityRecordTosIngestService)
+                .processDownloadAsync(5541984L, "https://vod.example/stuck.zip");
+    }
+
+    @Test
+    void listRecords_stuckDownloading_checkFails_marksFailed() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+        local.setTosUrl(null);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "云侧", "00:01:00", "2026-01-01 00:00:00", null, "100", null))
+        ));
+        when(activityRecordTosIngestService.isIngestInFlight(5541984L)).thenReturn(false);
+        when(liveProvider.checkRecordDownload(5541984L))
+                .thenThrow(new RuntimeException("vhall timeout"));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(ActivityRecordEntity.STATUS_FAILED, response.getList().get(0).getStatus());
+        verify(activityRecordTosIngestService).clearInFlight(5541984L);
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_downloadingInFlight_skipsCheck() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+        local.setTosUrl(null);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "云侧", "00:01:00", "2026-01-01 00:00:00", null, "100", null))
+        ));
+        when(activityRecordTosIngestService.isIngestInFlight(5541984L)).thenReturn(true);
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(ActivityRecordEntity.STATUS_DOWNLOADING, response.getList().get(0).getStatus());
+        verify(liveProvider, never()).checkRecordDownload(anyLong());
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void listRecords_downloadingNotInFlight_immediateRecheck() {
+        // 重启后 map 空：status=3 无 tos → 立刻 check，不依赖 updated_time
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+        local.setTosUrl(null);
+        local.setUpdatedTime(LocalDateTime.now().minusMinutes(1)); // 库时间很新也不挡恢复
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityId(uuid)).thenReturn(List.of(local));
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1,
+                List.of(new ProviderRecordItem(
+                        5541984L, "云侧", "00:01:00", "2026-01-01 00:00:00", null, "100", null))
+        ));
+        when(activityRecordTosIngestService.isIngestInFlight(5541984L)).thenReturn(false);
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, "https://vod.example/recover.zip", 1, 100));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        ActivityRecordListResponse response = activityService.listRecords(uuid);
+        assertEquals(ActivityRecordEntity.STATUS_DOWNLOADING, response.getList().get(0).getStatus());
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(activityRecordTosIngestService)
+                .processDownloadAsync(5541984L, "https://vod.example/recover.zip");
+    }
+
+    @Test
+    void recordDownload_readyLocal_returnsTosWithoutCheck() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_READY);
+        local.setTosUrl("https://cdn.example/activity/record/vhall_x_5541984.mp4");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.of(local));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(5541984L, response.getRecordId());
+        assertEquals("https://cdn.example/activity/record/vhall_x_5541984.mp4", response.getDownloadUrl());
+        assertEquals("https://cdn.example/activity/record/vhall_x_5541984.mp4", response.getTosUrl());
+        assertEquals(1, response.getPackStatus());
+        assertEquals(100, response.getProgress());
+        verify(liveProvider, never()).checkRecordDownload(anyLong());
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void recordDownload_notReady_triggersAsyncAndReturnsPackStatus2() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.empty());
+        when(liveProvider.getRecordInfo(5541984L)).thenReturn(new com.zhibo.liveprovider.dto.ProviderRecordInfo(
+                5541984L, 666781572L, "回放", 60, null, 100L, null));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
         when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
                 5541984L, "https://vod-download.vhall.com/a.zip", 1, 100));
 
         var response = activityService.recordDownload(uuid, 5541984L);
         assertEquals(5541984L, response.getRecordId());
-        assertEquals("https://vod-download.vhall.com/a.zip", response.getDownloadUrl());
-        assertEquals(1, response.getStatus());
+        assertNull(response.getDownloadUrl());
+        assertEquals(2, response.getPackStatus());
         assertEquals(100, response.getProgress());
+        verify(liveProvider).getRecordInfo(5541984L);
+        verify(activityRecordTosIngestService)
+                .processDownloadAsync(5541984L, "https://vod-download.vhall.com/a.zip");
+    }
+
+    @Test
+    void recordDownload_pendingPackage_advancesToPackaging() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_PENDING_PACKAGE);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.of(local));
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, null, 0, 0));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(5541984L, response.getRecordId());
+        assertNull(response.getDownloadUrl());
+        assertEquals(0, response.getPackStatus());
+        assertEquals(ActivityRecordEntity.STATUS_PACKAGING, local.getStatus());
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(liveProvider).submitRecordDownload(5541984L);
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void recordDownload_downloadingInFlight_returnsPackStatus2WithoutCheck() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.of(local));
+        when(activityRecordTosIngestService.isIngestInFlight(5541984L)).thenReturn(true);
+        when(activityRecordTosIngestService.getIngestStartedAt(5541984L))
+                .thenReturn(java.time.Instant.parse("2026-10-30T05:00:00Z"));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(2, response.getPackStatus());
+        assertNull(response.getDownloadUrl());
+        assertEquals("2026-10-30 13:00:00", response.getDownloadStartedTime());
+        verify(liveProvider, never()).checkRecordDownload(anyLong());
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void recordDownload_stuckDownloadingNotInFlight_immediateRecheck() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+        local.setUpdatedTime(LocalDateTime.now().minusMinutes(1));
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.of(local));
+        when(activityRecordTosIngestService.isIngestInFlight(5541984L)).thenReturn(false);
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, "https://vod.example/retry.zip", 1, 100));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(2, response.getPackStatus());
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(activityRecordTosIngestService)
+                .processDownloadAsync(5541984L, "https://vod.example/retry.zip");
+    }
+
+    @Test
+    void recordDownload_failedLocal_retriesViaCheck() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        ActivityRecordEntity local = new ActivityRecordEntity();
+        local.setActivityId(uuid);
+        local.setProvider("vhall");
+        local.setRecordId(5541984L);
+        local.setStatus(ActivityRecordEntity.STATUS_FAILED);
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.of(local));
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, null, 0, 0));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(5541984L, response.getRecordId());
+        assertNull(response.getDownloadUrl());
+        assertEquals(0, response.getPackStatus());
+        assertEquals(ActivityRecordEntity.STATUS_PACKAGING, local.getStatus());
+        verify(liveProvider).checkRecordDownload(5541984L);
+        verify(liveProvider).submitRecordDownload(5541984L);
+        verify(activityRecordTosIngestService, never()).processDownloadAsync(anyLong(), anyString());
+    }
+
+    @Test
+    void recordDownload_packFailed_resubmits() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(uuid);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("666781572");
+
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(uuid, "vhall", 5541984L))
+                .thenReturn(Optional.empty());
+        when(liveProvider.getRecordInfo(5541984L)).thenReturn(new com.zhibo.liveprovider.dto.ProviderRecordInfo(
+                5541984L, null, "x", 1, null, 1L, null));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(liveProvider.checkRecordDownload(5541984L)).thenReturn(new ProviderRecordDownload(
+                5541984L, null, 3, 0));
+
+        var response = activityService.recordDownload(uuid, 5541984L);
+        assertEquals(3, response.getPackStatus());
+        assertNull(response.getDownloadUrl());
+        verify(liveProvider).submitRecordDownload(5541984L);
     }
 
     @Test

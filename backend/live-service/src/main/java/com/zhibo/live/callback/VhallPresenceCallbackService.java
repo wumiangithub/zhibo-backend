@@ -1,5 +1,6 @@
 package com.zhibo.live.callback;
 
+import com.zhibo.activity.VhallRoomIdResolver;
 import com.zhibo.presence.PresenceEventEntity;
 import com.zhibo.presence.PresenceUserIds;
 import com.zhibo.presence.PresenceWriteService;

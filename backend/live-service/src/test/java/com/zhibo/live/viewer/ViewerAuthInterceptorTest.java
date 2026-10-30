@@ -45,6 +45,8 @@ class ViewerAuthInterceptorTest {
         assertAllowed("POST", "/api/v1/callbacks/vhall/presence");
         assertAllowed("POST", "/api/v1/callbacks/vhall/live-state");
         assertAllowed("POST", "/api/v1/callbacks/vhall/transcode");
+        assertAllowed("POST", "/api/v1/callbacks/vhall/record-generate");
+        assertAllowed("POST", "/api/v1/callbacks/vhall/record-download");
     }
 
     @Test

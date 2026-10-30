@@ -56,23 +56,30 @@ import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.material.MaterialService;
 import com.zhibo.activity.ActivityReady;
+import com.zhibo.activity.ActivityRecordEntity;
+import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.RecordDemandFinalizeService;
+import com.zhibo.activity.record.ActivityRecordTosIngestService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.presence.PresenceUserIds;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.liveprovider.dto.ProviderRecordDownload;
+import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.zhibo.livereport.LiveReportEntity;
 import com.zhibo.livereport.LiveReportRepository;
 import com.zhibo.material.MaterialAudit;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -94,6 +101,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import com.zhibo.common.UuidIds;
 import java.util.stream.Collectors;
@@ -103,6 +111,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ActivityService {
 
     private static final DateTimeFormatter CREATED_TIME =
@@ -135,6 +144,8 @@ public class ActivityService {
     private final SellPasswordCryptoService sellPasswordCrypto;
     private final LiveReportRepository liveReportRepository;
     private final RecordDemandFinalizeService recordDemandFinalizeService;
+    private final ActivityRecordRepository activityRecordRepository;
+    private final ActivityRecordTosIngestService activityRecordTosIngestService;
 
     @Transactional
     public CreateActivityResponse create(CreateActivityRequest request, long operatorId) {
@@ -774,34 +785,350 @@ public class ActivityService {
     }
 
     /**
-     * 某场本站活动下的微吼回放列表；{@code list[].id} 供 create-demand 的 recordId。
+     * 某场活动回放列表（D88）：本库行 + 微吼 get-list diff 补偿；{@code list[].id} 供 create-demand。
      */
     public ActivityRecordListResponse listRecords(String id) {
         ActivityEntity entity = requireActivity(id);
         LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
-        ProviderRecordList records = liveProvider.listRecords(entity.getProviderRoomId());
-        ActivityRecordListResponse response = new ActivityRecordListResponse();
-        response.setTotal(records.total());
-        List<ActivityRecordItem> list = new ArrayList<>();
-        for (ProviderRecordItem item : records.list()) {
-            list.add(new ActivityRecordItem(
-                    item.id(),
-                    item.title(),
-                    item.duration(),
-                    item.createdTime(),
-                    item.coverUrl(),
-                    item.storage(),
-                    item.saveTime()
-            ));
+
+        List<ActivityRecordEntity> localRows = activityRecordRepository.findByActivityId(entity.getId());
+        Map<Long, ActivityRecordEntity> localByRecordId = new LinkedHashMap<>();
+        for (ActivityRecordEntity row : localRows) {
+            if (row.getRecordId() != null && row.getRecordId() > 0) {
+                localByRecordId.putIfAbsent(row.getRecordId(), row);
+            }
         }
+
+        String roomId = entity.getProviderRoomId();
+        if (roomId == null || roomId.isBlank()) {
+            return buildRecordListFromLocalOnly(localByRecordId);
+        }
+
+        ProviderRecordList providerList;
+        try {
+            providerList = liveProvider.listRecords(roomId);
+        } catch (RuntimeException ex) {
+            log.warn("回放列表 get-list 失败，降级本库仍推进卡死行 activityId={}: {}",
+                    entity.getId(), ex.getMessage());
+            // get-list 失败也要对本库卡死 downloading / 1·2·5 再 check，避免永远停在 3
+            for (ActivityRecordEntity row : localByRecordId.values()) {
+                advanceExistingRecordOnList(liveProvider, row);
+            }
+            return buildRecordListFromLocalOnly(localByRecordId);
+        }
+
+        List<ProviderRecordItem> providerItems =
+                providerList == null || providerList.list() == null
+                        ? List.of()
+                        : providerList.list();
+
+        // 缺行：先插 pending_package(1) 再 check
+        for (ProviderRecordItem item : providerItems) {
+            if (item == null || item.id() == null || item.id() <= 0) {
+                continue;
+            }
+            ActivityRecordEntity existing = localByRecordId.get(item.id());
+            if (existing == null) {
+                ActivityRecordEntity inserted = compensateMissingRecord(entity, liveProvider, item);
+                if (inserted != null) {
+                    localByRecordId.put(item.id(), inserted);
+                }
+            }
+        }
+        // 已有 status∈{1,2,5} 或卡死 downloading(3)：全部本库行再 check（含微吼列表外的本库行）
+        for (ActivityRecordEntity row : localByRecordId.values()) {
+            advanceExistingRecordOnList(liveProvider, row);
+        }
+        // 本库比微吼多：不管（不删）；合并时仍会挂到响应末尾
+
+        LinkedHashSet<Long> seen = new LinkedHashSet<>();
+        List<ActivityRecordItem> list = new ArrayList<>();
+        for (ProviderRecordItem item : providerItems) {
+            if (item == null || item.id() == null || item.id() <= 0) {
+                continue;
+            }
+            if (!seen.add(item.id())) {
+                continue;
+            }
+            ActivityRecordEntity local = localByRecordId.get(item.id());
+            if (local != null) {
+                list.add(toRecordItemFromLocal(local));
+            } else {
+                list.add(toRecordItemFromProvider(item));
+            }
+        }
+        for (Map.Entry<Long, ActivityRecordEntity> e : localByRecordId.entrySet()) {
+            if (seen.add(e.getKey())) {
+                list.add(toRecordItemFromLocal(e.getValue()));
+            }
+        }
+
+        ActivityRecordListResponse response = new ActivityRecordListResponse();
+        response.setTotal(list.size());
+        response.setList(list);
+        return response;
+    }
+
+    private ActivityRecordListResponse buildRecordListFromLocalOnly(
+            Map<Long, ActivityRecordEntity> localByRecordId) {
+        List<ActivityRecordItem> list = new ArrayList<>();
+        for (ActivityRecordEntity row : localByRecordId.values()) {
+            list.add(toRecordItemFromLocal(row));
+        }
+        ActivityRecordListResponse response = new ActivityRecordListResponse();
+        response.setTotal(list.size());
         response.setList(list);
         return response;
     }
 
     /**
-     * 某场活动下一条回放的下载地址（微吼 check-download）。
+     * 缺行补偿：先插 {@code pending_package}（get-list 字段），再 check-download 推进。
+     *
+     * @return 本库行（含状态推进后），插失败返回 null
+     */
+    /**
+     * 缺行只插 {@code pending_package}；check 由调用方统一 {@link #advanceExistingRecordOnList}，避免同轮 double check。
+     */
+    private ActivityRecordEntity compensateMissingRecord(
+            ActivityEntity activity, LiveProvider liveProvider, ProviderRecordItem item) {
+        long recordId = item.id();
+        ActivityRecordEntity row = insertPendingPackageFromListItem(activity, item);
+        if (row == null) {
+            return activityRecordRepository
+                    .findByActivityIdAndProviderAndRecordId(
+                            activity.getId(), activity.getProvider(), recordId)
+                    .orElse(null);
+        }
+        return row;
+    }
+
+    /**
+     * 列表对已有行再 check：仅 status∈{1,2,5}，或卡死 downloading（无 tos 且不在 JVM in-flight）。
+     * 真在下（map 内且开始时间未超时）→ 跳过；不在 map（含重启清空 / 开始时间超时清僵尸）→ 立刻 check 重投，
+     * <b>不</b>等库 {@code updated_time}。
+     */
+    private void advanceExistingRecordOnList(LiveProvider liveProvider, ActivityRecordEntity row) {
+        if (row == null || row.getRecordId() == null || row.getRecordId() <= 0) {
+            return;
+        }
+        Integer st = row.getStatus();
+        if (st == null) {
+            return;
+        }
+        boolean needsAdvance =
+                st == ActivityRecordEntity.STATUS_PENDING_PACKAGE
+                        || st == ActivityRecordEntity.STATUS_PACKAGING
+                        || st == ActivityRecordEntity.STATUS_FAILED
+                        || isStuckDownloading(row);
+        if (!needsAdvance) {
+            return;
+        }
+        if (st == ActivityRecordEntity.STATUS_DOWNLOADING) {
+            // isStuckDownloading 为真时 isIngestInFlight 已为 false（含超时自清）
+            log.info("回放列表发现卡死 downloading（无 TOS 且无 in-flight），立刻 re-check recordId={}",
+                    row.getRecordId());
+        }
+        applyCheckDownloadOnList(liveProvider, row, row.getRecordId(), "列表推进已有行");
+    }
+
+    /**
+     * 卡死 downloading：status=3、无 tos_url，且不在 JVM ingest in-flight。
+     * in-flight 以内存 map（recordId→开始时间）为准：重启后 map 空 → 立刻 true；超时由 ingest 服务清 map。
+     */
+    boolean isStuckDownloading(ActivityRecordEntity row) {
+        if (row == null
+                || !Integer.valueOf(ActivityRecordEntity.STATUS_DOWNLOADING).equals(row.getStatus())) {
+            return false;
+        }
+        if (row.getTosUrl() != null && !row.getTosUrl().isBlank()) {
+            return false;
+        }
+        long recordId = row.getRecordId() == null ? 0L : row.getRecordId();
+        return !activityRecordTosIngestService.isIngestInFlight(recordId);
+    }
+
+    /**
+     * {@code packStatus=2} 且内存确有任务时，附带 {@code downloadStartedTime}。
+     */
+    private ActivityRecordDownloadResponse packingInFlight(
+            long recordId, Integer packStatus, Integer progress) {
+        ActivityRecordDownloadResponse r =
+                ActivityRecordDownloadResponse.packing(recordId, packStatus, progress);
+        if (packStatus != null && packStatus == 2) {
+            java.time.Instant started = activityRecordTosIngestService.getIngestStartedAt(recordId);
+            if (started != null) {
+                r.setDownloadStartedTime(
+                        CREATED_TIME.format(java.time.LocalDateTime.ofInstant(started, SHANGHAI)));
+            }
+        }
+        return r;
+    }
+
+    /**
+     * check-download 后按微吼 pack 状态推进本库行（列表侧显式分支，不依赖 Provider 内隐式 submit）。
+     * <ul>
+     *   <li>0 → 显式 submit → packaging(2)</li>
+     *   <li>2 → packaging(2)，本次不下载</li>
+     *   <li>1 有 URL → downloading(3) + 异步 ingest；无 URL → packaging(2)，绝不标 3</li>
+     *   <li>3 → 再 submit → packaging(2)（submit 失败 → failed）</li>
+     * </ul>
+     */
+    private void applyCheckDownloadOnList(
+            LiveProvider liveProvider, ActivityRecordEntity row, long recordId, String logTag) {
+        try {
+            ProviderRecordDownload pack = liveProvider.checkRecordDownload(recordId);
+            Integer status = pack == null ? null : pack.status();
+            String downloadUrl = pack == null ? null : pack.downloadUrl();
+            if (status != null && status == 0) {
+                try {
+                    liveProvider.submitRecordDownload(recordId);
+                    markLocalPackaging(row);
+                    log.info("{} pack=0 显式 submit → packaging recordId={}", logTag, recordId);
+                } catch (RuntimeException submitEx) {
+                    row.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                    activityRecordRepository.save(row);
+                    log.warn("{} pack=0 submit 失败 → failed recordId={}: {}",
+                            logTag, recordId, submitEx.getMessage());
+                }
+            } else if (status != null && status == 2) {
+                markLocalPackaging(row);
+                log.info("{} pack=2 → packaging（进行中，本次不下载）recordId={}", logTag, recordId);
+            } else if (status != null && status == 1
+                    && downloadUrl != null && !downloadUrl.isBlank()) {
+                if (!activityRecordTosIngestService.tryMarkInFlight(recordId)) {
+                    if (!Integer.valueOf(ActivityRecordEntity.STATUS_DOWNLOADING).equals(row.getStatus())) {
+                        row.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+                        activityRecordRepository.save(row);
+                    }
+                    log.info("{} pack=1 已有 ingest in-flight，跳过重复投递 recordId={}", logTag, recordId);
+                } else {
+                    row.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+                    activityRecordRepository.save(row);
+                    try {
+                        activityRecordTosIngestService.processDownloadAsync(recordId, downloadUrl.trim());
+                        log.info("{} pack=1 有 URL → downloading + 异步 ingest recordId={}", logTag, recordId);
+                    } catch (RuntimeException submitEx) {
+                        activityRecordTosIngestService.clearInFlight(recordId);
+                        row.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                        activityRecordRepository.save(row);
+                        log.warn("{} pack=1 投递 ingest 失败 → failed recordId={}: {}",
+                                logTag, recordId, submitEx.getMessage());
+                    }
+                }
+            } else if (status != null && status == 1) {
+                markLocalPackaging(row);
+                log.warn("{} pack=1 但无 download_url，标 packaging 不投递 ingest recordId={}",
+                        logTag, recordId);
+            } else if (status != null && status == 3) {
+                try {
+                    liveProvider.submitRecordDownload(recordId);
+                    markLocalPackaging(row);
+                    log.info("{} pack=3 再 submit → packaging recordId={}", logTag, recordId);
+                } catch (RuntimeException submitEx) {
+                    row.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                    activityRecordRepository.save(row);
+                    log.warn("{} pack=3 submit 失败 → failed recordId={}: {}",
+                            logTag, recordId, submitEx.getMessage());
+                }
+            } else {
+                log.info("{} check packStatus={} 不改 status={} recordId={}",
+                        logTag, status, row.getStatus(), recordId);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("{} check/submit 失败 recordId={}: {}", logTag, recordId, ex.getMessage());
+            // 卡死 downloading 上 check 失败 → failed，避免永久停在 3；用户可再点下载重试
+            if (Integer.valueOf(ActivityRecordEntity.STATUS_DOWNLOADING).equals(row.getStatus())
+                    && (row.getTosUrl() == null || row.getTosUrl().isBlank())) {
+                activityRecordTosIngestService.clearInFlight(recordId);
+                row.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                activityRecordRepository.save(row);
+                log.warn("{} check 失败 → failed（防卡死 downloading）recordId={}", logTag, recordId);
+            }
+        }
+    }
+
+    private void markLocalPackaging(ActivityRecordEntity row) {
+        if (!Integer.valueOf(ActivityRecordEntity.STATUS_PACKAGING).equals(row.getStatus())) {
+            row.setStatus(ActivityRecordEntity.STATUS_PACKAGING);
+            activityRecordRepository.save(row);
+        }
+    }
+
+    private ActivityRecordEntity insertPendingPackageFromListItem(
+            ActivityEntity activity, ProviderRecordItem item) {
+        ActivityRecordEntity entity = new ActivityRecordEntity();
+        entity.setActivityId(activity.getId());
+        entity.setProvider(activity.getProvider());
+        entity.setRecordId(item.id());
+        entity.setTitle(item.title());
+        entity.setDurationSec(parseDurationToSec(item.duration()));
+        entity.setCoverUrl(item.coverUrl());
+        entity.setStorageKb(parseStorageKb(item.storage()));
+        entity.setStatus(ActivityRecordEntity.STATUS_PENDING_PACKAGE);
+        entity.setProviderCreatedTime(parseProviderCreatedTime(item.createdTime()));
+        try {
+            return activityRecordRepository.save(entity);
+        } catch (DataIntegrityViolationException ex) {
+            log.info("回放列表补偿并发插行 activityId={} recordId={}",
+                    activity.getId(), item.id());
+            return null;
+        }
+    }
+
+    private static ActivityRecordItem toRecordItemFromLocal(ActivityRecordEntity row) {
+        ActivityRecordItem item = new ActivityRecordItem();
+        item.setId(row.getRecordId());
+        item.setTitle(row.getTitle());
+        item.setDuration(formatDurationSec(row.getDurationSec()));
+        item.setCreatedTime(formatProviderCreatedTime(row.getProviderCreatedTime()));
+        item.setCoverUrl(row.getCoverUrl());
+        item.setStorage(row.getStorageKb() == null ? null : String.valueOf(row.getStorageKb()));
+        item.setStatus(row.getStatus());
+        String tos = row.getTosUrl();
+        if (tos != null && !tos.isBlank()) {
+            item.setTosUrl(tos);
+            if (Integer.valueOf(ActivityRecordEntity.STATUS_READY).equals(row.getStatus())) {
+                item.setDownloadUrl(tos);
+            }
+        }
+        return item;
+    }
+
+    private static ActivityRecordItem toRecordItemFromProvider(ProviderRecordItem item) {
+        return new ActivityRecordItem(
+                item.id(),
+                item.title(),
+                item.duration(),
+                item.createdTime(),
+                item.coverUrl(),
+                item.storage(),
+                null,
+                null,
+                null);
+    }
+
+    static String formatDurationSec(Integer durationSec) {
+        if (durationSec == null || durationSec < 0) {
+            return null;
+        }
+        int total = durationSec;
+        int h = total / 3600;
+        int m = (total % 3600) / 60;
+        int s = total % 60;
+        return String.format("%02d:%02d:%02d", h, m, s);
+    }
+
+    private static String formatProviderCreatedTime(LocalDateTime time) {
+        if (time == null) {
+            return null;
+        }
+        return time.format(CREATED_TIME);
+    }
+
+    /**
+     * 某场活动下一条回放的下载地址（D88）。
      * {@code recordId} = listRecords 的 {@code list[].id}。
-     * 微吼 status=0 时由服务商实现提交打包任务，本次仍返回检查结果。
+     * 按本库状态往 {@code ready} 推进；响应 {@code packStatus} 对齐前端 Toast。
      */
     public ActivityRecordDownloadResponse recordDownload(String id, long recordId) {
         if (recordId <= 0) {
@@ -809,13 +1136,213 @@ public class ActivityService {
         }
         ActivityEntity entity = requireActivity(id);
         LiveProvider liveProvider = providerRegistry.require(entity.getProvider());
-        var info = liveProvider.checkRecordDownload(recordId);
-        return new ActivityRecordDownloadResponse(
-                info.recordId() != null ? info.recordId() : recordId,
-                info.downloadUrl(),
-                info.status(),
-                info.progress()
-        );
+
+        Optional<ActivityRecordEntity> localOpt = activityRecordRepository
+                .findByActivityIdAndProviderAndRecordId(
+                        entity.getId(), entity.getProvider(), recordId);
+        ActivityRecordEntity local = localOpt.orElse(null);
+
+        // 列表打开时可能还没有 tosUrl；点下载时本库已落 TOS → 直接回给前端下载
+        if (local != null && local.getTosUrl() != null && !local.getTosUrl().isBlank()) {
+            return ActivityRecordDownloadResponse.ready(recordId, local.getTosUrl());
+        }
+        // downloading：真在下（map 内未超时）→ 处理中；不在 map（重启/超时）→ 立刻 check 重投
+        if (local != null
+                && Integer.valueOf(ActivityRecordEntity.STATUS_DOWNLOADING).equals(local.getStatus())) {
+            if (isStuckDownloading(local)) {
+                log.info("回放下载发现卡死 downloading（无 TOS 且无 in-flight），立刻 re-check recordId={}",
+                        recordId);
+            } else {
+                return packingInFlight(recordId, 2, 0);
+            }
+        }
+
+        if (local == null) {
+            local = insertPendingPackageFromGetInfo(entity, liveProvider, recordId);
+        }
+
+        return advanceRecordDownload(liveProvider, local, recordId);
+    }
+
+    /**
+     * 下载兜底：对 {@code packaging} / {@code pending_package} / {@code failed}（及刚插行）走 check 推进。
+     */
+    private ActivityRecordDownloadResponse advanceRecordDownload(
+            LiveProvider liveProvider, ActivityRecordEntity local, long recordId) {
+        ProviderRecordDownload info;
+        try {
+            info = liveProvider.checkRecordDownload(recordId);
+        } catch (RuntimeException ex) {
+            log.warn("回放下载 check 失败 recordId={}: {}", recordId, ex.getMessage());
+            if (local != null
+                    && Integer.valueOf(ActivityRecordEntity.STATUS_DOWNLOADING).equals(local.getStatus())
+                    && (local.getTosUrl() == null || local.getTosUrl().isBlank())) {
+                activityRecordTosIngestService.clearInFlight(recordId);
+                local.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                activityRecordRepository.save(local);
+                log.warn("回放下载 check 失败 → failed（防卡死 downloading）recordId={}", recordId);
+            }
+            return ActivityRecordDownloadResponse.packing(recordId, 3, 0);
+        }
+        Integer packStatus = info == null ? null : info.status();
+        String providerUrl = info == null ? null : info.downloadUrl();
+        Integer progress = info == null ? null : info.progress();
+        long resolvedId = info != null && info.recordId() != null ? info.recordId() : recordId;
+
+        if (packStatus != null && packStatus == 0) {
+            try {
+                liveProvider.submitRecordDownload(resolvedId);
+                if (local != null) {
+                    markLocalPackaging(local);
+                }
+                log.info("回放下载 pack=0 显式 submit → packaging recordId={}", resolvedId);
+            } catch (RuntimeException ex) {
+                if (local != null) {
+                    local.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                    activityRecordRepository.save(local);
+                }
+                log.warn("回放下载 pack=0 submit 失败 → failed recordId={}: {}",
+                        resolvedId, ex.getMessage());
+            }
+            return ActivityRecordDownloadResponse.packing(resolvedId, 0, progress);
+        }
+        if (packStatus != null && packStatus == 2) {
+            if (local != null) {
+                markLocalPackaging(local);
+            }
+            return ActivityRecordDownloadResponse.packing(resolvedId, 2, progress);
+        }
+        if (packStatus != null && packStatus == 1
+                && providerUrl != null && !providerUrl.isBlank()) {
+            if (!activityRecordTosIngestService.tryMarkInFlight(resolvedId)) {
+                if (local != null
+                        && !Integer.valueOf(ActivityRecordEntity.STATUS_DOWNLOADING)
+                                .equals(local.getStatus())) {
+                    local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+                    activityRecordRepository.save(local);
+                }
+                log.info("回放下载已有 ingest in-flight，跳过重复投递 recordId={}", resolvedId);
+            } else {
+                if (local != null) {
+                    local.setStatus(ActivityRecordEntity.STATUS_DOWNLOADING);
+                    activityRecordRepository.save(local);
+                }
+                try {
+                    activityRecordTosIngestService.processDownloadAsync(resolvedId, providerUrl.trim());
+                    log.info("回放下载已投递异步 ingest recordId={}", resolvedId);
+                } catch (RuntimeException ex) {
+                    activityRecordTosIngestService.clearInFlight(resolvedId);
+                    if (local != null) {
+                        local.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                        activityRecordRepository.save(local);
+                    }
+                    log.warn("回放下载投递 ingest 失败 → failed recordId={}: {}",
+                            resolvedId, ex.getMessage());
+                }
+            }
+            return packingInFlight(resolvedId, 2, progress != null ? progress : 0);
+        }
+        if (packStatus != null && packStatus == 1) {
+            if (local != null) {
+                markLocalPackaging(local);
+            }
+            log.warn("回放下载 pack=1 但无 download_url，不投递 ingest recordId={}", resolvedId);
+            return ActivityRecordDownloadResponse.packing(
+                    resolvedId, 2, progress != null ? progress : 0);
+        }
+        if (packStatus != null && packStatus == 3) {
+            try {
+                liveProvider.submitRecordDownload(resolvedId);
+                if (local != null) {
+                    markLocalPackaging(local);
+                }
+                log.info("回放下载 pack=3 再 submit → packaging recordId={}", resolvedId);
+            } catch (RuntimeException ex) {
+                if (local != null) {
+                    local.setStatus(ActivityRecordEntity.STATUS_FAILED);
+                    activityRecordRepository.save(local);
+                }
+                log.warn("回放下载 pack=3 submit 失败 → failed recordId={}: {}",
+                        resolvedId, ex.getMessage());
+            }
+            return ActivityRecordDownloadResponse.packing(resolvedId, 3, progress);
+        }
+        return ActivityRecordDownloadResponse.packing(resolvedId, packStatus, progress);
+    }
+
+    private ActivityRecordEntity insertPendingPackageFromGetInfo(
+            ActivityEntity activity, LiveProvider liveProvider, long recordId) {
+        ProviderRecordInfo info = null;
+        try {
+            info = liveProvider.getRecordInfo(recordId);
+        } catch (RuntimeException ex) {
+            log.warn("回放下载无行 get-info 失败 activityId={} recordId={}: {}",
+                    activity.getId(), recordId, ex.getMessage());
+        }
+        ActivityRecordEntity entity = new ActivityRecordEntity();
+        entity.setActivityId(activity.getId());
+        entity.setProvider(activity.getProvider());
+        entity.setRecordId(recordId);
+        if (info != null) {
+            entity.setTitle(info.title());
+            entity.setDurationSec(info.durationSec());
+            entity.setCoverUrl(info.coverUrl());
+            entity.setStorageKb(info.storageKb());
+            entity.setProviderCreatedTime(parseProviderCreatedTime(info.createdTime()));
+        }
+        entity.setStatus(ActivityRecordEntity.STATUS_PENDING_PACKAGE);
+        try {
+            return activityRecordRepository.save(entity);
+        } catch (DataIntegrityViolationException ex) {
+            log.info("回放下载并发插行 activityId={} recordId={}", activity.getId(), recordId);
+            return activityRecordRepository
+                    .findByActivityIdAndProviderAndRecordId(
+                            activity.getId(), activity.getProvider(), recordId)
+                    .orElse(null);
+        }
+    }
+
+    static Integer parseDurationToSec(String duration) {
+        if (duration == null || duration.isBlank()) {
+            return null;
+        }
+        String[] parts = duration.trim().split(":");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            int h = Integer.parseInt(parts[0]);
+            int m = Integer.parseInt(parts[1]);
+            int s = Integer.parseInt(parts[2]);
+            if (h < 0 || m < 0 || m > 59 || s < 0 || s > 59) {
+                return null;
+            }
+            return h * 3600 + m * 60 + s;
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    static Long parseStorageKb(String storage) {
+        if (storage == null || storage.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(storage.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static LocalDateTime parseProviderCreatedTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(raw.trim(), CREATED_TIME);
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 
     /**

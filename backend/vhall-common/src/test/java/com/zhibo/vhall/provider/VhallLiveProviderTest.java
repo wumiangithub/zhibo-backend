@@ -3,6 +3,7 @@ package com.zhibo.vhall.provider;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
+import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.vhall.client.VhallClient;
 import com.zhibo.vhall.config.VhallProperties;
@@ -214,6 +215,59 @@ class VhallLiveProviderTest {
     }
 
     @Test
+    void getRecordInfo_mapsVhallFields() {
+        when(vhallClient.getForData(eq(VhallLiveProvider.PATH_RECORD_GET_INFO), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "id", 5328810,
+                        "webinar_id", 126780668,
+                        "name", "回放视频A",
+                        "img_url", "https://cover.example/a.png",
+                        "created_at", "2026-02-02 15:31:51",
+                        "duration", 308,
+                        "storage", 7107,
+                        "save_time", "永久储存"
+                ));
+
+        ProviderRecordInfo info = provider.getRecordInfo(5328810L);
+        assertEquals(5328810L, info.recordId());
+        assertEquals(126780668L, info.webinarId());
+        assertEquals("回放视频A", info.title());
+        assertEquals(308, info.durationSec());
+        assertEquals("https://cover.example/a.png", info.coverUrl());
+        assertEquals(7107L, info.storageKb());
+        assertEquals("2026-02-02 15:31:51", info.createdTime());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).getForData(
+                eq(VhallLiveProvider.PATH_RECORD_GET_INFO), captor.capture(), eq(Map.class));
+        assertEquals(5328810L, captor.getValue().get("record_id"));
+        assertEquals(1, captor.getValue().size());
+    }
+
+    @Test
+    void getRecordInfo_rejectsInvalidId() {
+        assertThrows(IllegalArgumentException.class, () -> provider.getRecordInfo(0L));
+        assertThrows(IllegalArgumentException.class, () -> provider.getRecordInfo(-1L));
+    }
+
+    @Test
+    void submitRecordDownload_postsSameQuality() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), anyMap(), eq(Object.class)))
+                .thenReturn(List.of());
+
+        provider.submitRecordDownload(5814669L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(
+                eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), captor.capture(), eq(Object.class));
+        assertEquals(5814669L, captor.getValue().get("record_id"));
+        assertEquals(VhallLiveProvider.RECORD_DOWNLOAD_QUALITY_SAME, captor.getValue().get("quality"));
+        assertEquals(2, captor.getValue().size());
+    }
+
+    @Test
     void buildChatFilterUrl_defaultsEmailAndName() {
         when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CHAT_FILTER), anyMap(), eq(Map.class)))
                 .thenReturn(Map.of("page_url", "https://e.vhall.com/v3/lives/authchat/99?live_token=t"));
@@ -256,15 +310,13 @@ class VhallLiveProviderTest {
     }
 
     @Test
-    void checkRecordDownload_submitsTaskWhenNotStarted() {
+    void checkRecordDownload_status0_doesNotAutoSubmit() {
         when(vhallClient.getForData(eq(VhallLiveProvider.PATH_RECORD_CHECK_DOWNLOAD), anyMap(), eq(Map.class)))
                 .thenReturn(Map.of(
                         "record_id", 5814669,
                         "status", 0,
                         "progress", 0
                 ));
-        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), anyMap(), eq(Object.class)))
-                .thenReturn(List.of());
 
         ProviderRecordDownload info = provider.checkRecordDownload(5814669L);
         assertEquals(5814669L, info.recordId());
@@ -272,13 +324,8 @@ class VhallLiveProviderTest {
         assertEquals(0, info.status());
         assertEquals(0, info.progress());
 
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-        verify(vhallClient).postForData(
-                eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), captor.capture(), eq(Object.class));
-        assertEquals(5814669L, captor.getValue().get("record_id"));
-        assertEquals(VhallLiveProvider.RECORD_DOWNLOAD_QUALITY_SAME, captor.getValue().get("quality"));
-        assertEquals(2, captor.getValue().size());
+        verify(vhallClient, never()).postForData(
+                eq(VhallLiveProvider.PATH_RECORD_DOWNLOAD), anyMap(), eq(Object.class));
     }
 
     @Test

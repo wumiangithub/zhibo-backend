@@ -4,6 +4,7 @@ import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
+import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
@@ -117,13 +118,33 @@ public interface LiveProvider {
     ProviderRecordList listRecords(String providerRoomId);
 
     /**
-     * 查询回放下载地址（微吼 check-download）。
-     * 微吼实现在 status=0（尚未打包）时会再提交下载任务，本次仍返回检查结果。
+     * 回放详情（微吼 get-info）。供事件 4 / 补偿落库元数据；不映射 {@code save_time}。
+     *
+     * @param recordId 云侧回放 id
+     */
+    default ProviderRecordInfo getRecordInfo(long recordId) {
+        throw new UnsupportedOperationException("该服务商未接入回放详情");
+    }
+
+    /**
+     * 查询回放打包状态 / 下载地址（微吼 check-download）。
+     * <p><b>只查询</b>：微吼 {@code status=0} 时<strong>不</strong>在 Provider 内自动 submit；
+     * 调用方须按 0/1/2/3 显式分支（0/3 → {@link #submitRecordDownload}）。
      *
      * @param recordId 回放 id（listRecords 的 {@code list[].id}）
      */
     default ProviderRecordDownload checkRecordDownload(long recordId) {
         throw new UnsupportedOperationException("该服务商未接入回放下载");
+    }
+
+    /**
+     * 提交回放打包任务（微吼 download，{@code quality=same} 原画）。
+     * 成功后需再 {@link #checkRecordDownload}；status=1 才有下载地址。
+     *
+     * @param recordId 云侧回放 id
+     */
+    default void submitRecordDownload(long recordId) {
+        throw new UnsupportedOperationException("该服务商未接入回放打包");
     }
 
     /**

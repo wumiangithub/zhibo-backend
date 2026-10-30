@@ -5,7 +5,11 @@ import com.volcengine.tos.TOSV2ClientBuilder;
 import com.volcengine.tos.TosException;
 import com.volcengine.tos.model.object.ObjectMetaRequestOptions;
 import com.volcengine.tos.model.object.PutObjectInput;
+import com.zhibo.activity.record.ActivityRecordTosClient;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -14,13 +18,16 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class ViewerTosUploader {
+public class ViewerTosUploader implements ActivityRecordTosClient {
 
     /** 观众头像。 */
     public static final String KEY_PREFIX = "viewer/avatar/";
 
     /** 意见反馈截图。 */
     public static final String FEEDBACK_PREFIX = "viewer/feedback/";
+
+    /** 活动回放成片（D88，服务端 PutObject）。 */
+    public static final String RECORD_PREFIX = ActivityRecordTosClient.RECORD_PREFIX;
 
     private final VolcTosProperties properties;
 
@@ -65,6 +72,19 @@ public class ViewerTosUploader {
             throw new ViewerTosException(502, "文件上传失败，请重试");
         }
         return publicUrl(objectKey);
+    }
+
+    /**
+     * 从本地文件 PutObject（回放成片等服务端上传）。
+     *
+     * @return 可访问 URL（优先 CDN）
+     */
+    @Override
+    public String putFile(String objectKey, Path file, String contentType) throws IOException {
+        long size = Files.size(file);
+        try (InputStream in = Files.newInputStream(file)) {
+            return put(objectKey, in, size, contentType);
+        }
     }
 
     /** 桶上的地址，对应直传 SDK 的 Location。 */
@@ -123,7 +143,9 @@ public class ViewerTosUploader {
     private static boolean isRegisteredKey(String objectKey) {
         return objectKey != null
                 && !objectKey.contains("..")
-                && (objectKey.startsWith(KEY_PREFIX) || objectKey.startsWith(FEEDBACK_PREFIX));
+                && (objectKey.startsWith(KEY_PREFIX)
+                        || objectKey.startsWith(FEEDBACK_PREFIX)
+                        || objectKey.startsWith(RECORD_PREFIX));
     }
 
     private static String stripScheme(String endpoint) {

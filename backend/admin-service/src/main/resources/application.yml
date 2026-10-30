@@ -41,11 +41,17 @@ volc:
   tos-region: ${VOLC_TOS_REGION:cn-shanghai}
   tos-endpoint: ${VOLC_TOS_ENDPOINT:tos-cn-shanghai.volces.com}
   tos-bucket: ${VOLC_TOS_BUCKET:qky-live-sucai-test}
+  tos-cdn-url: ${VOLC_TOS_CDN_URL:https://qklive-testcos.cjs99.com}
   sts-duration-seconds: ${VOLC_STS_DURATION_SECONDS:3600}
 
 # 售卖加密密码 AES（D44；与登录口令 AES 分开；密钥写 .env.local）
 activity:
   sell-password-aes-key-base64: ${ACTIVITY_SELL_PASSWORD_AES_KEY_BASE64:}
+
+# 回放 downloading in-flight 僵尸阈值（分钟）：按 JVM map 开始时间，超时清 map；重启后不在 map 立刻恢复，不看 updated_time
+zhibo:
+  activity-record:
+    downloading-stale-minutes: ${ZHIBO_ACTIVITY_RECORD_DOWNLOADING_STALE_MINUTES:30}
 
 # 管理端登录（D41；Secret/AES/JWT 优先 .env.local）
 # jwt-issuer / jwt-audience 默认对齐旧 base-admin；可经 AUTH_JWT_ISSUER / AUTH_JWT_AUDIENCE 覆盖

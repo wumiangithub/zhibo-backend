@@ -1,30 +1,64 @@
 package com.zhibo.admin.activity.dto;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * GET /api/v1/activities/records/{id}/download/{recordId} 的 data。
- * 对应微吼 check-download；status=0 时后端已提交打包任务，本次仍回检查结果。
- * downloadUrl 约 7 天有效。
+ * GET /api/v1/activities/records/{id}/download/{recordId} 的 data（D88）。
+ * 本库已有 {@code tos_url} 时回 {@code tosUrl}（及兼容字段 {@code downloadUrl}）；
+ * 否则 check-download 后可异步落 TOS。
+ * 字段名用 packStatus，避免与本库行 status INT 枚举混淆。
  */
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class ActivityRecordDownloadResponse {
 
-    /** 微吼 record_id（JSON number） */
+    /** 云侧 record_id（JSON number） */
     private Long recordId;
 
-    /** 下载地址；status=1 时可用 */
+    /**
+     * 本站 TOS/CDN；有 {@code tosUrl} 时与之同值（兼容旧前端）。
+     */
     private String downloadUrl;
 
-    /**
-     * 打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败
-     */
-    private Integer status;
+    /** 本站 TOS/CDN；有值时前端直接走下载封装 */
+    private String tosUrl;
 
-    /** 打包进度 0～100 */
+    /**
+     * 打包/落库态：0 未开始 / 1 可下载（本站已就绪）/ 2 处理中 / 3 失败
+     */
+    private Integer packStatus;
+
+    /** 进度 0～100；本站已就绪时为 100 */
     private Integer progress;
+
+    /**
+     * 本站内存任务开始下载时间 {@code yyyy-MM-dd HH:mm:ss}（上海时区）。
+     * 仅当 {@code packStatus=2} 且 JVM 确有 ingest in-flight 时返回。
+     */
+    private String downloadStartedTime;
+
+    /** 已有 TOS：{@code packStatus=1}，带 {@code tosUrl}+{@code downloadUrl}。 */
+    public static ActivityRecordDownloadResponse ready(long recordId, String tosUrl) {
+        ActivityRecordDownloadResponse r = new ActivityRecordDownloadResponse();
+        r.setRecordId(recordId);
+        String u = tosUrl == null ? null : tosUrl.trim();
+        if (u != null && !u.isEmpty()) {
+            r.setTosUrl(u);
+            r.setDownloadUrl(u);
+        }
+        r.setPackStatus(1);
+        r.setProgress(100);
+        return r;
+    }
+
+    /** 尚无 TOS：只回 pack 态。 */
+    public static ActivityRecordDownloadResponse packing(
+            long recordId, Integer packStatus, Integer progress) {
+        ActivityRecordDownloadResponse r = new ActivityRecordDownloadResponse();
+        r.setRecordId(recordId);
+        r.setPackStatus(packStatus);
+        r.setProgress(progress);
+        return r;
+    }
 }

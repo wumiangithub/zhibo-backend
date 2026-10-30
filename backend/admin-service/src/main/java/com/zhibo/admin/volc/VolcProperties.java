@@ -27,6 +27,9 @@ public class VolcProperties {
 
     private String tosBucket = "qky-live-sucai-test";
 
+    /** 落库访问前缀，如 https://qklive-testcos.cjs99.com；空则拼原生桶域名。 */
+    private String tosCdnUrl = "";
+
     /** 临时凭证有效秒数；契约建议 900～3600。 */
     private int stsDurationSeconds = 3600;
 
