@@ -1,7 +1,9 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
-import com.zhibo.activity.AttendanceTimes;
+import com.zhibo.activity.ActivityRecordEntity;
+import com.zhibo.activity.ActivityRecordRepository;
+import com.zhibo.activity.PlaybackRules;
 import com.zhibo.common.UuidIds;
 import com.zhibo.replay.RoomReplayWatchEntity;
 import com.zhibo.replay.RoomReplayWatchRepository;
@@ -21,6 +23,7 @@ public class ReplayWatchService {
 
     private final WatchService watchService;
     private final RoomReplayWatchRepository replayWatchRepository;
+    private final ActivityRecordRepository activityRecordRepository;
     private final Clock clock;
 
     @Transactional
@@ -29,7 +32,8 @@ public class ReplayWatchService {
             throw new IllegalArgumentException("recordId 须为正整数");
         }
         ActivityEntity activity = watchService.requireActivity(activityId);
-        assertReplayAllowed(activity);
+        PlaybackRules.assertReplayAllowed(activity, now());
+        requirePlayableRecord(activity, recordId);
         LocalDateTime now = now();
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
         row.setRoomId(activity.getId());
@@ -62,41 +66,21 @@ public class ReplayWatchService {
         return row.getLastReportTime();
     }
 
-    private void assertReplayAllowed(ActivityEntity activity) {
-        if (Boolean.FALSE.equals(activity.getPlaybackEnabled())) {
-            throw new IllegalArgumentException("回放未开启");
+    private void requirePlayableRecord(ActivityEntity activity, Long recordId) {
+        String provider = activity.getProvider() != null ? activity.getProvider() : "vhall";
+        ActivityRecordEntity row = activityRecordRepository
+                .findByActivityIdAndProviderAndRecordId(activity.getId(), provider, recordId)
+                .orElseThrow(() -> new IllegalArgumentException("回放不存在或未就绪"));
+        if (!Integer.valueOf(ActivityRecordEntity.STATUS_READY).equals(row.getStatus())) {
+            throw new IllegalArgumentException("回放不存在或未就绪");
         }
-        if (!"days".equals(activity.getPlaybackValidityType())) {
-            return;
-        }
-        Integer days = activity.getPlaybackValidityDays();
-        if (days == null || days < 1) {
-            return;
-        }
-        LocalDateTime from = activity.getLiveActualEndTime();
-        if (from == null) {
-            from = parseNullable(activity.getEndTime());
-        }
-        if (from == null) {
-            return;
-        }
-        if (now().isAfter(from.plusDays(days))) {
-            throw new IllegalArgumentException("回放已过期");
+        String tos = row.getTosUrl();
+        if (tos == null || tos.isBlank()) {
+            throw new IllegalArgumentException("回放不存在或未就绪");
         }
     }
 
     private LocalDateTime now() {
         return LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
-    }
-
-    private static LocalDateTime parseNullable(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return AttendanceTimes.parse(raw, "endTime");
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
     }
 }

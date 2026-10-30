@@ -4,14 +4,14 @@ import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityProductEntity;
 import com.zhibo.activity.ActivityProductId;
 import com.zhibo.activity.ActivityProductRepository;
+import com.zhibo.activity.ActivityRecordEntity;
+import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
-import com.zhibo.liveprovider.dto.ProviderRecordItem;
-import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +41,8 @@ class WatchServiceTest {
     private ActivityRepository activityRepository;
     @Mock
     private ActivityProductRepository productRepository;
+    @Mock
+    private ActivityRecordRepository activityRecordRepository;
     @Mock
     private LiveProviderRegistry providerRegistry;
     @Mock
@@ -130,31 +132,48 @@ class WatchServiceTest {
     }
 
     @Test
-    void listRecords_mapsProviderIds() {
+    void listRecords_mapsReadyLocalWithTos() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setProvider("vhall");
         entity.setProviderRoomId("1001");
         entity.setReady(1);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
-        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(liveProvider.listRecords("1001")).thenReturn(new ProviderRecordList(
-                1,
-                List.of(new ProviderRecordItem(
-                        799703L, "回放A", "01:02:03", null, null, null, null))));
+
+        ActivityRecordEntity ready = new ActivityRecordEntity();
+        ready.setRecordId(799703L);
+        ready.setTitle("回放A");
+        ready.setDurationSec(3723);
+        ready.setStatus(ActivityRecordEntity.STATUS_READY);
+        ready.setTosUrl("https://cdn.example.com/a.mp4");
+        ready.setProviderCreatedTime(LocalDateTime.of(2026, 10, 29, 18, 0));
+        ready.setCoverUrl("https://cover");
+
+        ActivityRecordEntity pending = new ActivityRecordEntity();
+        pending.setRecordId(1L);
+        pending.setStatus(ActivityRecordEntity.STATUS_PACKAGING);
+        pending.setTosUrl(null);
+
+        when(activityRecordRepository.findByActivityId(ID)).thenReturn(List.of(ready, pending));
 
         WatchRecordListResponse response = watchService.listRecords(ID);
         assertEquals(1, response.getList().size());
         assertEquals(799703L, response.getList().get(0).getId());
+        assertEquals("回放A", response.getList().get(0).getTitle());
+        assertEquals("01:02:03", response.getList().get(0).getDuration());
+        assertEquals("https://cdn.example.com/a.mp4", response.getList().get(0).getTosUrl());
+        assertEquals("2026-10-29 18:00:00", response.getList().get(0).getCreatedTime());
+        verifyNoInteractions(providerRegistry, liveProvider);
     }
 
     @Test
-    void listRecords_blankRoom_returnsEmpty() {
+    void listRecords_noReady_returnsEmpty() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setProvider("vhall");
         entity.setReady(1);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(activityRecordRepository.findByActivityId(ID)).thenReturn(List.of());
 
         WatchRecordListResponse response = watchService.listRecords(ID);
         assertTrue(response.getList().isEmpty());

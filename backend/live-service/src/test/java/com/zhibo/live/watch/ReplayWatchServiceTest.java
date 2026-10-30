@@ -1,6 +1,8 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityRecordEntity;
+import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.replay.RoomReplayWatchEntity;
 import com.zhibo.replay.RoomReplayWatchRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,17 +37,22 @@ class ReplayWatchServiceTest {
     private WatchService watchService;
     @Mock
     private RoomReplayWatchRepository replayWatchRepository;
+    @Mock
+    private ActivityRecordRepository activityRecordRepository;
 
     private ReplayWatchService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReplayWatchService(watchService, replayWatchRepository, Clock.fixed(NOW, SHANGHAI));
+        service = new ReplayWatchService(
+                watchService, replayWatchRepository, activityRecordRepository, Clock.fixed(NOW, SHANGHAI));
     }
 
     @Test
     void start_insertsRowAndReturnsSocket() {
         when(watchService.requireActivity(ROOM)).thenReturn(replayable());
+        when(activityRecordRepository.findByActivityIdAndProviderAndRecordId(ROOM, "vhall", 1001L))
+                .thenReturn(Optional.of(readyRecord(1001L)));
         when(replayWatchRepository.save(any(RoomReplayWatchEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -114,9 +121,20 @@ class ReplayWatchServiceTest {
         assertTrue(ex.getMessage().contains("不存在"));
     }
 
+    private static ActivityRecordEntity readyRecord(long recordId) {
+        ActivityRecordEntity row = new ActivityRecordEntity();
+        row.setActivityId(ROOM);
+        row.setProvider("vhall");
+        row.setRecordId(recordId);
+        row.setStatus(ActivityRecordEntity.STATUS_READY);
+        row.setTosUrl("https://cdn.example.com/a.mp4");
+        return row;
+    }
+
     private static ActivityEntity replayable() {
         ActivityEntity activity = new ActivityEntity();
         activity.setId(ROOM);
+        activity.setProvider("vhall");
         activity.setPlaybackEnabled(true);
         activity.setPlaybackValidityType("forever");
         return activity;

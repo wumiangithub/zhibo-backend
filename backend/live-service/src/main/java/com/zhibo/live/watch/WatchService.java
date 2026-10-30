@@ -4,6 +4,8 @@ import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityProductEntity;
 import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityReady;
+import com.zhibo.activity.ActivityRecordEntity;
+import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
@@ -14,8 +16,6 @@ import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
-import com.zhibo.liveprovider.dto.ProviderRecordItem;
-import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
@@ -25,15 +25,20 @@ import org.springframework.stereotype.Service;
 
 import com.zhibo.common.UuidIds;
 
-import java.util.ArrayList;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class WatchService {
 
+    private static final DateTimeFormatter CREATED_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
     private final ActivityRepository activityRepository;
     private final ActivityProductRepository productRepository;
+    private final ActivityRecordRepository activityRecordRepository;
     private final LiveProviderRegistry providerRegistry;
 
     public WatchActivityListResponse listActivities(int page, int pageSize, Integer state) {
@@ -88,26 +93,55 @@ public class WatchService {
         return response;
     }
 
-    /** 观看端回放 id 列表。start 上报用；不鉴权。 */
+    /**
+     * 观看端可播回放列表（D89）：本库 {@code status=ready} 且有 {@code tos_url}。
+     * 供结束页选片与 {@code <video src>}；不鉴权。
+     */
     public WatchRecordListResponse listRecords(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
         WatchRecordListResponse response = new WatchRecordListResponse();
-        String roomId = entity.getProviderRoomId();
-        if (roomId == null || roomId.isBlank()) {
-            return response;
-        }
-        ProviderRecordList records = providerRegistry.require(entity.getProvider()).listRecords(roomId);
-        List<WatchRecordItem> list = new ArrayList<>();
-        if (records != null && records.list() != null) {
-            for (ProviderRecordItem item : records.list()) {
-                if (item != null && item.id() != null && item.id() > 0) {
-                    list.add(new WatchRecordItem(item.id()));
-                }
-            }
-        }
+        List<WatchRecordItem> list = activityRecordRepository.findByActivityId(entity.getId()).stream()
+                .filter(row -> Integer.valueOf(ActivityRecordEntity.STATUS_READY).equals(row.getStatus()))
+                .filter(row -> row.getTosUrl() != null && !row.getTosUrl().isBlank())
+                .filter(row -> row.getRecordId() != null && row.getRecordId() > 0)
+                .sorted(Comparator
+                        .comparing(ActivityRecordEntity::getProviderCreatedTime,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(ActivityRecordEntity::getRecordId, Comparator.reverseOrder()))
+                .map(this::toWatchRecordItem)
+                .toList();
         response.setList(list);
         return response;
+    }
+
+    private WatchRecordItem toWatchRecordItem(ActivityRecordEntity row) {
+        WatchRecordItem item = new WatchRecordItem();
+        item.setId(row.getRecordId());
+        item.setTitle(row.getTitle());
+        item.setDuration(formatDurationSec(row.getDurationSec()));
+        item.setCoverUrl(row.getCoverUrl());
+        item.setTosUrl(row.getTosUrl());
+        item.setCreatedTime(formatProviderCreatedTime(row.getProviderCreatedTime()));
+        return item;
+    }
+
+    static String formatDurationSec(Integer durationSec) {
+        if (durationSec == null || durationSec < 0) {
+            return null;
+        }
+        int total = durationSec;
+        int h = total / 3600;
+        int m = (total % 3600) / 60;
+        int s = total % 60;
+        return String.format("%02d:%02d:%02d", h, m, s);
+    }
+
+    private static String formatProviderCreatedTime(LocalDateTime time) {
+        if (time == null) {
+            return null;
+        }
+        return time.format(CREATED_TIME);
     }
 
     /**

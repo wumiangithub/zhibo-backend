@@ -23,6 +23,16 @@ public class WatchSdkResponse {
     private SdkPayload sdk;
     /** 与旧 watch 接口相同，供 SDK 失败时 iframe 兜底。 */
     private String embedUrl;
-    /** 本站回放开关。结束态据此决定是否拉播放器。 */
+    /** 本站回放开关。false 时结束页不展示「查看回放」。 */
     private Boolean playbackEnabled;
+    /** forever / days；与管理端回放设置一致 */
+    private String playbackValidityType;
+    /** type=days 时的有效天数 */
+    private Integer playbackValidityDays;
+    /** 是否已超过有效期（前端禁用按钮；服务端 start 也会拦） */
+    private Boolean playbackExpired;
+    /** 是否允许倍速（&lt;video&gt; playbackRate） */
+    private Boolean playbackSpeedAllow;
+    /** 是否允许快进/拖进度（&lt;video&gt; seek） */
+    private Boolean playbackFastForwardAllow;
 }
