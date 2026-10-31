@@ -3,27 +3,21 @@ package com.zhibo.live.watch.dto;
 import lombok.Data;
 
 /**
- * 微吼 JS SDK 3.9.1 初始化载荷（前端 {@code new VhallSDK(...)}）。
+ * 微吼 JS SDK 3.9.1 init 鉴权载荷（前端 {@code new VhallSDK(...)}）。
  * <p>
- * 字段名按 {@code API约定.md} camelCase 下发；签名参与字段名见 {@link com.zhibo.live.watch.WatchSdkService}。
- * secret 不在此对象，绝不返回前端。
+ * 字段名按 {@code API约定.md} camelCase 下发；签名参与字段见 {@link com.zhibo.live.watch.WatchSdkService}。
+ * secret 不在此对象，绝不返回前端。脚本 CDN 由前端适配器加载（D93），本对象不含 {@code scriptUrl}。
  * <p>
  * 3.9.1：{@code email} 与 {@code account} 互斥；本项目只用 {@code email}。
  */
 @Data
 public class SdkPayload {
 
-    /** VhallSDK.js 官方 CDN（3.9.1）。 */
-    private String scriptUrl;
     /**
-     * 旧 2.x 依赖 jQuery；3.9.1 文档未要求。可空，前端有值才加载。
-     */
-    private String jqueryUrl;
-    /**
-     * 第三方用户 id（仅本站 guestId 回显；<strong>不要</strong>传给 3.9.1 init，与 email 互斥）。
+     * {@code String(viewerId)} 回显；<strong>不要</strong>传给 3.9.1 init（与 email 互斥）。
      */
     private String account;
-    /** {guestId}@zhibo.local，参会身份（推荐，参与签名）。 */
+    /** {@code {viewerId}@qkzb.com}，参会身份并参与签名（D92）。 */
     private String email;
     /** 昵称。 */
     private String username;

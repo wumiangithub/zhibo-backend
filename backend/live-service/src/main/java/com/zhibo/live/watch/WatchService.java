@@ -7,6 +7,7 @@ import com.zhibo.activity.ActivityReady;
 import com.zhibo.activity.ActivityRecordEntity;
 import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.activity.PlaybackRules;
 import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchProductItem;
@@ -14,6 +15,7 @@ import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchRecordItem;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
+import com.zhibo.live.watch.dto.WatchSummaryResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
@@ -25,7 +27,9 @@ import org.springframework.stereotype.Service;
 
 import com.zhibo.common.UuidIds;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
@@ -34,12 +38,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WatchService {
 
+    static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+
     private static final DateTimeFormatter CREATED_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final ActivityRepository activityRepository;
     private final ActivityProductRepository productRepository;
     private final ActivityRecordRepository activityRecordRepository;
     private final LiveProviderRegistry providerRegistry;
+    private final Clock clock;
 
     public WatchActivityListResponse listActivities(int page, int pageSize, Integer state) {
         if (page < 1) {
@@ -62,13 +69,41 @@ public class WatchService {
         return response;
     }
 
+    /**
+     * 观看页壳摘要（D95）：本库 Activity，无签名、不调微吼。
+     */
+    public WatchSummaryResponse summary(String activityId) {
+        ActivityEntity entity = requireActivity(activityId);
+        requireReadyForWatch(entity);
+
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
+        boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
+
+        WatchSummaryResponse response = new WatchSummaryResponse();
+        response.setId(entity.getId());
+        response.setProvider(entity.getProvider());
+        response.setTitle(entity.getTitle());
+        response.setState(entity.getState());
+        response.setType(entity.getType());
+        response.setStartTime(entity.getStartTime());
+        response.setEndTime(entity.getEndTime());
+        response.setPlaybackEnabled(playbackEnabled);
+        response.setPlaybackValidityType(
+                entity.getPlaybackValidityType() != null ? entity.getPlaybackValidityType() : "forever");
+        response.setPlaybackValidityDays(entity.getPlaybackValidityDays());
+        response.setPlaybackExpired(PlaybackRules.isExpired(entity, now));
+        response.setPlaybackSpeedAllow(!Boolean.FALSE.equals(entity.getPlaybackSpeedAllow()));
+        response.setPlaybackFastForwardAllow(!Boolean.FALSE.equals(entity.getPlaybackFastForwardAllow()));
+        return response;
+    }
+
     public WatchResponse watch(String activityId, String guestId, String nickname, Long viewerId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
         LiveProvider provider = providerRegistry.require(entity.getProvider());
 
         String resolvedGuestId = VhallLiveProvider.resolveGuestId(guestId);
-        // 与 /watch/sdk 一致：有 viewerId 时优先用客户端展示昵称（小程序 URL）
+        // 与 /watch/sdk-sign 一致：有 viewerId 时优先用客户端展示昵称（小程序 URL）
         String resolvedNickname = WatchSdkService.resolveSdkNickname(nickname, viewerId);
         String email = VhallLiveProvider.resolveWatchEmail(viewerId, resolvedGuestId);
 

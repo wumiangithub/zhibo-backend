@@ -31,6 +31,12 @@ public class ViewerAuthProperties {
     /** refresh 的 aud。放进 Authorization 时必须被拒绝。 */
     private String jwtRefreshAudience = "viewer-refresh";
 
+    /** 加密售卖本场访问 JWT 的 aud（D90）；勿与 viewer / viewer-refresh 混用。 */
+    private String activityAccessAudience = "activity-access";
+
+    /** 本场访问 JWT 默认有效秒数（24h）；若访问截止更早则截断。 */
+    private long activityAccessExpireSeconds = 86400;
+
     /** 微信小程序这一个渠道的 AppID / AppSecret。 */
     private Wechat wechat = new Wechat();
 

@@ -13,6 +13,7 @@ import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRecordEntity;
 import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.activity.SellPasswordCryptoService;
 import com.zhibo.activity.record.ActivityRecordTosIngestService;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
@@ -2047,33 +2048,14 @@ class ActivityServiceTest {
     }
 
     @Test
-    void updateSales_paidRequiresPriceAndLinePriceGreater() {
-        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
-        ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
-        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
-        when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        SalesUpdateRequest badLine = new SalesUpdateRequest();
-        badLine.setSellAlone(true);
-        badLine.setSellType("paid");
-        badLine.setPrice("9.90");
-        badLine.setLinePrice("9.90");
-        badLine.setAccessValidityType("long");
+    void updateSales_paidRejected() {
+        SalesUpdateRequest paid = new SalesUpdateRequest();
+        paid.setSellAlone(true);
+        paid.setSellType("paid");
+        paid.setAccessValidityType("long");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.updateSales(uuid, badLine));
-        assertEquals("划线价格须大于商品价格", ex.getMessage());
-
-        SalesUpdateRequest ok = new SalesUpdateRequest();
-        ok.setSellAlone(true);
-        ok.setSellType("paid");
-        ok.setPrice("9.90");
-        ok.setLinePrice("19.90");
-        ok.setAccessValidityType("days");
-        ok.setAccessValidityDays(30);
-        SalesUpdateResponse response = activityService.updateSales(uuid, ok);
-        assertEquals("paid", response.getSellType());
-        assertEquals("30天有效", response.getValidityLabel());
-        assertEquals("30天有效", entity.getValidityLabel());
+                () -> activityService.updateSales("a1b2c3d4e5f67890abcdef1234567890", paid));
+        assertEquals("sellType 无效", ex.getMessage());
     }
 
     @Test

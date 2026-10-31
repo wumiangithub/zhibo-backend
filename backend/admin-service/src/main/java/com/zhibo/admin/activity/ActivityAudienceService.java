@@ -6,8 +6,8 @@ import com.zhibo.activity.ActivityAudienceEntity;
 import com.zhibo.activity.ActivityAudienceImportEntity;
 import com.zhibo.activity.ActivityAudienceImportRepository;
 import com.zhibo.activity.ActivityAudienceRepository;
-import com.zhibo.activity.ActivityCommentEntity;
-import com.zhibo.activity.ActivityCommentRepository;
+import com.zhibo.activity.RoomCommentEntity;
+import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.AudienceCommentListItem;
@@ -77,7 +77,7 @@ public class ActivityAudienceService {
 
     private final ActivityRepository activityRepository;
     private final ActivityAudienceRepository audienceRepository;
-    private final ActivityCommentRepository commentRepository;
+    private final RoomCommentRepository commentRepository;
     private final ViewerRepository viewerRepository;
     private final ViewerTagMemberRepository viewerTagMemberRepository;
     private final ViewerTagRepository viewerTagRepository;
@@ -631,7 +631,7 @@ public class ActivityAudienceService {
         int p = Math.max(page, 1);
         int size = pageSize < 1 || pageSize > 100 ? 20 : pageSize;
         PageRequest pr = PageRequest.of(p - 1, size);
-        Page<ActivityCommentEntity> result;
+        Page<RoomCommentEntity> result;
         if (nickname != null && !nickname.isBlank()) {
             result = commentRepository.findByActivityIdAndNicknameContainingOrderByDeletedTimeAscCommentTimeDesc(
                     uuid, nickname.trim(), pr);
@@ -642,7 +642,7 @@ public class ActivityAudienceService {
         response.setPage(p);
         response.setPageSize(size);
         response.setTotal(result.getTotalElements());
-        for (ActivityCommentEntity c : result.getContent()) {
+        for (RoomCommentEntity c : result.getContent()) {
             AudienceCommentListItem item = new AudienceCommentListItem();
             item.setId(c.getId());
             item.setViewerId(c.getViewerId());

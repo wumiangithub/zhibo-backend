@@ -2,6 +2,7 @@ package com.zhibo.live.web;
 
 import com.zhibo.live.viewer.ViewerAuthException;
 import com.zhibo.live.volc.ViewerTosException;
+import com.zhibo.live.watch.WatchAccessException;
 import com.zhibo.liveprovider.ProviderNotAvailableException;
 import com.zhibo.vhall.exception.VhallException;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ViewerAuthException.class)
     public ApiResponse<Void> handleViewerAuth(ViewerAuthException ex) {
         log.info("观众鉴权 code={} msg={}", ex.getCode(), ex.getMessage());
+        return ApiResponse.fail(ex.getCode(), ex.getMessage());
+    }
+
+    @ExceptionHandler(WatchAccessException.class)
+    public ApiResponse<Void> handleWatchAccess(WatchAccessException ex) {
+        log.info("观看门禁 code={} msg={}", ex.getCode(), ex.getMessage());
         return ApiResponse.fail(ex.getCode(), ex.getMessage());
     }
 

@@ -14,12 +14,6 @@ public class SalesUpdateRequest {
     @NotBlank(message = "sellType 不能为空")
     private String sellType;
 
-    /** paid 时必填；≥0 最多两位小数 */
-    private String price;
-
-    /** 有值须大于 price */
-    private String linePrice;
-
     /** encrypted 时必填；恰好 6 位数字明文 */
     private String password;
 

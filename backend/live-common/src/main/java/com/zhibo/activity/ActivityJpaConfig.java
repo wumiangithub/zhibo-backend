@@ -2,6 +2,7 @@ package com.zhibo.activity;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
@@ -11,6 +12,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  * 经 AutoConfiguration.imports 加载，不依赖业务包扫 {@code com.zhibo}。
  */
 @AutoConfiguration
+@EnableConfigurationProperties(SellPasswordProperties.class)
 @EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer"})
 @EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer"})
 @ComponentScan(

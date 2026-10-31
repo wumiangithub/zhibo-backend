@@ -1,10 +1,10 @@
-package com.zhibo.admin.activity;
+package com.zhibo.activity;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 售卖加密密码 AES 密钥（与登录口令 AES 分开，见 D44 / API约定 PUT .../sales）。
+ * 售卖加密密码 AES 密钥（与登录口令 AES 分开；admin / live 共用）。
  */
 @Data
 @ConfigurationProperties(prefix = "activity")

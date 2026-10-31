@@ -11,12 +11,12 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
-/** 本站直播评论流水（D77）。 */
+/** 本站直播评论流水（D77；表名 room_comment）。 */
 @Entity
-@Table(name = "activity_comment")
+@Table(name = "room_comment")
 @Getter
 @Setter
-public class ActivityCommentEntity {
+public class RoomCommentEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

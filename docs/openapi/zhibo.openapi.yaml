@@ -12,7 +12,7 @@ info:
     分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。
     
     导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。
-  version: "2.5.0"
+  version: "2.6.0"
   contact:
     name: zhibo
 servers:
@@ -28,11 +28,20 @@ tags:
   - name: admin/直播报备
   - name: admin/课程
   - name: admin/对外课程
+  - name: admin/用户管理
   - name: admin/统计
   - name: admin/中控台
   - name: admin/员工组织
   - name: live/观看
-  - name: live/进出房
+  - name: live/观众鉴权
+  - name: live/观众资料
+  - name: live/观众上传
+  - name: live/意见反馈
+  - name: live/我的学习
+  - name: live/回放
+  - name: live/评论
+  - name: live/用户运营
+  - name: live/开发
   - name: live/中控台
   - name: live/回调
 paths:
@@ -169,6 +178,8 @@ paths:
       tags:
         - admin/图片上传
       summary: 图片上传（代理微吼）
+      deprecated: true
+      description: D60 已废弃：请改用 TOS 直传（uploads/tos-sts + 登记）。
       operationId: admin_uploadImage
       security:
         - BearerAuth:
@@ -367,8 +378,7 @@ paths:
         - name: groupId
           in: query
           schema:
-            type: string
-            format: uuid
+            $ref: "#/components/schemas/BusinessUuid"
         - name: keyword
           in: query
           schema:
@@ -572,8 +582,7 @@ paths:
                 - groupId
               properties:
                 groupId:
-                  type: string
-                  format: uuid
+                  $ref: "#/components/schemas/BusinessUuid"
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -1050,7 +1059,7 @@ paths:
       tags:
         - admin/活动管理
       summary: 回放下载
-      description: "某场活动下一条回放的打包下载地址（管理后台回放「下载」）。路径 id=本站活动 UUID；recordId=回放列表 list[].id。走微吼 check-download。非 vhall / 未接入 → 501。status=1 时 downloadUrl 可用（约 7 天有效）。"
+      description: "某场活动下一条回放的打包下载地址（管理后台回放「下载」）。路径 id=本站活动 UUID；recordId=回放列表 list[].id。按本库状态推进 TOS（D88）。非 vhall / 未接入 → 501。有 tosUrl 时直接下载。"
       operationId: admin_downloadActivityRecord
       security:
         - BearerAuth:
@@ -2047,6 +2056,1129 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAuditSubmit"
+  /api/v1/materials/audits/{id}:
+    get:
+      tags:
+        - admin/素材中心
+      summary: 素材审核记录
+      operationId: admin_listMaterialAudits
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/MaterialId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseMaterialAudits"
+  /api/v1/materials/vhall-transcode/{id}:
+    post:
+      tags:
+        - admin/素材中心
+      summary: 上传微吼转码
+      operationId: admin_materialVhallTranscode
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/MaterialId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseMaterialItem"
+  /api/v1/activities/passcode/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 查本场口令
+      operationId: admin_getActivityPasscode
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePasscode"
+  /api/v1/activities/passcode/reset/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 重置口令
+      operationId: admin_resetActivityPasscode
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePasscode"
+  /api/v1/outside/host/passcode/enter:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 口令进房
+      description: 不鉴权；H5/App 口令开播共用。
+      operationId: admin_passcodeHostEnter
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasscodeHostEnterRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponsePasscodeHostEnter"
+  /api/v1/activities/audiences/list/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 用户运营名单
+      operationId: admin_listActivityAudiences
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - id
+              - phone
+            default: nickname
+            description: nickname 昵称 / id 用户ID / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: id
+                name: 用户ID
+                description: 用户ID
+              - value: phone
+                name: 手机号
+                description: 手机号
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: tagIds
+          in: query
+          schema:
+            type: string
+          description: 逗号分隔标签 id
+        - name: tagMatch
+          in: query
+          schema:
+            type: string
+            enum:
+              - any
+              - none
+              - all
+            default: any
+            description: any 满足其一 / none 不包含 / all 全部满足
+            x-apifox-enum:
+              - value: any
+                name: 满足其一
+                description: 满足其一
+              - value: none
+                name: 不包含
+                description: 不包含
+              - value: all
+                name: 全部满足
+                description: 全部满足
+        - name: entitlementStatus
+          in: query
+          schema:
+            type: integer
+            enum:
+              - 0
+              - 1
+            description: "0 无权益 / 1 有权益"
+            x-apifox-enum:
+              - value: 0
+                name: 无权益
+                description: 无权益
+              - value: 1
+                name: 有权益
+                description: 有权益
+        - name: totalWatchDurationOp
+          in: query
+          schema:
+            type: string
+            enum:
+              - gte
+              - lte
+            description: gte 大于等于 / lte 小于等于
+            x-apifox-enum:
+              - value: gte
+                name: 大于等于
+                description: 大于等于
+              - value: lte
+                name: 小于等于
+                description: 小于等于
+        - name: totalWatchDurationSec
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: liveWatchDurationOp
+          in: query
+          schema:
+            type: string
+            enum:
+              - gte
+              - lte
+            description: gte 大于等于 / lte 小于等于
+            x-apifox-enum:
+              - value: gte
+                name: 大于等于
+                description: 大于等于
+              - value: lte
+                name: 小于等于
+                description: 小于等于
+        - name: liveWatchDurationSec
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+            description: asc 升序 / desc 降序
+            x-apifox-enum:
+              - value: asc
+                name: 升序
+                description: 升序
+              - value: desc
+                name: 降序
+                description: 降序
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceList"
+  /api/v1/activities/audiences/create/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 添加用户
+      operationId: admin_createActivityAudience
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityAudienceCreateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceCreate"
+  /api/v1/activities/audiences/import/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: CSV 批量导入
+      operationId: admin_importActivityAudiences
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV 文件
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceImport"
+  /api/v1/activities/audiences/import-template:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 导入模板
+      operationId: admin_downloadActivityAudienceImportTemplate
+      security:
+        - BearerAuth:
+            []
+      responses:
+        200:
+          description: UTF-8 BOM CSV，表头：手机号
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+  /api/v1/activities/audiences/imports/list/{activityId}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 导入历史
+      operationId: admin_listActivityAudienceImports
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: activityId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 活动 id（D74）
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceImportHistory"
+  /api/v1/activities/audiences/imports/failures/{importId}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 失败明细 CSV
+      operationId: admin_downloadActivityAudienceImportFailures
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 导入批次 id
+      responses:
+        200:
+          description: "失败明细 CSV：行号,手机号,原因"
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+  /api/v1/activities/audiences/export/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 导出用户名单 CSV
+      operationId: admin_exportActivityAudiences
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - id
+              - phone
+            default: nickname
+            description: nickname 昵称 / id 用户ID / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: id
+                name: 用户ID
+                description: 用户ID
+              - value: phone
+                name: 手机号
+                description: 手机号
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: tagIds
+          in: query
+          schema:
+            type: string
+          description: 逗号分隔标签 id
+        - name: tagMatch
+          in: query
+          schema:
+            type: string
+            enum:
+              - any
+              - none
+              - all
+            default: any
+            description: any 满足其一 / none 不包含 / all 全部满足
+            x-apifox-enum:
+              - value: any
+                name: 满足其一
+                description: 满足其一
+              - value: none
+                name: 不包含
+                description: 不包含
+              - value: all
+                name: 全部满足
+                description: 全部满足
+        - name: entitlementStatus
+          in: query
+          schema:
+            type: integer
+            enum:
+              - 0
+              - 1
+            description: "0 无权益 / 1 有权益"
+            x-apifox-enum:
+              - value: 0
+                name: 无权益
+                description: 无权益
+              - value: 1
+                name: 有权益
+                description: 有权益
+      responses:
+        200:
+          description: 按 list 同筛选导出 CSV（不分页）
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+  /api/v1/activities/audiences/entitlement/{rowId}:
+    put:
+      tags:
+        - admin/活动管理
+      summary: 开关观看权益
+      operationId: admin_updateActivityAudienceEntitlement
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: rowId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 名单行 id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityAudienceEntitlementRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceEntitlement"
+  /api/v1/activities/audiences/comments/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 本场评论列表
+      operationId: admin_listActivityAudienceComments
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: nickname
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceComments"
+  /api/v1/activities/chat-filter/{id}:
+    get:
+      tags:
+        - admin/活动管理
+      summary: 评论管理 iframe URL
+      description: "用户运营 · 评论管理；仅 provider=vhall，否则 501。"
+      operationId: admin_getActivityChatFilter
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: email
+          in: query
+          schema:
+            type: string
+        - name: name
+          in: query
+          schema:
+            type: string
+            maxLength: 30
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseChatFilterAdmin"
+  /api/v1/live-reports/delete/{id}:
+    delete:
+      tags:
+        - admin/直播报备
+      summary: 软删报备
+      operationId: admin_deleteLiveReport
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/LiveReportId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/viewers/list:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 顶栏用户列表
+      operationId: admin_listViewers
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - id
+              - phone
+            description: nickname 昵称 / id 用户ID / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: id
+                name: 用户ID
+                description: 用户ID
+              - value: phone
+                name: 手机号
+                description: 手机号
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: tagIds
+          in: query
+          schema:
+            type: string
+        - name: tagMatch
+          in: query
+          schema:
+            type: string
+            enum:
+              - any
+              - none
+              - all
+            description: any 满足其一 / none 不包含 / all 全部满足
+            x-apifox-enum:
+              - value: any
+                name: 满足其一
+                description: 满足其一
+              - value: none
+                name: 不包含
+                description: 不包含
+              - value: all
+                name: 全部满足
+                description: 全部满足
+        - name: sort
+          in: query
+          schema:
+            type: string
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            description: asc 升序 / desc 降序
+            x-apifox-enum:
+              - value: asc
+                name: 升序
+                description: 升序
+              - value: desc
+                name: 降序
+                description: 降序
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerList"
+  /api/v1/viewers/update-status/{id}:
+    put:
+      tags:
+        - admin/用户管理
+      summary: 更新观众状态（兼容）
+      operationId: admin_updateViewerStatus
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: viewer.id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerStatusUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerStatus"
+  /api/v1/viewers/update-blacklist/{id}:
+    put:
+      tags:
+        - admin/用户管理
+      summary: 更新黑名单三开关
+      operationId: admin_updateViewerBlacklist
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: viewer.id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerBlacklistUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerBlacklist"
+  /api/v1/viewers/update-tags/{id}:
+    put:
+      tags:
+        - admin/用户管理
+      summary: 贴手动标签
+      operationId: admin_updateViewerTags
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: viewer.id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerTagsUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTags"
+  /api/v1/viewers/learning-stats/summary:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 学习统计汇总
+      operationId: admin_viewerLearnStatsSummary
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerLearnSummary"
+  /api/v1/viewers/learning-stats/courses:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 学习统计课程
+      description: 本轮恒空表，仍返回分页结构。
+      operationId: admin_viewerLearnStatsCourses
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerLearnCourses"
+  /api/v1/viewer-tags/list:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 标签分页列表
+      operationId: admin_listViewerTags
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: type
+          in: query
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+            description: "1 手动 / 2 自动"
+            x-apifox-enum:
+              - value: 1
+                name: 手动
+                description: 手动
+              - value: 2
+                name: 自动
+                description: 自动
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: groupId
+          in: query
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagList"
+  /api/v1/viewer-tags/detail/{id}:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 标签详情
+      operationId: admin_getViewerTagDetail
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagDetail"
+  /api/v1/viewer-tags/create:
+    post:
+      tags:
+        - admin/用户管理
+      summary: 创建手动标签
+      operationId: admin_createViewerTag
+      security:
+        - BearerAuth:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerTagCreateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagDetail"
+  /api/v1/viewer-tags/update/{id}:
+    put:
+      tags:
+        - admin/用户管理
+      summary: 更新标签
+      operationId: admin_updateViewerTag
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerTagUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagDetail"
+  /api/v1/viewer-tags/delete/{id}:
+    delete:
+      tags:
+        - admin/用户管理
+      summary: 软删标签
+      operationId: admin_deleteViewerTag
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/viewer-tags/groups/list:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 标签分组下拉
+      operationId: admin_listViewerTagGroups
+      security:
+        - BearerAuth:
+            []
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagGroups"
+  /api/v1/viewer-tags/groups/page:
+    get:
+      tags:
+        - admin/用户管理
+      summary: 标签分组分页
+      operationId: admin_pageViewerTagGroups
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: name
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagGroupPage"
+  /api/v1/viewer-tags/groups/create:
+    post:
+      tags:
+        - admin/用户管理
+      summary: 创建标签分组
+      operationId: admin_createViewerTagGroup
+      security:
+        - BearerAuth:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerTagGroupCreateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagGroupItem"
+  /api/v1/viewer-tags/groups/update/{id}:
+    put:
+      tags:
+        - admin/用户管理
+      summary: 更新标签分组
+      operationId: admin_updateViewerTagGroup
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerTagGroupUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTagGroupItem"
+  /api/v1/viewer-tags/groups/delete/{id}:
+    delete:
+      tags:
+        - admin/用户管理
+      summary: 软删标签分组
+      operationId: admin_deleteViewerTagGroup
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
   /api/v1/outside/courses/list:
     get:
       tags:
@@ -2083,6 +3215,344 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseOutsideCourseList"
+  /api/v1/viewer/auth/wechat-login:
+    post:
+      tags:
+        - live/观众鉴权
+      summary: 微信小程序登录
+      operationId: live_viewerWechatLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerAuthWechatLoginRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTokenPair"
+  /api/v1/viewer/auth/phone-login:
+    post:
+      tags:
+        - live/观众鉴权
+      summary: 手机号授权登录
+      operationId: live_viewerPhoneLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerAuthPhoneLoginRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTokenPair"
+  /api/v1/viewer/auth/dev-phone-login:
+    post:
+      tags:
+        - live/观众鉴权
+      summary: 本地造号登录
+      description: "仅 spring profile=local；非 local 返回 404「接口不存在」。"
+      operationId: live_viewerDevPhoneLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerAuthDevPhoneLoginRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTokenPair"
+  /api/v1/viewer/auth/refresh:
+    post:
+      tags:
+        - live/观众鉴权
+      summary: 刷新双票
+      operationId: live_viewerAuthRefresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerAuthRefreshRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTokenPair"
+  /api/v1/viewer/auth/user-info:
+    get:
+      tags:
+        - live/观众鉴权
+      summary: 当前观众
+      operationId: live_viewerAuthUserInfo
+      security:
+        - BearerViewer:
+            []
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerUserInfo"
+  /api/v1/viewer/profile/update:
+    put:
+      tags:
+        - live/观众资料
+      summary: 更新昵称/头像
+      operationId: live_viewerProfileUpdate
+      security:
+        - BearerViewer:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerProfileUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerUserInfo"
+  /api/v1/viewer/uploads/file:
+    post:
+      tags:
+        - live/观众上传
+      summary: 中转上传
+      operationId: live_viewerUploadFile
+      security:
+        - BearerViewer:
+            []
+      parameters:
+        - name: biz
+          in: query
+          required: true
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+            description: "1 头像 / 2 意见反馈截图"
+            x-apifox-enum:
+              - value: 1
+                name: 头像
+                description: 头像
+              - value: 2
+                name: 意见反馈截图
+                description: 意见反馈截图
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - objectKey
+              properties:
+                file:
+                  type: string
+                  format: binary
+                objectKey:
+                  type: string
+                contentType:
+                  type: string
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerUploadFile"
+  /api/v1/viewer/uploads/tos-sts:
+    get:
+      tags:
+        - live/观众上传
+      summary: 直传 STS
+      operationId: live_viewerUploadTosSts
+      security:
+        - BearerViewer:
+            []
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerTosSts"
+  /api/v1/viewer/feedback/submit:
+    post:
+      tags:
+        - live/意见反馈
+      summary: 提交反馈
+      operationId: live_viewerFeedbackSubmit
+      security:
+        - BearerViewer:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerFeedbackSubmitRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerFeedbackId"
+  /api/v1/viewer/feedback/list:
+    get:
+      tags:
+        - live/意见反馈
+      summary: 我的反馈列表
+      operationId: live_viewerFeedbackList
+      security:
+        - BearerViewer:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerFeedbackList"
+  /api/v1/viewer/feedback/detail/{id}:
+    get:
+      tags:
+        - live/意见反馈
+      summary: 反馈详情
+      operationId: live_viewerFeedbackDetail
+      security:
+        - BearerViewer:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerFeedbackDetail"
+  /api/v1/viewer/learning/lives:
+    get:
+      tags:
+        - live/我的学习
+      summary: 我的学习·直播
+      operationId: live_viewerLearningLives
+      security:
+        - BearerViewer:
+            []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/ActivityState"
+            x-apifox-enum:
+              - value: 0
+                name: 全部(列表筛)
+                description: 全部(列表筛)
+              - value: 1
+                name: 直播
+                description: 直播
+              - value: 2
+                name: 预告
+                description: 预告
+              - value: 3
+                name: 结束
+                description: 结束
+              - value: 4
+                name: 点播
+                description: 点播
+              - value: 5
+                name: 回放
+                description: 回放
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchList"
+  /api/v1/viewer/presence/ping:
+    post:
+      tags:
+        - live/观众鉴权
+      summary: 访问心跳
+      operationId: live_viewerPresencePing
+      security:
+        - BearerViewer:
+            []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerPresencePingRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerPresencePing"
   /api/v1/watch/activities:
     get:
       tags:
@@ -2136,11 +3606,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchList"
+  /api/v1/watch/access/{id}:
+    get:
+      tags:
+        - live/观看
+      summary: 观看售卖门禁状态
+      description: 可匿名。可选观众 Authorization；加密已解锁则带 X-Activity-Access。返回 accessState（D90）。
+      operationId: live_getWatchAccess
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: X-Activity-Access
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchAccess"
+  /api/v1/watch/access/verify-password/{id}:
+    post:
+      tags:
+        - live/观看
+      summary: 校验观看密码并发本场访问 JWT
+      description: "仅 sellAlone=true 且 sellType=encrypted；密码错 → 400；已过期 → 403（D90）。"
+      operationId: live_verifyWatchAccessPassword
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchAccessVerifyPasswordRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchAccessVerifyPassword"
   /api/v1/watch/detail/{id}:
     get:
       tags:
         - live/观看
-      summary: 观看嵌入（iframe 兜底）
+      summary: 观看嵌入页地址
+      description: 独立用途的嵌入 URL（兜底）；观看默认走 /watch/summary + /watch/sdk-sign（D94/D95 签名不再回 embedUrl）。
       operationId: live_getWatchEmbed
       parameters:
         - $ref: "#/components/parameters/WatchActivityId"
@@ -2149,13 +3666,19 @@ paths:
           schema:
             type: string
             pattern: "^[A-Za-z0-9]+$"
-          description: 只能字母数字；不传则后端生成
+          description: 只能字母数字；不传则后端生成（仅 detail 嵌入）
         - name: nickname
           in: query
           schema:
             type: string
             maxLength: 50
           description: 默认「观众」
+        - name: viewerId
+          in: query
+          schema:
+            type: integer
+            format: int64
+          description: "观众数字 id；有则 email 为 {id}@qkzb.com"
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -2163,26 +3686,73 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchEmbed"
-  /api/v1/watch/sdk/{id}:
+  /api/v1/watch/summary/{id}:
     get:
       tags:
         - live/观看
-      summary: 学生端观看 SDK 初始化载荷
-      operationId: live_getWatchSdk
+      summary: 观看页活动摘要（页面壳）
+      description: |
+        观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95）。
+        字段全部取本库 Activity，不调微吼、不含 SDK 签名。
+        勿用 /watch/detail（嵌入专用）顶替。须过售卖门禁，未过 → 403。
+      operationId: live_getWatchSummary
       parameters:
         - $ref: "#/components/parameters/WatchActivityId"
-        - name: guestId
-          in: query
+        - name: X-Activity-Access
+          in: header
+          required: false
           schema:
             type: string
-            pattern: "^[A-Za-z0-9]+$"
-          description: 只能字母数字；不传则后端生成
+          description: 本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchSummary"
+  /api/v1/watch/sdk-sign:
+    get:
+      tags:
+        - live/观看
+      summary: 观看 SDK 签名与初始化载荷
+      description: |
+        旧路径 GET /api/v1/watch/sdk/{id} 已删除。
+        Query 必填 id；viewerId 优先 Query，可从观众 JWT 解析；都无 → 400「请先登录」。
+        仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。
+        不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。
+        签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。
+      operationId: live_getWatchSdkSign
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+            example: a1b2c3d4e5f67890abcdef1234567890
+          description: 本站活动 UUID（Query；相对 D62 的明确例外，见 D92）
+        - name: viewerId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: 观众数字 id；优先 Query，未传可从观众 JWT 解析；都无 → 400
         - name: nickname
           in: query
           schema:
             type: string
             maxLength: 50
-          description: 默认「观众」
+          description: 默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL
+        - name: X-Activity-Access
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -2190,13 +3760,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchSdk"
-  /api/v1/watch/attendance/enter/{id}:
+  /api/v1/watch/products/{id}:
+    get:
+      tags:
+        - live/观看
+      summary: 本场商品元数据
+      operationId: live_getWatchProducts
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchProducts"
+  /api/v1/watch/chat-history/{id}:
+    get:
+      tags:
+        - live/观看
+      summary: 观看端聊天历史（回放只读）
+      description: 回放页只读聊天；代理微吼 get-list。须过售卖门禁，未过 → 403。page 从 1 起，每页 50（D91）。
+      operationId: live_getWatchChatHistory
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: X-Activity-Access
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: 从 1 起；缺省 1；每页 50 条
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchChatHistory"
+  /api/v1/watch/records/{id}:
+    get:
+      tags:
+        - live/观看
+      summary: 可播回放列表
+      description: 本库 ready 且 tosUrl 非空；未过售卖门禁 → 403（D89/D90）。
+      operationId: live_listWatchPlayRecords
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+        - name: X-Activity-Access
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchPlayRecords"
+  /api/v1/watch/replay/start/{id}:
     post:
       tags:
-        - live/进出房
-      summary: 进入（辅通道）
-      description: "前端在 VITE_ATTENDANCE_CLIENT_REPORT=true 时调用。"
-      operationId: live_attendanceEnter
+        - live/回放
+      summary: 回放开始
+      operationId: live_watchReplayStart
+      security:
+        - BearerViewer:
+            []
       parameters:
         - $ref: "#/components/parameters/WatchActivityId"
       requestBody:
@@ -2204,20 +3842,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AttendanceEnterRequest"
+              $ref: "#/components/schemas/WatchReplayStartRequest"
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponseId"
-  /api/v1/watch/attendance/leave/{id}:
+                $ref: "#/components/schemas/ApiResponseWatchReplayStart"
+  /api/v1/watch/replay/heartbeat/{id}:
     post:
       tags:
-        - live/进出房
-      summary: 离开（辅通道，批量）
-      operationId: live_attendanceLeave
+        - live/回放
+      summary: 回放心跳
+      operationId: live_watchReplayHeartbeat
+      security:
+        - BearerViewer:
+            []
       parameters:
         - $ref: "#/components/parameters/WatchActivityId"
       requestBody:
@@ -2225,14 +3866,103 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AttendanceLeaveRequest"
+              $ref: "#/components/schemas/WatchReplayHeartbeatRequest"
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ApiResponseAttendanceLeave"
+                $ref: "#/components/schemas/ApiResponseWatchReplayHeartbeat"
+  /api/v1/watch/dev/presence/{id}:
+    post:
+      tags:
+        - live/开发
+      summary: 本地模拟进出
+      description: 仅 local profile；非 local 返回 404。
+      operationId: live_watchDevPresence
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchDevPresenceRequest"
+      responses:
+        200:
+          description: 校签通过时纯文本 success（与微吼约定一致）
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: success
+  /api/v1/watch/comments/report/{id}:
+    post:
+      tags:
+        - live/评论
+      summary: 上报评论
+      operationId: live_watchCommentReport
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchCommentReportRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseIntId"
+  /api/v1/watch/comments/delete/{id}:
+    post:
+      tags:
+        - live/评论
+      summary: 软删评论
+      operationId: live_watchCommentDelete
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchCommentDeleteRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseIntId"
+  /api/v1/watch/audience/attribute/{id}:
+    post:
+      tags:
+        - live/用户运营
+      summary: 邀请归因
+      operationId: live_watchAudienceAttribute
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WatchActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchAudienceAttributeRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchAudienceAttribute"
   /api/v1/callbacks/vhall/presence:
     post:
       tags:
@@ -2240,6 +3970,7 @@ paths:
       summary: 微吼上下线回调（主通道）
       description: 微吼主动 POST，不是前端调用。method_id 须为 20。
       operationId: live_vhallPresenceCallback
+      security: []
       requestBody:
         required: true
         content:
@@ -2248,7 +3979,75 @@ paths:
               $ref: "#/components/schemas/VhallPresenceCallback"
       responses:
         200:
-          description: 按微吼约定响应
+          description: 校签通过时纯文本 success（与微吼约定一致）
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: success
+  /api/v1/callbacks/vhall/live-state:
+    post:
+      tags:
+        - live/回调
+      summary: 微吼开播/结束回调
+      description: "method_id=1；校签失败 403，成功纯文本 success。"
+      operationId: live_vhallLiveStateCallback
+      security: []
+      responses:
+        200:
+          description: 校签通过时纯文本 success（与微吼约定一致）
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: success
+  /api/v1/callbacks/vhall/transcode:
+    post:
+      tags:
+        - live/回调
+      summary: 微吼转码回调
+      operationId: live_vhallTranscodeCallback
+      security: []
+      responses:
+        200:
+          description: 校签通过时纯文本 success（与微吼约定一致）
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: success
+  /api/v1/callbacks/vhall/record-generate:
+    post:
+      tags:
+        - live/回调
+      summary: 微吼回放生成回调
+      description: "method_id=4（D88）"
+      operationId: live_vhallRecordGenerateCallback
+      security: []
+      responses:
+        200:
+          description: 校签通过时纯文本 success（与微吼约定一致）
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: success
+  /api/v1/callbacks/vhall/record-download:
+    post:
+      tags:
+        - live/回调
+      summary: 微吼回放打包完成回调
+      description: "method_id=6（D88）"
+      operationId: live_vhallRecordDownloadCallback
+      security: []
+      responses:
+        200:
+          description: 校签通过时纯文本 success（与微吼约定一致）
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: success
   /api/v1/watch/attendees/{id}:
     get:
       tags:
@@ -2309,7 +4108,7 @@ paths:
       tags:
         - live/中控台
       summary: 进出三线走势
-      description: 数据来自 presence_event，不要调微吼 report/online。
+      description: 数据来自 room_presence_event，不要调微吼 report/online。
       operationId: live_getWatchPresenceTrend
       parameters:
         - $ref: "#/components/parameters/WatchActivityId"
@@ -2375,6 +4174,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: 管理端 access JWT；不要带 refresh
+    BearerViewer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 观众 access JWT；不要带 refresh / 本场访问 token
   parameters:
     ActivityId:
       name: id
@@ -2382,43 +4186,58 @@ components:
       required: true
       schema:
         type: string
-        format: uuid
-        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-      description: 本站活动 UUID
+        maxLength: 32
+        pattern: "^[0-9a-f]{32}$"
+        description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+        example: a1b2c3d4e5f67890abcdef1234567890
+      description: 本站活动 id（D74）
     MaterialId:
       name: id
       in: path
       required: true
       schema:
         type: string
-        format: uuid
-      description: 素材 / 分组 UUID
+        maxLength: 32
+        pattern: "^[0-9a-f]{32}$"
+        description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+      description: 素材 / 分组 id（D74）
     CourseId:
       name: id
       in: path
       required: true
       schema:
         type: string
-        format: uuid
-      description: 本站课程 UUID
+        maxLength: 32
+        pattern: "^[0-9a-f]{32}$"
+        description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+      description: 本站课程 id（D74）
     LiveReportId:
       name: id
       in: path
       required: true
       schema:
         type: string
-        format: uuid
-      description: 直播报备 UUID
+        maxLength: 32
+        pattern: "^[0-9a-f]{32}$"
+        description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+      description: 直播报备 id（D74）
     WatchActivityId:
       name: id
       in: path
       required: true
       schema:
         type: string
-        format: uuid
-        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
-      description: 本站活动 UUID
+        maxLength: 32
+        pattern: "^[0-9a-f]{32}$"
+        description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+        example: a1b2c3d4e5f67890abcdef1234567890
+      description: 本站活动 id（D74）
   schemas:
+    BusinessUuid:
+      type: string
+      maxLength: 32
+      pattern: "^[0-9a-f]{32}$"
+      description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
     ApiResponseBase:
       type: object
       required:
@@ -2572,7 +4391,7 @@ components:
         - paid
         - encrypted
         - specified
-      description: free 免费 / paid 付费 / encrypted 加密 / specified 指定学员；库：VARCHAR(16)
+      description: free 免费 / paid 付费（PUT sales 已下线，列表仍可能回显）/ encrypted 加密 / specified 指定学员；库：VARCHAR(16)
       x-apifox-enum:
         - value: free
           name: 免费
@@ -2708,10 +4527,8 @@ components:
         - id
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站业务主键（活动/素材等多为 UUID）；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务主键（活动/素材等多为 UUID）
     EmployeeBrief:
       type: object
       properties:
@@ -2753,10 +4570,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 素材 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 素材 UUID
         name:
           type: string
           description: 名称；库：VARCHAR(256)
@@ -2956,10 +4771,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 素材分组 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 素材分组 UUID
         name:
           type: string
           maxLength: 64
@@ -2974,10 +4787,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 素材 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 素材 UUID
         type:
           $ref: "#/components/schemas/MaterialType"
           description: image 图片 / video 视频 / document 文档 / article 文章
@@ -2995,10 +4806,8 @@ components:
               name: 文章
               description: 文章
         groupId:
-          type: string
-          format: uuid
-          description: 分组 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         name:
           type: string
           description: 名称；库：VARCHAR(256)
@@ -3069,6 +4878,31 @@ components:
           type: string
           example: "2026-10-12 14:00:00"
           description: "上传时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        vhallVideoId:
+          type: string
+          description: 仅 video；微吼 video_id
+        vhallTranscodeProgress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 仅 video；转码进度 0～100；库：INT
+        vhallTranscodeStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+            - 3
+          description: "0 转码中 / 1 成功 / 3 失败（仅 video）；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 转码中
+              description: 转码中
+            - value: 1
+              name: 成功
+              description: 成功
+            - value: 3
+              name: 失败（仅 video）
+              description: 失败（仅 video）
     MaterialListData:
       type: object
       properties:
@@ -3108,10 +4942,8 @@ components:
               name: 文档
               description: 文档
         groupId:
-          type: string
-          format: uuid
-          description: 分组 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         items:
           type: array
           minItems: 1
@@ -3166,10 +4998,8 @@ components:
         - content
       properties:
         groupId:
-          type: string
-          format: uuid
-          description: 分组 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         title:
           type: string
           maxLength: 45
@@ -3205,15 +5035,11 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 文章素材 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 文章素材 UUID
         groupId:
-          type: string
-          format: uuid
-          description: 分组 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         title:
           type: string
           maxLength: 45
@@ -3308,9 +5134,7 @@ components:
           format: int64
           description: "type=4 且 provider=vhall：微吼回放资源 ID（微吼 integer / JSON number），直接作 create-demand 的 record_id。与 GET .../records 的 list[].id 同型。与 recordMaterialId 二选一，不可同时传；本站不落库；库：微吼 integer（本站不落库，透传 create-demand）"
         recordMaterialId:
-          type: string
-          format: uuid
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
           description: "type=4：本站视频素材 UUID。请求/响应/库列统一：JSON recordMaterialId ↔ 库 record_material_id。须未软删、video、两审通过、有 url。与 recordId 二选一；库：VARCHAR(36)"
         isTiming:
           type: boolean
@@ -3367,14 +5191,11 @@ components:
           maxLength: 100
           maxItems: 100
           items:
-            type: string
-            format: uuid
+            $ref: "#/components/schemas/BusinessUuid"
           description: 课件素材 UUID 有序数组
         reportId:
-          type: string
-          format: uuid
-          maxLength: 36
-          description: "创建必填。绑定已通过直播报备 UUID。须 status=passed、未软删；hostIds 须恰好为该报备主播 1 人。创建后不可改绑。库：VARCHAR(36)"
+          $ref: "#/components/schemas/BusinessUuid"
+          description: "创建必填。绑定已通过直播报备 id（D74）。须 status=passed、未软删；hostIds 须恰好为该报备主播 1 人。创建后不可改绑"
     UpdateActivityRequest:
       type: object
       description: 至少填一个字段；未出现的关联字段不改
@@ -3427,14 +5248,11 @@ components:
           type: array
           maxItems: 100
           items:
-            type: string
-            format: uuid
+            $ref: "#/components/schemas/BusinessUuid"
           description: 课件素材 UUID 有序数组
         recordMaterialId:
-          type: string
-          format: uuid
-          maxLength: 36
-          description: "仅 type=4：替换录播素材（与创建/详情同名 recordMaterialId）。写入后 ready→0；库：VARCHAR(36)"
+          $ref: "#/components/schemas/BusinessUuid"
+          description: "仅 type=4：替换录播素材（与创建/详情同名 recordMaterialId）。写入后 ready→0（D74）"
     PlaybackSettingsRequest:
       type: object
       required:
@@ -3474,7 +5292,7 @@ components:
           description: 是否单独售卖；库：TINYINT(1)
         sellType:
           $ref: "#/components/schemas/SellType"
-          description: free 免费 / paid 付费 / encrypted 加密 / specified 指定学员
+          description: free 免费 / paid 付费（PUT sales 已下线，列表仍可能回显）/ encrypted 加密 / specified 指定学员
           x-apifox-enum:
             - value: free
               name: 免费
@@ -3519,13 +5337,11 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         sellType:
           $ref: "#/components/schemas/SellType"
-          description: free 免费 / paid 付费 / encrypted 加密 / specified 指定学员
+          description: free 免费 / paid 付费（PUT sales 已下线，列表仍可能回显）/ encrypted 加密 / specified 指定学员
           x-apifox-enum:
             - value: free
               name: 免费
@@ -3555,10 +5371,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         shelfStatus:
           $ref: "#/components/schemas/ShelfStatus"
           description: pending 待上架 / on 已上架 / off 已下架 / banned 强制封禁
@@ -3603,10 +5417,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         riskStatus:
           $ref: "#/components/schemas/RiskStatus"
           description: pending 待审核 / passed 已通过 / rejected 已驳回
@@ -3640,10 +5452,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 审核记录 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 审核记录 UUID
         action:
           type: string
           enum:
@@ -3690,10 +5500,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         provider:
           $ref: "#/components/schemas/Provider"
           description: vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改
@@ -3800,7 +5608,7 @@ components:
               description: 已驳回
         sellType:
           $ref: "#/components/schemas/SellType"
-          description: free 免费 / paid 付费 / encrypted 加密 / specified 指定学员
+          description: free 免费 / paid 付费（PUT sales 已下线，列表仍可能回显）/ encrypted 加密 / specified 指定学员
           x-apifox-enum:
             - value: free
               name: 免费
@@ -3839,10 +5647,8 @@ components:
               name: 失败不可重试
               description: 失败不可重试
         recordMaterialId:
-          type: string
-          format: uuid
-          maxLength: 36
-          description: 本场绑定的录播素材 UUID（与创建/改活动请求同名）；非录播或不绑可不返回；库：VARCHAR(36)
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本场绑定的录播素材 id（D74，与创建/改活动请求同名）；非录播或不绑可不返回
         owners:
           type: array
           items:
@@ -3915,10 +5721,8 @@ components:
               type: boolean
               description: 风控通过后是否自动上架；库：TINYINT(1)
             reportId:
-              type: string
-              format: uuid
-              description: 绑定的直播报备；未绑定不输出；库：VARCHAR(36)
-              maxLength: 36
+              $ref: "#/components/schemas/BusinessUuid"
+              description: 绑定的直播报备；未绑定不输出
             reportTitle:
               type: string
               description: 报备标题；未绑定不输出
@@ -4019,6 +5823,40 @@ components:
           type: string
           description: 封面图 URL；库：VARCHAR(2048)
           maxLength: 2048
+        storage:
+          type: string
+          description: 体积 KB 字符串
+        status:
+          type: integer
+          enum:
+            - 1
+            - 2
+            - 3
+            - 4
+            - 5
+          description: "1 待打包 / 2 打包中 / 3 下载中 / 4 就绪 / 5 失败；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 待打包
+              description: 待打包
+            - value: 2
+              name: 打包中
+              description: 打包中
+            - value: 3
+              name: 下载中
+              description: 下载中
+            - value: 4
+              name: 就绪
+              description: 就绪
+            - value: 5
+              name: 失败
+              description: 失败
+        tosUrl:
+          type: string
+          description: 本站 TOS/CDN URL；无则省略
+        downloadUrl:
+          type: string
+          description: "仅 status=4（ready）时与 tosUrl 同值；否则省略"
     ActivityRecordListData:
       type: object
       properties:
@@ -4035,22 +5873,26 @@ components:
       type: object
       required:
         - recordId
-        - status
-      description: 回放下载：微吼 check-download；对应管理后台回放列表「下载」
+        - packStatus
+        - progress
+      description: 回放下载：按本库状态推进 TOS；对应管理后台回放列表「下载」（D88）
       properties:
         recordId:
           type: integer
           format: int64
-          description: "微吼回放 id（同 GET .../records 的 list[].id）；库：微吼 integer（不落本站库）"
+          description: "云侧回放 id（同 GET .../records 的 list[].id）；库：微吼 integer（不落本站库）"
           example: 5814669
+        tosUrl:
+          type: string
+          format: uri
+          description: 本站 TOS/CDN；有值时前端直接下载
         downloadUrl:
           type: string
           format: uri
-          description: "下载地址；status=1 时可用（微吼侧约 7 天有效）；库：微吼透传（不落本站库）"
-          example: "https://vod-download.vhall.com/....zip"
-        status:
+          description: 与 tosUrl 同值（兼容旧前端）；无 TOS 时省略；库：微吼透传（不落本站库）
+        packStatus:
           type: integer
-          description: 打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败；库：微吼透传（不落本站库）
+          description: "0 未开始 / 1 可下载 / 2 处理中 / 3 失败；库：INT"
           enum:
             - 0
             - 1
@@ -4062,11 +5904,11 @@ components:
               name: 未开始
               description: 未开始
             - value: 1
-              name: 已完成
-              description: 已完成
+              name: 可下载
+              description: 可下载
             - value: 2
-              name: 进行中
-              description: 进行中
+              name: 处理中
+              description: 处理中
             - value: 3
               name: 失败
               description: 失败
@@ -4076,6 +5918,9 @@ components:
           minimum: 0
           maximum: 100
           example: 100
+        downloadStartedTime:
+          type: string
+          description: "packStatus=2 且本站 JVM 确有 ingest 任务时返回；否则省略；库：DATETIME(3)"
     EndActivityData:
       type: object
       required:
@@ -4084,10 +5929,8 @@ components:
       description: 结束直播 / 第三方推流开始直播（/activities/start）共用：返回本站活动 id 与写回后的 state
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 id（D74）
         state:
           $ref: "#/components/schemas/ActivityState"
           description: 本站写回后的活动状态；结束多为 3，start 成功多为 1
@@ -4380,10 +6223,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         title:
           type: string
           description: 标题；库：VARCHAR(64)
@@ -4445,10 +6286,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         startTime:
           type: string
           description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
@@ -4479,10 +6318,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         startTime:
           type: string
           description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
@@ -4578,7 +6415,7 @@ components:
         id:
           type: integer
           format: int64
-          description: 部门 rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(36)
+          description: 部门 rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(32)
         name:
           type: string
           description: 部门名称 bmmc；库：VARCHAR(256)
@@ -4674,7 +6511,7 @@ components:
         id:
           type: integer
           format: int64
-          description: 角色 sys_uimsrole.rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(36)
+          description: 角色 sys_uimsrole.rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(32)
         name:
           type: string
           description: 角色名称；库：VARCHAR(256)
@@ -4685,7 +6522,7 @@ components:
         id:
           type: integer
           format: int64
-          description: 角色 rs_mainkey_id；库：VARCHAR(36)
+          description: 角色 rs_mainkey_id；库：VARCHAR(32)
         name:
           type: string
           description: 名称；库：VARCHAR(256)
@@ -4730,7 +6567,7 @@ components:
         id:
           type: integer
           format: int64
-          description: 角色 rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(36)
+          description: 角色 rs_mainkey_id（JSON 数字，D56）；库：VARCHAR(32)
         menuCodes:
           type: array
           items:
@@ -4853,10 +6690,8 @@ components:
           description: 封面 MIME 类型；库：VARCHAR(128)
           maxLength: 128
         coverMaterialId:
-          type: string
-          format: uuid
-          description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         hostId:
           $ref: "#/components/schemas/EmployeeId"
           description: 主播员工 id
@@ -4903,10 +6738,8 @@ components:
           description: 封面 MIME 类型；库：VARCHAR(128)
           maxLength: 128
         coverMaterialId:
-          type: string
-          format: uuid
-          description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         hostId:
           $ref: "#/components/schemas/EmployeeId"
           description: 主播员工 id
@@ -4947,10 +6780,8 @@ components:
         - status
       properties:
         id:
-          type: string
-          format: uuid
-          description: 报备单 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 报备单 UUID
         status:
           $ref: "#/components/schemas/LiveReportStatus"
           description: 报备审核状态：pending 待审核 / passed 已通过 / rejected 已驳回
@@ -4968,10 +6799,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 报备单 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 报备单 UUID
         title:
           type: string
           description: 标题；库：VARCHAR(64)
@@ -5002,10 +6831,8 @@ components:
           description: 封面 MIME 类型；库：VARCHAR(128)
           maxLength: 128
         coverMaterialId:
-          type: string
-          format: uuid
-          description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
         host:
           $ref: "#/components/schemas/LiveReportHost"
           description: 报备主播
@@ -5069,10 +6896,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 审核记录 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 审核记录 UUID
         action:
           type: string
           enum:
@@ -5149,10 +6974,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 素材 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 素材 UUID
         name:
           type: string
           description: 名称；库：VARCHAR(256)
@@ -5203,10 +7026,8 @@ components:
           maxLength: 200000
           description: 可见文字 ≤10000，原文 ≤200000；库：MEDIUMTEXT
         coverMaterialId:
-          type: string
-          format: uuid
-          description: 两审通过的 JPG/PNG 图片素材，≤5MB；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 两审通过的 JPG/PNG 图片素材，≤5MB（D74）
         autoList:
           type: boolean
           description: 风控通过后是否自动上架；库：TINYINT(1)
@@ -5221,17 +7042,14 @@ components:
           type: array
           maxItems: 100
           items:
-            type: string
-            format: uuid
+            $ref: "#/components/schemas/BusinessUuid"
           description: 课件：两审通过的 image/video/document，不含 article
     CourseSummary:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 课程 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 课程 UUID
         title:
           type: string
           description: 标题；库：VARCHAR(45)
@@ -5321,10 +7139,8 @@ components:
               description: 富文本详情 HTML；库：MEDIUMTEXT
               maxLength: 200000
             coverMaterialId:
-              type: string
-              format: uuid
-              description: 封面素材 UUID（素材中心）；库：VARCHAR(36)
-              maxLength: 36
+              $ref: "#/components/schemas/BusinessUuid"
+              description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
             materials:
               type: array
               items:
@@ -5362,10 +7178,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 课程 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 课程 UUID
         title:
           type: string
           description: 标题；库：VARCHAR(45)
@@ -5407,6 +7221,952 @@ components:
           items:
             $ref: "#/components/schemas/OutsideCourseItem"
           description: 列表数据
+    MaterialAuditRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 审核记录 id 或合成 submit id；库：VARCHAR(32)
+          maxLength: 32
+        action:
+          type: string
+          enum:
+            - submit
+            - ai
+            - risk
+          description: submit 发起申请 / ai AI审核 / risk 风控审核；库：VARCHAR(16)
+          maxLength: 16
+          x-apifox-enum:
+            - value: submit
+              name: 发起申请
+              description: 发起申请
+            - value: ai
+              name: AI审核
+              description: AI审核
+            - value: risk
+              name: 风控审核
+              description: 风控审核
+        result:
+          type: string
+          enum:
+            - passed
+            - rejected
+          description: passed 已通过 / rejected 已驳回；submit 不返回；库：VARCHAR(16)
+          maxLength: 16
+          x-apifox-enum:
+            - value: passed
+              name: 已通过
+              description: 已通过
+            - value: rejected
+              name: 已驳回；submit 不返回
+              description: 已驳回；submit 不返回
+        operatorId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 员工 rs_mainkey_id（JSON 数字，D56）
+        operatorName:
+          type: string
+          description: 操作人姓名；库：VARCHAR(50)
+          maxLength: 50
+        departmentName:
+          type: string
+          description: 无则省略；库：VARCHAR(256)
+          maxLength: 256
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    MaterialAuditListData:
+      type: object
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaterialAuditRecord"
+          description: 列表数据
+    PasscodeData:
+      type: object
+      required:
+        - passcode
+      properties:
+        passcode:
+          type: string
+          pattern: "^\\d{9}$"
+          description: "9 位数字开播口令"
+    PasscodeHostEnterRequest:
+      type: object
+      required:
+        - passcode
+      properties:
+        passcode:
+          type: string
+          pattern: "^\\d{9}$"
+          description: "9 位数字开播口令"
+        nickname:
+          type: string
+          maxLength: 30
+          description: 讲师名称；默认「讲师」；库：VARCHAR(30)
+    PasscodeHostEnterData:
+      type: object
+      properties:
+        activityId:
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+        provider:
+          $ref: "#/components/schemas/Provider"
+          description: vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改
+          x-apifox-enum:
+            - value: vhall
+              name: 微吼
+              description: 微吼
+            - value: aliyun
+              name: 阿里云
+              description: 阿里云
+            - value: tencent
+              name: 腾讯云
+              description: 腾讯云
+        hostUrl:
+          type: string
+          format: uri
+          description: 角色参会 iframe 地址（微吼 page_url）；本站开播页 iframe 的 src；库：VARCHAR(1024)
+          maxLength: 1024
+        role:
+          type: integer
+          enum:
+            - 1
+          description: "1 主播；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 主播
+              description: 主播
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+    ActivityAudienceListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 名单行 id；库：VARCHAR(32)
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        avatarUrl:
+          type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
+        entitlementStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 无权益 / 1 有权益；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 无权益
+              description: 无权益
+            - value: 1
+              name: 有权益
+              description: 有权益
+        inviterDisplayName:
+          type: string
+          description: 邀请人展示名
+        inviterKind:
+          type: string
+          enum:
+            - employee
+          description: employee 员工
+          x-apifox-enum:
+            - value: employee
+              name: 员工
+              description: 员工
+        inviteTime:
+          type: string
+          description: 邀请时间；库：DATETIME(3)
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: 标签 id 列表
+        tagLabels:
+          type: array
+          items:
+            type: string
+          description: 标签展示名列表
+        totalWatchDurationSec:
+          type: integer
+          description: 累计观看时长（秒）；库：INT
+        liveWatchDurationSec:
+          type: integer
+          description: 直播观看时长（秒）；库：INT
+        replayWatchDurationSec:
+          type: integer
+          description: 回放观看时长（秒）；库：INT
+        commentCount:
+          type: integer
+          description: 评论条数；库：INT
+        dealAmount:
+          type: string
+          example: "0.00"
+          description: 成交金额（元）
+    ActivityAudienceListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityAudienceListItem"
+          description: 列表数据
+    ActivityAudienceCreateRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          description: 与 viewerId 二选一
+        viewerId:
+          type: integer
+          format: int64
+          description: 与 phone 二选一；库：BIGINT
+    ActivityAudienceCreateData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+        created:
+          type: boolean
+          description: 是否新建；库：TINYINT(1)
+    ActivityAudienceImportData:
+      type: object
+      properties:
+        importId:
+          type: integer
+          format: int64
+          description: 导入批次 id；库：BIGINT
+        total:
+          type: integer
+          description: 总条数；库：BIGINT
+          format: int64
+        created:
+          type: integer
+          description: 是否新建；库：INT
+        updated:
+          type: integer
+          description: 成功更新条数；库：INT
+        skipped:
+          type: integer
+          description: 跳过条数；库：INT
+        failed:
+          type: integer
+          description: 失败条数；库：INT
+        errors:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            properties:
+              row:
+                type: integer
+                description: Excel 行号；库：INT
+              phone:
+                type: string
+                description: 手机号
+              reason:
+                type: string
+                description: 原因/驳回理由；库：VARCHAR(500)
+                maxLength: 500
+          description: 失败明细
+    ActivityAudienceImportHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        importTime:
+          type: string
+          description: 导入时间；库：DATETIME(3)
+        importerId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 员工 rs_mainkey_id（JSON 数字，D56）
+        importerName:
+          type: string
+          description: 导入操作人
+        successCount:
+          type: integer
+          description: 成功条数；库：INT
+        failCount:
+          type: integer
+          description: 失败条数；库：INT
+    ActivityAudienceImportHistoryData:
+      type: object
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityAudienceImportHistoryItem"
+          description: 列表数据
+    ActivityAudienceEntitlementRequest:
+      type: object
+      required:
+        - entitlementStatus
+      properties:
+        entitlementStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 无权益 / 1 有权益；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 无权益
+              description: 无权益
+            - value: 1
+              name: 有权益
+              description: 有权益
+    ActivityAudienceEntitlementData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        entitlementStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 无权益 / 1 有权益；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 无权益
+              description: 无权益
+            - value: 1
+              name: 有权益
+              description: 有权益
+    ActivityAudienceCommentItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+        guestId:
+          type: string
+          description: 本站生成的游客 id；库：VARCHAR(64)
+          maxLength: 64
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        content:
+          type: string
+          description: 正文内容；库：VARCHAR(500)
+          maxLength: 500
+        commentTime:
+          type: string
+          description: 评论时间；库：DATETIME(3)
+        deleted:
+          type: boolean
+          description: 是否已删除；库：TINYINT(1)
+    ActivityAudienceCommentListData:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityAudienceCommentItem"
+          description: 列表数据
+    ViewerListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        avatarUrl:
+          type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
+        registerChannel:
+          type: integer
+          enum:
+            - 1
+            - 2
+          description: "1 微信 / 2 导入；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 微信
+              description: 微信
+            - value: 2
+              name: 导入
+              description: 导入
+        phoneMasked:
+          type: string
+          description: 脱敏手机号
+        status:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 禁用 / 1 正常；库：VARCHAR(16)"
+          x-apifox-enum:
+            - value: 0
+              name: 禁用
+              description: 禁用
+            - value: 1
+              name: 正常
+              description: 正常
+        banComment:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        banPurchase:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        banAccess:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        lastVisitTime:
+          type: string
+          description: 最近访问时间；库：DATETIME(3)
+        consumeCount:
+          type: integer
+          description: 消费次数；库：INT
+        consumeAmount:
+          type: string
+          description: 消费金额（元）
+        totalLearnDurationSec:
+          type: integer
+          description: 累计学习时长（秒）；库：INT
+        todayLearnDurationSec:
+          type: integer
+          description: 今日学习时长（秒）；库：INT
+        completedCourseCount:
+          type: integer
+          description: 已完成课程数；库：INT
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: 标签 id 列表
+        tagLabels:
+          type: array
+          items:
+            type: string
+          description: 标签展示名列表
+    ViewerListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerListItem"
+          description: 列表数据
+    ViewerStatusUpdateRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 禁用 / 1 正常；库：VARCHAR(16)"
+          x-apifox-enum:
+            - value: 0
+              name: 禁用
+              description: 禁用
+            - value: 1
+              name: 正常
+              description: 正常
+    ViewerStatusUpdateData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        status:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 禁用 / 1 正常；库：VARCHAR(16)"
+          x-apifox-enum:
+            - value: 0
+              name: 禁用
+              description: 禁用
+            - value: 1
+              name: 正常
+              description: 正常
+    ViewerBlacklistUpdateRequest:
+      type: object
+      required:
+        - banComment
+        - banPurchase
+        - banAccess
+      properties:
+        banComment:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        banPurchase:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        banAccess:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+    ViewerBlacklistUpdateData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        banComment:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        banPurchase:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        banAccess:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 关闭 / 1 开启；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 关闭
+              description: 关闭
+            - value: 1
+              name: 开启
+              description: 开启
+        status:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 禁用 / 1 正常；库：VARCHAR(16)"
+          x-apifox-enum:
+            - value: 0
+              name: 禁用
+              description: 禁用
+            - value: 1
+              name: 正常
+              description: 正常
+    ViewerTagsUpdateRequest:
+      type: object
+      required:
+        - tagIds
+      properties:
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: 标签 id 列表
+    ViewerTagsUpdateData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: 标签 id 列表
+        tagLabels:
+          type: array
+          items:
+            type: string
+          description: 标签展示名列表
+    ViewerLearnStatsSummaryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        avatarUrl:
+          type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: 标签 id 列表
+        tagLabels:
+          type: array
+          items:
+            type: string
+          description: 标签展示名列表
+        totalLearnDurationSec:
+          type: integer
+          description: 累计学习时长（秒）；库：INT
+        totalLearnDays:
+          type: integer
+          description: 累计学习天数；库：INT
+        viewedCourseCount:
+          type: integer
+          description: 已观看课程数；库：INT
+        completedCourseCount:
+          type: integer
+          description: 已完成课程数；库：INT
+    ViewerLearnStatsSummaryData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerLearnStatsSummaryItem"
+          description: 列表数据
+    ViewerLearnStatsCourseListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                format: int64
+                description: 占位；本轮恒空表；库：VARCHAR(32)
+          description: 列表数据
+    ViewerTagGroupBrief:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        name:
+          type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
+        isDefault:
+          type: boolean
+          description: 是否默认分组；库：TINYINT(1)
+    ViewerTagGroupPageItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        name:
+          type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
+        isDefault:
+          type: boolean
+          description: 是否默认分组；库：TINYINT(1)
+        tagCount:
+          type: integer
+          description: 标签数量；库：INT
+    ViewerTagGroupPageData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerTagGroupPageItem"
+          description: 列表数据
+    ViewerTagGroupCreateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 10
+          description: 名称；库：VARCHAR(10)
+    ViewerTagGroupUpdateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 10
+          description: 名称；库：VARCHAR(10)
+    ViewerTagListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        name:
+          type: string
+          description: 名称；库：VARCHAR(256)
+          maxLength: 256
+        type:
+          type: integer
+          enum:
+            - 1
+            - 2
+          description: "1 手动 / 2 自动；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 手动
+              description: 手动
+            - value: 2
+              name: 自动
+              description: 自动
+        definitionSummary:
+          type: string
+          description: 标签规则摘要
+        userCount:
+          type: integer
+          description: 覆盖用户数；库：INT
+        groupId:
+          type: integer
+          format: int64
+          description: 分组 UUID；库：VARCHAR(32)
+        groupName:
+          type: string
+          description: 标签分组名
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    ViewerTagListData:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerTagListItem"
+          description: 列表数据
+    ViewerTagCreateRequest:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          maxLength: 20
+          description: 名称；库：VARCHAR(20)
+        type:
+          type: integer
+          enum:
+            - 1
+          description: "1 手动；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 手动
+              description: 手动
+        groupId:
+          type: integer
+          format: int64
+          description: 分组 UUID；库：VARCHAR(32)
+    ViewerTagUpdateRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 20
+          description: 名称；库：VARCHAR(20)
+        groupId:
+          type: integer
+          format: int64
+          description: 分组 UUID；库：VARCHAR(32)
+    ChatFilterAdminData:
+      type: object
+      required:
+        - pageUrl
+      properties:
+        pageUrl:
+          type: string
+          format: uri
+          description: 页面 URL；库：VARCHAR(2048)
+          maxLength: 2048
     ApiResponseId:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
@@ -5793,14 +8553,182 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/OutsideCourseListData"
+    ApiResponseMaterialAudits:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/MaterialAuditListData"
+    ApiResponsePasscode:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/PasscodeData"
+    ApiResponsePasscodeHostEnter:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/PasscodeHostEnterData"
+    ApiResponseActivityAudienceList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceListData"
+    ApiResponseActivityAudienceCreate:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceCreateData"
+    ApiResponseActivityAudienceImport:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceImportData"
+    ApiResponseActivityAudienceImportHistory:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceImportHistoryData"
+    ApiResponseActivityAudienceEntitlement:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceEntitlementData"
+    ApiResponseActivityAudienceComments:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceCommentListData"
+    ApiResponseChatFilterAdmin:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ChatFilterAdminData"
+    ApiResponseViewerList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerListData"
+    ApiResponseViewerStatus:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerStatusUpdateData"
+    ApiResponseViewerBlacklist:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerBlacklistUpdateData"
+    ApiResponseViewerTags:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTagsUpdateData"
+    ApiResponseViewerLearnSummary:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerLearnStatsSummaryData"
+    ApiResponseViewerLearnCourses:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerLearnStatsCourseListData"
+    ApiResponseViewerTagGroups:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              type: array
+              items:
+                $ref: "#/components/schemas/ViewerTagGroupBrief"
+    ApiResponseViewerTagGroupPage:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTagGroupPageData"
+    ApiResponseViewerTagGroupItem:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTagGroupPageItem"
+    ApiResponseViewerTagList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTagListData"
+    ApiResponseViewerTagDetail:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTagListItem"
     WatchActivitySummary:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         title:
           type: string
           description: 标题；库：VARCHAR(64)
@@ -5850,10 +8778,8 @@ components:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         title:
           type: string
           description: 标题；库：VARCHAR(64)
@@ -5917,53 +8843,45 @@ components:
           maxLength: 1024
     VhallSdkPayload:
       type: object
+      description: 微吼签名/init 鉴权字段；脚本 CDN 由前端适配器加载（D93）
       properties:
-        scriptUrl:
-          type: string
-          format: uri
-          description: SDK 脚本地址
-        jqueryUrl:
-          type: string
-          nullable: true
-          description: jQuery 脚本地址
         account:
           type: string
-          description: 回显用；init 不要传
+          description: 回显 String(viewerId)；init 不要传（与 email 互斥）
         email:
           type: string
-          description: 合成邮箱（观看身份）；库：VARCHAR(128)
+          description: "{viewerId}@qkzb.com，参与签名；new VhallSDK 必须用这份；库：VARCHAR(128)"
           maxLength: 128
         username:
           type: string
-          description: 观看昵称；库：VARCHAR(50)
+          description: 优先 Query nickname；空则默认「观众」；库：VARCHAR(50)
           maxLength: 50
         webinarId:
           type: string
-          description: 微吼活动号
+          description: "微吼活动号（= provider_room_id）；仅 provider=vhall"
         appKey:
           type: string
           description: 微吼 app_key
         signedAt:
           type: string
-          description: 签名时间戳
+          description: 签名时间戳（约 5 分钟有效）
         signType:
           type: integer
           example: 0
-          description: 签名类型；库：INT
+          description: 签名类型；通常 0；库：INT
         sign:
           type: string
-          description: 签名串
-    WatchSdkData:
+          description: 服务端 SecretKey 算出的签名；勿返回 secret
+    WatchSummaryData:
       type: object
+      description: 观看页活动摘要 / 页面壳（D95）：标题、态、时间、回放开关与有效期；全部取本库 Activity，不含 SDK 签名
       properties:
         id:
-          type: string
-          format: uuid
-          description: 本站活动 UUID；库：VARCHAR(36)
-          maxLength: 36
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID
         provider:
           $ref: "#/components/schemas/Provider"
-          description: vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改
+          description: 服务商（页壳可忽略；init 仍以 sdk-sign 的 provider 为准）
           x-apifox-enum:
             - value: vhall
               name: 微吼
@@ -5976,11 +8894,11 @@ components:
               description: 腾讯云
         title:
           type: string
-          description: 标题；库：VARCHAR(64)
+          description: 本库活动标题；库：VARCHAR(64)
           maxLength: 64
         state:
           $ref: "#/components/schemas/ActivityState"
-          description: "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放"
+          description: 本库活动状态
           x-apifox-enum:
             - value: 0
               name: 全部(列表筛)
@@ -6002,7 +8920,7 @@ components:
               description: 回放
         type:
           $ref: "#/components/schemas/ActivityType"
-          description: "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改"
+          description: 本库活动类型
           x-apifox-enum:
             - value: 1
               name: 音频
@@ -6016,97 +8934,174 @@ components:
             - value: 4
               name: 录播
               description: 录播
-        nickname:
-          type: string
-          description: 昵称；库：VARCHAR(64)
-          maxLength: 64
-        guestId:
-          type: string
-          description: 本站生成的游客 id；库：VARCHAR(64)
-          maxLength: 64
         startTime:
           type: string
-          description: "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+          description: "计划/实际开始，yyyy-MM-dd HH:mm:ss；本库；库：DATETIME(3)"
         endTime:
           type: string
-          description: "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
-        sdk:
-          $ref: "#/components/schemas/VhallSdkPayload"
-          description: 观看 JS SDK 初始化参数
-        embedUrl:
-          type: string
-          format: uri
-          description: 嵌入页 URL；库：VARCHAR(1024)
-          maxLength: 1024
-    AttendanceEnterRequest:
+          description: 结束时间；占位 0000-00-00… 时不输出；库：DATETIME(3)
+        playbackEnabled:
+          type: boolean
+          description: 本站回放开关；false 时结束页不展示「查看回放」；库：TINYINT(1)
+        playbackValidityType:
+          $ref: "#/components/schemas/PlaybackValidityType"
+          description: forever 永久有效 / days 直播结束后 N 天有效；缺省按 forever
+        playbackValidityDays:
+          type: integer
+          description: "type=days 时的天数；永久有效时可省略；库：INT"
+        playbackExpired:
+          type: boolean
+          description: 是否已超过有效期；起算同 replay/start：liveActualEndTime → 计划 endTime；无法起算则 false；库：TINYINT(1)
+        playbackSpeedAllow:
+          type: boolean
+          description: 是否允许倍速（原生 video.playbackRate）；缺省 true；库：TINYINT(1)
+        playbackFastForwardAllow:
+          type: boolean
+          description: 是否允许快进/拖进度；缺省 true；库：TINYINT(1)
+    WatchSdkData:
       type: object
-      required:
-        - userId
-        - enterTime
+      description: "观看 SDK 签名载荷（D92/D93/D94/D95）：仅 id / provider / viewerId / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*"
       properties:
-        userId:
-          type: string
-          description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
-          maxLength: 128
-        enterTime:
-          type: string
-          example: "2026-09-30 10:00:00"
-          description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
-        mid:
-          type: string
-          description: 幂等/消息 id；库：VARCHAR(64)
-          maxLength: 64
+        id:
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站活动 UUID（与 Query id 相同）
+        provider:
+          $ref: "#/components/schemas/Provider"
+          description: 服务商；前端 createWatchAdapter(provider)
+          x-apifox-enum:
+            - value: vhall
+              name: 微吼
+              description: 微吼
+            - value: aliyun
+              name: 阿里云
+              description: 阿里云
+            - value: tencent
+              name: 腾讯云
+              description: 腾讯云
         nickname:
           type: string
-          description: 昵称；库：VARCHAR(64)
+          description: 与 sdk.username 同值（身份回显）；库：VARCHAR(64)
           maxLength: 64
-        avatarUrl:
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众数字 id（与 sdk.email 一致）；库：BIGINT
+        sdk:
+          $ref: "#/components/schemas/VhallSdkPayload"
+          description: 该服务商签名与 init 鉴权参数（不含脚本 CDN，D93）
+    WatchAccessData:
+      type: object
+      description: 观看售卖门禁状态（D90）
+      properties:
+        id:
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+        sellAlone:
+          type: boolean
+          description: 是否单独售卖；库：TINYINT(1)
+        sellType:
+          $ref: "#/components/schemas/SellType"
+          description: free 免费 / paid 付费（存量） / encrypted 加密 / specified 指定学员
+        accessState:
           type: string
-          description: 头像 URL；库：VARCHAR(512)
-          maxLength: 512
-    AttendanceLeaveRequest:
+          enum:
+            - ok
+            - need_password
+            - need_login
+            - forbidden
+            - expired
+          description: ok 已放行 / need_password 需观看密码 / need_login 需登录 / forbidden 无观看权限 / expired 访问已过期
+          x-apifox-enum:
+            - value: ok
+              name: 已放行
+              description: 已放行
+            - value: need_password
+              name: 需观看密码
+              description: 需观看密码
+            - value: need_login
+              name: 需登录
+              description: 需登录
+            - value: forbidden
+              name: 无观看权限
+              description: 无观看权限
+            - value: expired
+              name: 访问已过期
+              description: 访问已过期
+        accessExpired:
+          type: boolean
+          description: 访问是否已过期（days 起算：仅 liveActualEndTime）；库：TINYINT(1)
+        accessValidityType:
+          $ref: "#/components/schemas/AccessValidityType"
+          description: long 长期有效 / days 直播实际结束后 N 天有效
+        accessValidityDays:
+          type: integer
+          description: 购买后有效天数；库：INT
+    WatchAccessVerifyPasswordRequest:
       type: object
       required:
-        - items
+        - password
       properties:
-        items:
-          type: array
-          minItems: 1
-          maxItems: 100
-          items:
-            type: object
-            required:
-              - userId
-              - enterTime
-              - leaveTime
-            properties:
-              userId:
-                type: string
-                description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
-                maxLength: 128
-              enterTime:
-                type: string
-                description: "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
-              leaveTime:
-                type: string
-                description: "离开时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
-              mid:
-                type: string
-                description: 幂等/消息 id；库：VARCHAR(64)
-                maxLength: 64
-          description: 条目列表
-    AttendanceLeaveData:
+        password:
+          type: string
+          pattern: "^\\d{6}$"
+          description: 明文 6 位数字观看密码；库：VARCHAR(64)
+          maxLength: 64
+    WatchAccessVerifyPasswordData:
       type: object
       properties:
-        updated:
+        accessToken:
+          type: string
+          description: 本场访问 JWT（请求头 X-Activity-Access）
+        expiresIn:
           type: integer
-          description: 成功更新条数；库：INT
-        skipped:
+          format: int64
+          description: accessToken 有效秒数；库：INT
+    WatchChatHistoryItem:
+      type: object
+      properties:
+        senderId:
+          type: string
+          description: 发送方 id
+        senderName:
+          type: string
+          description: 发送方昵称
+        msg:
+          type: string
+          description: 正文；库：VARCHAR(256)
+          maxLength: 256
+        msgId:
+          type: string
+          description: 消息 id；可空
+        avatar:
+          type: string
+          description: 头像；可空；库：VARCHAR(512)
+          maxLength: 512
+        roleName:
           type: integer
-          description: 跳过条数；库：INT
-        missing:
+          description: "1 主持 / 2 观众 / 3 助理 / 4 嘉宾；可空；库：INT"
+        timestamp:
           type: integer
-          description: 未找到条数；库：INT
+          format: int64
+          description: 毫秒时间戳；库：BIGINT
+    WatchChatHistoryData:
+      type: object
+      description: 回放页只读聊天历史（D91）
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: 微吼总数；失败为 0；库：BIGINT
+        page:
+          type: integer
+          description: 回显请求页码；库：INT
+        pageSize:
+          type: integer
+          description: 回显每页条数（固定 50）；库：INT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/WatchChatHistoryItem"
+          description: 旧→新；仅文本类消息
     ChatFilterData:
       type: object
       required:
@@ -6117,6 +9112,497 @@ components:
           format: uri
           description: 页面 URL；库：VARCHAR(2048)
           maxLength: 2048
+    ViewerUserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        hasPhone:
+          type: boolean
+          description: 是否已绑定手机号；库：TINYINT(1)
+        phoneMasked:
+          type: string
+          description: 脱敏手机号
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        avatarUrl:
+          type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
+        avatarObjectKey:
+          type: string
+          description: 头像对象存储 key
+    ViewerTokenPairData:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: access JWT
+        expiresIn:
+          type: integer
+          description: access 有效秒数；库：INT
+        refreshToken:
+          type: string
+          description: refresh JWT
+        refreshExpiresIn:
+          type: integer
+          description: refresh 有效秒数；库：INT
+        user:
+          $ref: "#/components/schemas/ViewerUserInfo"
+          description: 当前员工信息
+    ViewerAuthWechatLoginRequest:
+      type: object
+      required:
+        - code
+        - agreed
+      properties:
+        code:
+          type: string
+          description: 业务码：0 成功；400/401/403/500/501/502…；库：INT
+        agreed:
+          type: boolean
+          enum:
+            - true
+          description: true 已勾选同意；库：TINYINT(1)
+          x-apifox-enum:
+            - value: true
+              name: 已勾选同意
+              description: 已勾选同意
+    ViewerAuthPhoneLoginRequest:
+      type: object
+      required:
+        - loginCode
+        - phoneCode
+        - agreed
+      properties:
+        loginCode:
+          type: string
+          description: wx.login 临时 code
+        phoneCode:
+          type: string
+          description: getPhoneNumber 返回 code
+        agreed:
+          type: boolean
+          enum:
+            - true
+          description: true 已勾选同意；库：TINYINT(1)
+          x-apifox-enum:
+            - value: true
+              name: 已勾选同意
+              description: 已勾选同意
+    ViewerAuthDevPhoneLoginRequest:
+      type: object
+      required:
+        - phone
+        - agreed
+      properties:
+        phone:
+          type: string
+          pattern: "^1\\d{10}$"
+          description: 手机号
+        agreed:
+          type: boolean
+          enum:
+            - true
+          description: true 已勾选同意；库：TINYINT(1)
+          x-apifox-enum:
+            - value: true
+              name: 已勾选同意
+              description: 已勾选同意
+    ViewerAuthRefreshRequest:
+      type: object
+      required:
+        - accessToken
+        - refreshToken
+      properties:
+        accessToken:
+          type: string
+          description: access JWT
+        refreshToken:
+          type: string
+          description: refresh JWT
+    ViewerProfileUpdateRequest:
+      type: object
+      properties:
+        nickname:
+          type: string
+          maxLength: 16
+          description: 昵称；库：VARCHAR(16)
+        avatarUrl:
+          type: string
+          maxLength: 512
+          description: 头像 URL；库：VARCHAR(512)
+        avatarObjectKey:
+          type: string
+          maxLength: 1024
+          description: 头像对象存储 key；库：VARCHAR(1024)
+    ViewerUploadFileData:
+      type: object
+      properties:
+        objectKey:
+          type: string
+          description: 对象存储 key；库：VARCHAR(1024)
+          maxLength: 1024
+        url:
+          type: string
+          description: URL 地址；库：VARCHAR(2048)
+          maxLength: 2048
+        location:
+          type: string
+          description: 上传后访问 URL
+    ViewerTosStsData:
+      type: object
+      properties:
+        region:
+          type: string
+          description: 云厂商 region
+        endpoint:
+          type: string
+          description: 对象存储 endpoint
+        bucketName:
+          type: string
+          description: 桶名
+        accessKeyId:
+          type: string
+          description: 临时 AccessKeyId
+        secretAccessKey:
+          type: string
+          description: 临时 SecretAccessKey
+        sessionToken:
+          type: string
+          description: 临时 SessionToken
+        expiredTime:
+          type: string
+          description: STS 过期时间；库：DATETIME(3)
+        cdnUrl:
+          type: string
+          description: CDN 根地址
+    ViewerFeedbackImageRef:
+      type: object
+      required:
+        - url
+        - objectKey
+      properties:
+        url:
+          type: string
+          description: URL 地址；库：VARCHAR(2048)
+          maxLength: 2048
+        objectKey:
+          type: string
+          description: 对象存储 key；库：VARCHAR(1024)
+          maxLength: 1024
+    ViewerFeedbackSubmitRequest:
+      type: object
+      required:
+        - category
+        - content
+      properties:
+        category:
+          type: integer
+          enum:
+            - 1
+            - 2
+            - 3
+            - 4
+          description: "1 课程权益 / 2 视频播放 / 3 学习体验 / 4 其他；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 课程权益
+              description: 课程权益
+            - value: 2
+              name: 视频播放
+              description: 视频播放
+            - value: 3
+              name: 学习体验
+              description: 学习体验
+            - value: 4
+              name: 其他
+              description: 其他
+        content:
+          type: string
+          maxLength: 200
+          description: 正文内容；库：VARCHAR(200)
+        contactPhone:
+          type: string
+          description: 联系电话
+        images:
+          type: array
+          maxItems: 4
+          items:
+            $ref: "#/components/schemas/ViewerFeedbackImageRef"
+          description: 截图 objectKey 列表
+    ViewerFeedbackListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        category:
+          type: integer
+          description: 反馈分类 code；库：INT
+        categoryLabel:
+          type: string
+          description: 反馈分类展示名
+        content:
+          type: string
+          description: 正文内容；库：VARCHAR(500)
+          maxLength: 500
+        imageCount:
+          type: integer
+          description: 截图数量；库：INT
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    ViewerFeedbackListData:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ViewerFeedbackListItem"
+          description: 列表数据
+    ViewerFeedbackDetailData:
+      allOf:
+        - $ref: "#/components/schemas/ViewerFeedbackListItem"
+        - type: object
+          properties:
+            contactPhone:
+              type: string
+              description: 联系电话
+            images:
+              type: array
+              items:
+                $ref: "#/components/schemas/ViewerFeedbackImageRef"
+              description: 截图 objectKey 列表
+    ViewerPresencePingRequest:
+      type: object
+      properties:
+        scene:
+          type: string
+          enum:
+            - miniapp
+            - live
+          description: miniapp 小程序 / live 直播间
+          x-apifox-enum:
+            - value: miniapp
+              name: 小程序
+              description: 小程序
+            - value: live
+              name: 直播间
+              description: 直播间
+    ViewerPresencePingData:
+      type: object
+      properties:
+        lastVisitTime:
+          type: string
+          description: 最近访问时间；库：DATETIME(3)
+    WatchProductItem:
+      type: object
+      properties:
+        spuId:
+          type: string
+          description: 订单中心商品 id（十进制字符串，D56 例外）；库：VARCHAR(64)
+          maxLength: 64
+        productName:
+          type: string
+          description: 商品名称；库：VARCHAR(128)
+          maxLength: 128
+    WatchProductListData:
+      type: object
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/WatchProductItem"
+          description: 列表数据
+    WatchRecordPlayItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        title:
+          type: string
+          description: 标题；库：VARCHAR(64)
+          maxLength: 64
+        duration:
+          type: string
+          description: 时长
+        coverUrl:
+          type: string
+          description: 封面图 URL；库：VARCHAR(2048)
+          maxLength: 2048
+        tosUrl:
+          type: string
+          description: 本站 TOS/CDN 播放地址
+        createdTime:
+          type: string
+          description: "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    WatchRecordPlayListData:
+      type: object
+      properties:
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/WatchRecordPlayItem"
+          description: 列表数据
+    WatchReplayStartRequest:
+      type: object
+      required:
+        - recordId
+      properties:
+        recordId:
+          type: integer
+          format: int64
+          description: 微吼回放/点播资源 id（create-demand 的 record_id）；库：微吼 integer（本站不落库，透传 create-demand）
+    WatchReplayStartData:
+      type: object
+      properties:
+        socketId:
+          type: string
+          maxLength: 32
+          description: 回放心跳 socket id；库：VARCHAR(32)
+    WatchReplayHeartbeatRequest:
+      type: object
+      required:
+        - socketId
+      properties:
+        socketId:
+          type: string
+          description: 回放心跳 socket id
+    WatchReplayHeartbeatData:
+      type: object
+      properties:
+        lastReportTime:
+          type: string
+          description: 上次上报时间；库：DATETIME(3)
+    WatchDevPresenceRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - Join
+            - Leave
+          description: Join 进房 / Leave 离房；库：INT
+          x-apifox-enum:
+            - value: Join
+              name: 进房
+              description: 进房
+            - value: Leave
+              name: 离房
+              description: 离房
+        userId:
+          type: string
+          description: 用户标识（第三方观众 id，非员工主键）；库：VARCHAR(128)
+          maxLength: 128
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        email:
+          type: string
+          description: 合成邮箱（观看身份）；库：VARCHAR(128)
+          maxLength: 128
+    WatchCommentReportRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          maxLength: 500
+          description: 正文内容；库：VARCHAR(500)
+        guestId:
+          type: string
+          description: 本站生成的游客 id；库：VARCHAR(64)
+          maxLength: 64
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+        nickname:
+          type: string
+          description: 昵称；库：VARCHAR(64)
+          maxLength: 64
+        roleName:
+          type: integer
+          description: 评论角色名；库：INT
+        providerMsgId:
+          type: string
+          description: 第三方消息 id
+        commentTime:
+          type: string
+          description: 评论时间；库：DATETIME(3)
+    WatchCommentDeleteRequest:
+      type: object
+      properties:
+        providerMsgId:
+          type: string
+          description: 第三方消息 id
+        commentId:
+          type: integer
+          format: int64
+          description: 评论 id；库：BIGINT
+    WatchAudienceAttributeRequest:
+      type: object
+      required:
+        - viewerId
+        - inviterId
+      properties:
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+        inviterId:
+          type: integer
+          format: int64
+          description: 员工 rs_mainkey_id；库：BIGINT
+        inviterKind:
+          type: string
+          enum:
+            - employee
+          description: employee 员工
+          x-apifox-enum:
+            - value: employee
+              name: 员工
+              description: 员工
+    WatchAudienceAttributeData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+    IdDataInt:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
     VhallPresenceCallback:
       type: object
       description: 微吼上下线回调 body（字段以微吼文档为准）
@@ -6182,6 +9668,14 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchEmbedData"
+    ApiResponseWatchSummary:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchSummaryData"
     ApiResponseWatchSdk:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
@@ -6190,14 +9684,30 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchSdkData"
-    ApiResponseAttendanceLeave:
+    ApiResponseWatchAccess:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
         - type: object
           properties:
             data:
               description: 业务数据；失败时可能省略
-              $ref: "#/components/schemas/AttendanceLeaveData"
+              $ref: "#/components/schemas/WatchAccessData"
+    ApiResponseWatchAccessVerifyPassword:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchAccessVerifyPasswordData"
+    ApiResponseWatchChatHistory:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchChatHistoryData"
     ApiResponseChatFilter:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
@@ -6206,6 +9716,118 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/ChatFilterData"
+    ApiResponseViewerTokenPair:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTokenPairData"
+    ApiResponseViewerUserInfo:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerUserInfo"
+    ApiResponseViewerUploadFile:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerUploadFileData"
+    ApiResponseViewerTosSts:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerTosStsData"
+    ApiResponseViewerFeedbackId:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/IdDataInt"
+    ApiResponseViewerFeedbackList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerFeedbackListData"
+    ApiResponseViewerFeedbackDetail:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerFeedbackDetailData"
+    ApiResponseViewerPresencePing:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerPresencePingData"
+    ApiResponseWatchProducts:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchProductListData"
+    ApiResponseWatchPlayRecords:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchRecordPlayListData"
+    ApiResponseWatchReplayStart:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchReplayStartData"
+    ApiResponseWatchReplayHeartbeat:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchReplayHeartbeatData"
+    ApiResponseWatchAudienceAttribute:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchAudienceAttributeData"
+    ApiResponseIntId:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/IdDataInt"
 security:
   - BearerAuth:
       []

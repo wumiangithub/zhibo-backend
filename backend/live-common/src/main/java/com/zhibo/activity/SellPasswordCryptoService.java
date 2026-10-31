@@ -1,4 +1,4 @@
-package com.zhibo.admin.activity;
+package com.zhibo.activity;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;

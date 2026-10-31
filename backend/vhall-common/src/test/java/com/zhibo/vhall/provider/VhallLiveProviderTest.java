@@ -2,6 +2,7 @@ package com.zhibo.vhall.provider;
 
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
+import com.zhibo.liveprovider.dto.ProviderChatHistory;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
@@ -281,6 +282,42 @@ class VhallLiveProviderTest {
         assertEquals("99", captor.getValue().get("webinar_id"));
         assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_EMAIL, captor.getValue().get("email"));
         assertEquals(VhallLiveProvider.DEFAULT_CHAT_FILTER_NAME, captor.getValue().get("name"));
+    }
+
+    @Test
+    void listChatHistory_mapsNestedGetList() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_CHAT_LIST), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "total", 1,
+                        "list", List.of(Map.of(
+                                "sender_id", "s1",
+                                "msg_id", "m1",
+                                "date_time", "2026-10-30 12:00:00",
+                                "context", Map.of(
+                                        "role_name", 1,
+                                        "nickname", "主持",
+                                        "avatar", "https://a/b.jpg"),
+                                "data", Map.of(
+                                        "type", "text",
+                                        "text_content", "大家好",
+                                        "nickname", "主持",
+                                        "avatar", "https://a/b.jpg")))));
+
+        ProviderChatHistory history = provider.listChatHistory("99", 0, 50);
+        assertEquals(1L, history.total());
+        assertEquals(1, history.list().size());
+        assertEquals("大家好", history.list().get(0).msg());
+        assertEquals("主持", history.list().get(0).senderName());
+        assertEquals(1, history.list().get(0).roleName());
+        assertEquals("m1", history.list().get(0).msgId());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_CHAT_LIST), captor.capture(), eq(Map.class));
+        assertEquals("99", captor.getValue().get("webinar_id"));
+        assertEquals(0, captor.getValue().get("pos"));
+        assertEquals(50, captor.getValue().get("limit"));
+        assertEquals(1, captor.getValue().get("chat_audit_status"));
     }
 
     @Test

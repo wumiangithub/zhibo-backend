@@ -1,7 +1,7 @@
 package com.zhibo.live.watch;
 
-import com.zhibo.activity.ActivityCommentEntity;
-import com.zhibo.activity.ActivityCommentRepository;
+import com.zhibo.activity.RoomCommentEntity;
+import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.AttendanceTimes;
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WatchCommentService {
 
     private final ActivityRepository activityRepository;
-    private final ActivityCommentRepository commentRepository;
+    private final RoomCommentRepository commentRepository;
 
     @Transactional
     public ReportCommentResponse report(String activityId, ReportCommentRequest request) {
@@ -44,7 +44,13 @@ public class WatchCommentService {
         if (providerMsgId != null) {
             var existing = commentRepository.findByActivityIdAndProviderMsgId(activity.getId(), providerMsgId);
             if (existing.isPresent()) {
-                return new ReportCommentResponse(existing.get().getId());
+                // 他端可能先以 guestId 幂等入库；本人回声补上 viewerId，评论次数才有数
+                RoomCommentEntity row = existing.get();
+                if (row.getViewerId() == null && viewerId != null) {
+                    row.setViewerId(viewerId);
+                    commentRepository.save(row);
+                }
+                return new ReportCommentResponse(row.getId());
             }
         }
 
@@ -52,7 +58,7 @@ public class WatchCommentService {
                 ? LocalDateTime.now()
                 : AttendanceTimes.parse(request.getCommentTime(), "commentTime");
 
-        ActivityCommentEntity entity = new ActivityCommentEntity();
+        RoomCommentEntity entity = new RoomCommentEntity();
         entity.setActivityId(activity.getId());
         entity.setViewerId(viewerId);
         entity.setGuestId(guestId);
@@ -81,7 +87,7 @@ public class WatchCommentService {
             throw new IllegalArgumentException("请求体不能为空");
         }
         ActivityEntity activity = requireActivity(activityId);
-        ActivityCommentEntity entity = null;
+        RoomCommentEntity entity = null;
         if (request.getCommentId() != null) {
             entity = commentRepository
                     .findById(request.getCommentId())

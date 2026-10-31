@@ -4,6 +4,8 @@ import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
+import com.zhibo.liveprovider.dto.ProviderChatHistory;
+import com.zhibo.liveprovider.dto.ProviderChatMessage;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
@@ -19,6 +21,10 @@ import com.zhibo.vhall.util.VhallSignUtil;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,11 +75,12 @@ public class VhallLiveProvider implements LiveProvider {
     static final String RECORD_DOWNLOAD_QUALITY_SAME = "same";
     /** 聊天审核页（中控台 iframe） */
     static final String PATH_CHAT_FILTER = "/v3/webinars/manage/chat-filter";
+    /** 历史聊天；业务参数 webinar_id + pos + limit（+ 可选时间/审核） */
+    static final String PATH_CHAT_LIST = "/v3/interacts/chat/get-list";
     /** 当前活动的 rtmp 推流地址；业务参数仅 webinar_id */
     static final String PATH_STREAM_PUSH = "/v3/webinars/live/get-stream-push-address";
     /** 当前活动是否有推流；业务参数仅 webinar_id；data.status：0 无 / 1 有 */
     static final String PATH_STREAM_STATUS = "/v3/webinars/stream/get-stream-status";
-    static final String SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
     /** 微吼 get-role-url：1 主持人 */
     static final int ROLE_HOST = 1;
     /** 微吼 get-role-url：2 嘉宾 */
@@ -422,18 +429,16 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("缺少微吼 SecretKey，无法签名 SDK 载荷");
         }
 
-        String guestId = resolveGuestId(command.guestId());
+        Long viewerId = command.viewerId();
+        if (viewerId == null || viewerId <= 0) {
+            throw new IllegalArgumentException("请先登录");
+        }
         String nickname = resolveNickname(command.nickname());
-        String email = resolveWatchEmail(command.viewerId(), guestId);
+        String email = resolveWatchEmail(viewerId, null);
+        String account = Long.toString(viewerId);
         String webinarId = command.providerRoomId();
 
-        ProviderRoomSnapshot info = fetchRoom(webinarId);
-        String baseEmbed = info.fullEmbedShareLink();
-        if (baseEmbed == null || baseEmbed.isBlank()) {
-            throw new IllegalStateException("活动缺少全屏嵌入地址 full_embed_share_link");
-        }
-        String embedUrl = buildEmbedUrlWithEmail(baseEmbed, email, nickname);
-
+        // D94：签名接口不拉微吼详情、不下发 embedUrl；活动态/标题等由本库 Activity 填
         String signedAt = Long.toString(clock.instant().getEpochSecond());
         Map<String, Object> signParams = new LinkedHashMap<>();
         signParams.put("app_key", properties.getAppKey());
@@ -444,9 +449,7 @@ public class VhallLiveProvider implements LiveProvider {
         String sign = VhallSignUtil.sign(appSecret, signParams);
 
         WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();
-        sdk.setScriptUrl(SDK_SCRIPT_URL);
-        sdk.setJqueryUrl(null);
-        sdk.setAccount(guestId);
+        sdk.setAccount(account);
         sdk.setEmail(email);
         sdk.setUsername(nickname);
         sdk.setWebinarId(webinarId);
@@ -456,12 +459,6 @@ public class VhallLiveProvider implements LiveProvider {
         sdk.setSign(sign);
 
         WatchSdkBundle bundle = new WatchSdkBundle();
-        bundle.setTitle(info.title());
-        bundle.setState(info.state());
-        bundle.setType(info.type());
-        bundle.setStartTime(info.startTime());
-        bundle.setEndTime(info.endTime());
-        bundle.setEmbedUrl(embedUrl);
         bundle.setSdk(sdk);
         return bundle;
     }
@@ -605,6 +602,173 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("微吼未返回聊天审核页 page_url");
         }
         return pageUrl;
+    }
+
+    /**
+     * 历史聊天（D91）：代理微吼 get-list；返回列表为微吼原始顺序（通常新→旧），
+     * 观看端再 reverse 成旧→新展示。
+     */
+    @Override
+    public ProviderChatHistory listChatHistory(String providerRoomId, int pos, int limit) {
+        requireRoomId(providerRoomId);
+        if (pos < 0) {
+            throw new IllegalArgumentException("pos 不能小于 0");
+        }
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("limit 需在 1~1000");
+        }
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("webinar_id", providerRoomId);
+        params.put("pos", pos);
+        params.put("limit", limit);
+        params.put("chat_audit_status", 1);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.postForData(PATH_CHAT_LIST, params, Map.class);
+        if (data == null) {
+            return new ProviderChatHistory(0L, List.of());
+        }
+        long total = asLong(data.get("total"));
+        List<ProviderChatMessage> list = mapChatList(data.get("list"));
+        return new ProviderChatHistory(total, list);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<ProviderChatMessage> mapChatList(Object rawList) {
+        if (!(rawList instanceof List<?> rows)) {
+            return List.of();
+        }
+        List<ProviderChatMessage> result = new ArrayList<>();
+        for (Object row : rows) {
+            if (!(row instanceof Map<?, ?> map)) {
+                continue;
+            }
+            ProviderChatMessage msg = normalizeChatItem((Map<String, Object>) map);
+            if (msg != null) {
+                result.add(msg);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 对齐 live-web {@code normalizeChatItem}：顶层 / context / data 三套字段兜底。
+     */
+    @SuppressWarnings("unchecked")
+    static ProviderChatMessage normalizeChatItem(Map<String, Object> raw) {
+        if (raw == null) {
+            return null;
+        }
+        Map<String, Object> ctx = raw.get("context") instanceof Map<?, ?> c
+                ? (Map<String, Object>) c
+                : Map.of();
+        Map<String, Object> payload = raw.get("data") instanceof Map<?, ?> d
+                ? (Map<String, Object>) d
+                : Map.of();
+
+        String type = asString(payload.get("type"));
+        if (type != null && !type.isBlank() && !"text".equals(type) && !"image".equals(type)) {
+            return null;
+        }
+        String event = asString(raw.get("event"));
+        if (event != null && !event.isBlank() && !"msg".equals(event)) {
+            return null;
+        }
+
+        String text = firstNonBlank(
+                asString(raw.get("content")),
+                asString(payload.get("text_content")),
+                asString(payload.get("barrage_txt")),
+                asString(payload.get("barrageTxt")));
+        String name = firstNonBlank(
+                asString(raw.get("nickname")),
+                asString(raw.get("nick_name")),
+                asString(ctx.get("nickname")),
+                asString(ctx.get("nick_name")),
+                asString(payload.get("nickname")),
+                asString(payload.get("nick_name")));
+        if (text == null || name == null) {
+            return null;
+        }
+
+        String avatar = firstNonBlank(
+                asString(raw.get("avatar")),
+                asString(ctx.get("avatar")),
+                asString(payload.get("avatar")));
+
+        Integer role = asInteger(raw.get("role_name"));
+        if (role == null) {
+            role = asInteger(ctx.get("role_name"));
+        }
+        if (role == null) {
+            String userRole = firstNonBlank(asString(raw.get("user_role")), asString(ctx.get("user_role")));
+            if ("host".equals(userRole)) {
+                role = 1;
+            }
+        }
+        if (role != null && (role < 1 || role > 4)) {
+            role = null;
+        }
+
+        String senderId = firstNonBlank(
+                asString(raw.get("user_id")),
+                asString(raw.get("sender_id")),
+                asString(raw.get("third_user_id")),
+                asString(ctx.get("third_account_id")),
+                asString(ctx.get("user_id")),
+                asString(raw.get("account_id")));
+
+        String msgId = firstNonBlank(
+                asString(raw.get("id")),
+                asString(raw.get("msg_id")),
+                asString(payload.get("msg_id")));
+
+        long timestamp = resolveChatTimestamp(raw);
+
+        return new ProviderChatMessage(
+                senderId == null ? "" : senderId,
+                name.trim(),
+                text,
+                msgId,
+                avatar,
+                role,
+                timestamp);
+    }
+
+    private static long resolveChatTimestamp(Map<String, Object> raw) {
+        Object createTs = raw.get("create_timestamp");
+        if (createTs != null) {
+            long sec = asLong(createTs);
+            if (sec > 0) {
+                // 微吼多为秒；若已是毫秒（>1e12）直接用
+                return sec > 1_000_000_000_000L ? sec : sec * 1000L;
+            }
+        }
+        String dateTime = firstNonBlank(asString(raw.get("date_time")), asString(raw.get("show_time")));
+        if (dateTime != null) {
+            try {
+                return LocalDateTime.parse(dateTime.trim(), DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                        .atZone(ZoneId.of("Asia/Shanghai"))
+                        .toInstant()
+                        .toEpochMilli();
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        return Instant.now().toEpochMilli();
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String v : values) {
+            if (v != null && !v.isBlank()) {
+                return v.trim();
+            }
+        }
+        return null;
     }
 
     static String resolveChatFilterEmail(String email) {

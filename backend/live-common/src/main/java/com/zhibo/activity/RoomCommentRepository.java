@@ -9,18 +9,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface ActivityCommentRepository extends JpaRepository<ActivityCommentEntity, Long> {
+public interface RoomCommentRepository extends JpaRepository<RoomCommentEntity, Long> {
 
-    Optional<ActivityCommentEntity> findByActivityIdAndProviderMsgId(String activityId, String providerMsgId);
+    Optional<RoomCommentEntity> findByActivityIdAndProviderMsgId(String activityId, String providerMsgId);
 
-    Page<ActivityCommentEntity> findByActivityIdOrderByDeletedTimeAscCommentTimeDesc(
+    Page<RoomCommentEntity> findByActivityIdOrderByDeletedTimeAscCommentTimeDesc(
             String activityId, Pageable pageable);
 
-    Page<ActivityCommentEntity> findByActivityIdAndNicknameContainingOrderByDeletedTimeAscCommentTimeDesc(
+    Page<RoomCommentEntity> findByActivityIdAndNicknameContainingOrderByDeletedTimeAscCommentTimeDesc(
             String activityId, String nickname, Pageable pageable);
 
     @Query(
-            "SELECT c.viewerId, COUNT(c) FROM ActivityCommentEntity c "
+            "SELECT c.viewerId, COUNT(c) FROM RoomCommentEntity c "
                     + "WHERE c.activityId = :activityId AND c.deletedTime IS NULL "
                     + "AND c.viewerId IN :viewerIds GROUP BY c.viewerId")
     List<Object[]> countActiveByViewerIds(

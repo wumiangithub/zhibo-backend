@@ -1,7 +1,6 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
-import com.zhibo.activity.PlaybackRules;
 import com.zhibo.live.watch.dto.SdkPayload;
 import com.zhibo.live.watch.dto.WatchSdkResponse;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -11,62 +10,39 @@ import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-
 /**
- * 观看 SDK。有 {@code viewerId} 时 email 签成 {@code {id}@qkzb.com}；
+ * 观看 SDK 签名（D92/D95）。必须有 {@code viewerId}；email 签成 {@code {id}@qkzb.com}；
  * {@code sdk.username} 优先用请求里非空的展示昵称（小程序 URL 已按通则算好），避免 H5 再拉 user-info。
- * 回放相关字段（D89）一并下发，供结束页 / 本站 TOS 回放页使用。
+ * 页壳字段（title/state/playback*）见 {@link WatchService#summary}，不进本响应。
  */
 @Service
 @RequiredArgsConstructor
 public class WatchSdkService {
 
-    static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
-
     private final WatchService watchService;
     private final LiveProviderRegistry providerRegistry;
-    private final Clock clock;
 
-    public WatchSdkResponse sdk(String activityId, String guestId, String nickname, Long viewerId) {
+    public WatchSdkResponse sdk(String activityId, String nickname, Long viewerId) {
+        if (viewerId == null || viewerId <= 0) {
+            throw new IllegalArgumentException("请先登录");
+        }
         ActivityEntity entity = watchService.requireActivity(activityId);
         watchService.requireReadyForWatch(entity);
 
         String sdkNickname = resolveSdkNickname(nickname, viewerId);
         WatchSdkBundle bundle = providerRegistry.require(entity.getProvider())
                 .buildWatchSdk(new WatchSdkCommand(
-                        entity.getProviderRoomId(), guestId, sdkNickname, viewerId));
+                        entity.getProviderRoomId(), sdkNickname, viewerId));
 
-        String resolvedGuestId = bundle.getSdk() != null && bundle.getSdk().getAccount() != null
-                ? bundle.getSdk().getAccount()
-                : VhallLiveProvider.resolveGuestId(guestId);
         String resolvedNickname = bundle.getSdk() != null && bundle.getSdk().getUsername() != null
                 ? bundle.getSdk().getUsername()
                 : sdkNickname;
 
-        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
-        boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
-
         WatchSdkResponse response = new WatchSdkResponse();
         response.setId(entity.getId());
         response.setProvider(entity.getProvider());
-        response.setTitle(bundle.getTitle() != null ? bundle.getTitle() : entity.getTitle());
-        response.setState(bundle.getState() != null ? bundle.getState() : entity.getState());
-        response.setType(entity.getType());
         response.setNickname(resolvedNickname);
-        response.setGuestId(resolvedGuestId);
-        response.setStartTime(entity.getStartTime() != null ? entity.getStartTime() : bundle.getStartTime());
-        response.setEndTime(entity.getEndTime() != null ? entity.getEndTime() : bundle.getEndTime());
-        response.setEmbedUrl(bundle.getEmbedUrl());
-        response.setPlaybackEnabled(playbackEnabled);
-        response.setPlaybackValidityType(
-                entity.getPlaybackValidityType() != null ? entity.getPlaybackValidityType() : "forever");
-        response.setPlaybackValidityDays(entity.getPlaybackValidityDays());
-        response.setPlaybackExpired(PlaybackRules.isExpired(entity, now));
-        response.setPlaybackSpeedAllow(!Boolean.FALSE.equals(entity.getPlaybackSpeedAllow()));
-        response.setPlaybackFastForwardAllow(!Boolean.FALSE.equals(entity.getPlaybackFastForwardAllow()));
+        response.setViewerId(viewerId);
         response.setSdk(toSdkPayload(bundle.getSdk()));
         return response;
     }
@@ -89,8 +65,6 @@ public class WatchSdkService {
             return null;
         }
         SdkPayload payload = new SdkPayload();
-        payload.setScriptUrl(sdk.getScriptUrl());
-        payload.setJqueryUrl(sdk.getJqueryUrl());
         payload.setAccount(sdk.getAccount());
         payload.setEmail(sdk.getEmail());
         payload.setUsername(sdk.getUsername());

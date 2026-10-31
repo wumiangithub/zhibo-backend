@@ -5,18 +5,12 @@ import lombok.Data;
 @Data
 public class WatchSdkBundle {
 
-    private String title;
-    private Integer state;
-    private Integer type;
-    private String startTime;
-    private String endTime;
-    private String embedUrl;
+    /** 仅签名/init；活动标题/态/时间由本库 Activity 填（D94）。 */
     private SdkInit sdk;
 
+    /** 签名与 init 鉴权字段；脚本 CDN 由前端适配器加载（D93）。 */
     @Data
     public static class SdkInit {
-        private String scriptUrl;
-        private String jqueryUrl;
         private String account;
         private String email;
         private String username;

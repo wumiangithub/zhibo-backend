@@ -3,6 +3,7 @@ package com.zhibo.liveprovider;
 import com.zhibo.liveprovider.dto.CreateRoomCommand;
 import com.zhibo.liveprovider.dto.CreateRoomResult;
 import com.zhibo.liveprovider.dto.OnlinePoint;
+import com.zhibo.liveprovider.dto.ProviderChatHistory;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
@@ -155,6 +156,16 @@ public interface LiveProvider {
      * @return 可嵌入的审核页地址
      */
     String buildChatFilterUrl(String providerRoomId, String email, String name);
+
+    /**
+     * 历史聊天（回放页只读；微吼 {@code /v3/interacts/chat/get-list}）。
+     *
+     * @param pos   起始偏移（0 起）
+     * @param limit 条数上限
+     */
+    default ProviderChatHistory listChatHistory(String providerRoomId, int pos, int limit) {
+        throw new UnsupportedOperationException("该服务商未接入聊天历史");
+    }
 
     /**
      * 第三方 rtmp 推到本场直播间的服务器与串流密钥。

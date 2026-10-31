@@ -6,8 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.zhibo.activity.ActivityCommentEntity;
-import com.zhibo.activity.ActivityCommentRepository;
+import com.zhibo.activity.RoomCommentEntity;
+import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.live.watch.dto.ReportCommentRequest;
@@ -27,7 +27,7 @@ class WatchCommentServiceTest {
     @Mock
     private ActivityRepository activityRepository;
     @Mock
-    private ActivityCommentRepository commentRepository;
+    private RoomCommentRepository commentRepository;
 
     private WatchCommentService service;
 
@@ -50,8 +50,8 @@ class WatchCommentServiceTest {
 
         when(commentRepository.findByActivityIdAndProviderMsgId(ACTIVITY_ID, "msg-1"))
                 .thenReturn(Optional.empty());
-        when(commentRepository.save(any(ActivityCommentEntity.class))).thenAnswer(inv -> {
-            ActivityCommentEntity e = inv.getArgument(0);
+        when(commentRepository.save(any(RoomCommentEntity.class))).thenAnswer(inv -> {
+            RoomCommentEntity e = inv.getArgument(0);
             e.setId(9L);
             return e;
         });
@@ -59,7 +59,7 @@ class WatchCommentServiceTest {
         var resp = service.report(ACTIVITY_ID, request);
         assertEquals(9L, resp.getId());
 
-        ArgumentCaptor<ActivityCommentEntity> cap = ArgumentCaptor.forClass(ActivityCommentEntity.class);
+        ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
         assertEquals("hello", cap.getValue().getContent());
         assertEquals("guest-1", cap.getValue().getGuestId());
@@ -68,7 +68,7 @@ class WatchCommentServiceTest {
 
     @Test
     void report_idempotentByProviderMsgId() {
-        ActivityCommentEntity existing = new ActivityCommentEntity();
+        RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
         when(commentRepository.findByActivityIdAndProviderMsgId(ACTIVITY_ID, "msg-1"))
                 .thenReturn(Optional.of(existing));
@@ -79,6 +79,26 @@ class WatchCommentServiceTest {
         request.setProviderMsgId("msg-1");
 
         assertEquals(3L, service.report(ACTIVITY_ID, request).getId());
+    }
+
+    @Test
+    void report_idempotentBackfillsViewerId() {
+        RoomCommentEntity existing = new RoomCommentEntity();
+        existing.setId(3L);
+        existing.setViewerId(null);
+        when(commentRepository.findByActivityIdAndProviderMsgId(ACTIVITY_ID, "msg-1"))
+                .thenReturn(Optional.of(existing));
+        when(commentRepository.save(any(RoomCommentEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReportCommentRequest request = new ReportCommentRequest();
+        request.setContent("hello");
+        request.setGuestId("guest-1");
+        request.setViewerId(12L);
+        request.setProviderMsgId("msg-1");
+
+        assertEquals(3L, service.report(ACTIVITY_ID, request).getId());
+        assertEquals(12L, existing.getViewerId());
+        verify(commentRepository).save(existing);
     }
 
     @Test

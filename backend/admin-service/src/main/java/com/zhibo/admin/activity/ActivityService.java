@@ -17,6 +17,7 @@ import com.zhibo.activity.ActivityProductEntity;
 import com.zhibo.activity.ActivityProductId;
 import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.activity.SellPasswordCryptoService;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
 import com.zhibo.admin.activity.dto.DeleteActivityMembersRequest;
@@ -86,8 +87,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -123,7 +122,8 @@ public class ActivityService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final String VALIDITY_LONG = "长期有效";
     private static final Set<String> SHELF_VALUES = Set.of("pending", "on", "off", "banned");
-    private static final Set<String> SELL_VALUES = Set.of("free", "paid", "encrypted", "specified");
+    /** 管理端可写售卖类型（paid 已下线，PUT 拒收；存量 paid 仍可读） */
+    private static final Set<String> SELL_VALUES = Set.of("free", "encrypted", "specified");
     private static final Set<String> ACCESS_VALIDITY = Set.of("long", "days");
     private static final Set<String> PLAYBACK_VALIDITY = Set.of("forever", "days");
     private static final int RELATION_LIMIT = 20;
@@ -602,8 +602,6 @@ public class ActivityService {
         entity.setSellAlone(request.getSellAlone());
         entity.setSellType(sellType);
 
-        BigDecimal price = null;
-        BigDecimal linePrice = null;
         String cipher = null;
         String accessType;
         Integer accessDays = null;
@@ -624,15 +622,7 @@ public class ActivityService {
             }
         }
 
-        if ("paid".equals(sellType)) {
-            price = parseMoney(request.getPrice(), "商品价格", true);
-            if (request.getLinePrice() != null && !request.getLinePrice().isBlank()) {
-                linePrice = parseMoney(request.getLinePrice(), "划线价格", false);
-                if (linePrice.compareTo(price) <= 0) {
-                    throw new IllegalArgumentException("划线价格须大于商品价格");
-                }
-            }
-        } else if ("encrypted".equals(sellType)) {
+        if ("encrypted".equals(sellType)) {
             String password = request.getPassword() == null ? "" : request.getPassword().trim();
             if (!password.matches("\\d{6}")) {
                 throw new IllegalArgumentException("密码须为恰好6位数字");
@@ -640,8 +630,9 @@ public class ActivityService {
             cipher = sellPasswordCrypto.encrypt(password);
         }
 
-        entity.setPrice(price);
-        entity.setLinePrice(linePrice);
+        // 改离 paid 时清空价格；paid 已不可再写入
+        entity.setPrice(null);
+        entity.setLinePrice(null);
         entity.setSellPasswordCipher(cipher);
         entity.setAccessValidityType(accessType);
         entity.setAccessValidityDays(accessDays);
@@ -2433,29 +2424,6 @@ public class ActivityService {
         person.setAvatar(AuthService.resolveAvatar(user));
         person.setDepartmentName(AuthService.resolveDepartmentName(user));
         return person;
-    }
-
-    private static BigDecimal parseMoney(String raw, String label, boolean required) {
-        if (raw == null || raw.isBlank()) {
-            if (required) {
-                throw new IllegalArgumentException(label + "不能为空");
-            }
-            return null;
-        }
-        String text = raw.trim();
-        BigDecimal value;
-        try {
-            value = new BigDecimal(text);
-        } catch (NumberFormatException ex) {
-            throw new IllegalArgumentException(label + "无效");
-        }
-        if (value.compareTo(BigDecimal.ZERO) < 0) {
-            throw new IllegalArgumentException(label + "不能为负");
-        }
-        if (value.scale() > 2) {
-            throw new IllegalArgumentException(label + "最多两位小数");
-        }
-        return value.setScale(2, RoundingMode.UNNECESSARY);
     }
 
     private static String buildValidityLabel(String accessType, Integer days) {

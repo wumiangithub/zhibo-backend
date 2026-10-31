@@ -17,7 +17,7 @@ import com.zhibo.activity.ActivityAudienceEntity;
 import com.zhibo.activity.ActivityAudienceImportEntity;
 import com.zhibo.activity.ActivityAudienceImportRepository;
 import com.zhibo.activity.ActivityAudienceRepository;
-import com.zhibo.activity.ActivityCommentRepository;
+import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.CreateAudienceRequest;
@@ -56,7 +56,7 @@ class ActivityAudienceServiceTest {
     @Mock
     private ActivityAudienceRepository audienceRepository;
     @Mock
-    private ActivityCommentRepository commentRepository;
+    private RoomCommentRepository commentRepository;
     @Mock
     private ViewerRepository viewerRepository;
     @Mock

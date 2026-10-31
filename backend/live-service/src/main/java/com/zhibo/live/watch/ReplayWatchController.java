@@ -23,13 +23,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReplayWatchController {
 
     private final ReplayWatchService replayWatchService;
+    private final WatchAccessService watchAccessService;
 
     @PostMapping("/start/{id}")
     public ApiResponse<ReplayStartResponse> start(
             @PathVariable String id,
             @Valid @RequestBody ReplayStartRequest request,
             HttpServletRequest httpRequest) {
-        String socketId = replayWatchService.start(id, requireViewerId(httpRequest), request.getRecordId());
+        long viewerId = requireViewerId(httpRequest);
+        watchAccessService.assertAllowed(
+                id, viewerId, WatchAccessHeaders.activityAccess(httpRequest));
+        String socketId = replayWatchService.start(id, viewerId, request.getRecordId());
         return ApiResponse.ok(new ReplayStartResponse(socketId));
     }
 
@@ -38,7 +42,10 @@ public class ReplayWatchController {
             @PathVariable String id,
             @Valid @RequestBody ReplayHeartbeatRequest request,
             HttpServletRequest httpRequest) {
-        var last = replayWatchService.heartbeat(id, requireViewerId(httpRequest), request.getSocketId());
+        long viewerId = requireViewerId(httpRequest);
+        watchAccessService.assertAllowed(
+                id, viewerId, WatchAccessHeaders.activityAccess(httpRequest));
+        var last = replayWatchService.heartbeat(id, viewerId, request.getSocketId());
         return ApiResponse.ok(new ReplayHeartbeatResponse(AttendanceTimes.format(last)));
     }
 

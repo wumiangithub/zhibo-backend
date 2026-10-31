@@ -38,8 +38,13 @@ vhall:
   app-secret: ${VHALL_APP_SECRET:}
   callback-secret: ${VHALL_CALLBACK_SECRET:}
 
+# 售卖加密密码 AES（与 admin 共用；D90 观看门禁校验）
+activity:
+  sell-password-aes-key-base64: ${ACTIVITY_SELL_PASSWORD_AES_KEY_BASE64:}
+
 # 观众登录（D73；AppSecret / JWT 写 .env.local，缺省不拒启动）
 # 不要复用管理端 AUTH_JWT_SECRET。aud 默认 viewer，管理端 aud=base 过不来。
+# 本场售卖访问 JWT 复用 jwt-secret，aud 默认 activity-access（D90）。
 viewer:
   jwt-secret: ${VIEWER_JWT_SECRET:}
   jwt-expire-seconds: ${VIEWER_JWT_EXPIRE_SECONDS:7200}
@@ -47,6 +52,8 @@ viewer:
   jwt-issuer: ${VIEWER_JWT_ISSUER:zhibo-viewer}
   jwt-audience: ${VIEWER_JWT_AUDIENCE:viewer}
   jwt-refresh-audience: ${VIEWER_JWT_REFRESH_AUDIENCE:viewer-refresh}
+  activity-access-audience: ${VIEWER_ACTIVITY_ACCESS_AUDIENCE:activity-access}
+  activity-access-expire-seconds: ${VIEWER_ACTIVITY_ACCESS_EXPIRE_SECONDS:86400}
   wechat:
     mp-app-id: ${WECHAT_MP_APP_ID:}
     mp-app-secret: ${WECHAT_MP_APP_SECRET:}

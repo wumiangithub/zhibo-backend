@@ -198,6 +198,32 @@ const ok200 = (schemaRef, examples) => {
   }
 }
 
+const csvOk200 = (description) => ({
+  '200': {
+    description,
+    content: {
+      'text/csv': { schema: { type: 'string', format: 'binary' } },
+    },
+  },
+})
+
+const plainTextSuccess200 = (description) => ({
+  '200': {
+    description: description || '校签通过时纯文本 success（与微吼约定一致）',
+    content: {
+      'text/plain': { schema: { type: 'string', example: 'success' } },
+    },
+  },
+})
+
+const BUSINESS_UUID = {
+  type: 'string',
+  maxLength: 32,
+  pattern: "^[0-9a-f]{32}$",
+  description:
+    '本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)',
+}
+
 const pageParams = [
   {
     name: 'page',
@@ -345,9 +371,13 @@ const FIELD_DESC_BY_NAME = {
   validityLabel: '有效期展示文案',
   playbackEnabled: '是否开启回放',
   playbackValidityDays: '回放有效天数',
+  playbackExpired: '是否已超过回放有效期',
   playbackSpeedAllow: '是否允许倍速',
   playbackFastForwardAllow: '是否允许快进',
+  accessExpired: '访问是否已过期',
+  accessState: '观看售卖门禁状态',
   accessValidityDays: '购买后有效天数',
+  account: '回显 String(viewerId)；init 不要传',
   ultraLowLatency:
     '是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。创建后不可改',
   verify: '观看验证方式（微吼 verify）',
@@ -402,6 +432,68 @@ const FIELD_DESC_BY_NAME = {
   aiAuditStatus: 'AI 审核状态',
   riskAuditStatus: '风控合规审核状态',
   role: '开播角色',
+  operatorName: '操作人姓名',
+  passcode: '9 位数字开播口令',
+  viewerId: '观众 id（viewer 表主键）',
+  entitlementStatus: '权益状态：0 无 / 1 有',
+  inviterDisplayName: '邀请人展示名',
+  inviterKind: '邀请人类型',
+  inviteTime: '邀请时间',
+  tagIds: '标签 id 列表',
+  tagLabels: '标签展示名列表',
+  totalWatchDurationSec: '累计观看时长（秒）',
+  liveWatchDurationSec: '直播观看时长（秒）',
+  replayWatchDurationSec: '回放观看时长（秒）',
+  commentCount: '评论条数',
+  dealAmount: '成交金额（元）',
+  created: '是否新建',
+  importId: '导入批次 id',
+  failed: '失败条数',
+  errors: '失败明细',
+  row: 'Excel 行号',
+  phone: '手机号',
+  importTime: '导入时间',
+  importerName: '导入操作人',
+  successCount: '成功条数',
+  failCount: '失败条数',
+  commentTime: '评论时间',
+  deleted: '是否已删除',
+  phoneMasked: '脱敏手机号',
+  banComment: '禁言开关',
+  banPurchase: '禁止购买开关',
+  banAccess: '禁止访问开关',
+  lastVisitTime: '最近访问时间',
+  consumeCount: '消费次数',
+  consumeAmount: '消费金额（元）',
+  totalLearnDurationSec: '累计学习时长（秒）',
+  todayLearnDurationSec: '今日学习时长（秒）',
+  completedCourseCount: '已完成课程数',
+  totalLearnDays: '累计学习天数',
+  viewedCourseCount: '已观看课程数',
+  tagCount: '标签数量',
+  definitionSummary: '标签规则摘要',
+  userCount: '覆盖用户数',
+  groupName: '标签分组名',
+  hasPhone: '是否已绑定手机号',
+  avatarObjectKey: '头像对象存储 key',
+  agreed: '是否同意用户协议',
+  loginCode: 'wx.login 临时 code',
+  phoneCode: 'getPhoneNumber 返回 code',
+  location: '上传后访问 URL',
+  expiredTime: 'STS 过期时间',
+  cdnUrl: 'CDN 根地址',
+  contactPhone: '联系电话',
+  images: '截图 objectKey 列表',
+  category: '反馈分类 code',
+  categoryLabel: '反馈分类展示名',
+  imageCount: '截图数量',
+  scene: '场景：live / replay',
+  tosUrl: '本站 TOS/CDN 播放地址',
+  socketId: '回放心跳 socket id',
+  lastReportTime: '上次上报时间',
+  roleName: '评论角色名',
+  providerMsgId: '第三方消息 id',
+  commentId: '评论 id',
 }
 
 const FIELD_DESC_BY_PATH = {
@@ -419,7 +511,7 @@ const FIELD_DESC_BY_PATH = {
   'AuditRecord.id': '审核记录 UUID',
   'ActivityRecordItem.id': '回放 record_id（create-demand 用）',
   'ActivityRecordDownloadData.recordId': '微吼回放 id（同 GET .../records 的 list[].id）',
-  'ActivityRecordDownloadData.status':
+  'ActivityRecordDownloadData.packStatus':
     '打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败',
   'ActivityRecordDownloadData.progress': '打包进度 0～100',
   'ActivityRecordDownloadData.downloadUrl':
@@ -432,7 +524,44 @@ const FIELD_DESC_BY_PATH = {
   'OutsideCourseItem.id': '课程 UUID',
   'WatchActivitySummary.id': '本站活动 UUID',
   'WatchEmbedData.id': '本站活动 UUID',
-  'WatchSdkData.id': '本站活动 UUID',
+  'WatchSummaryData.id': '本站活动 UUID',
+  'WatchSummaryData.provider': '服务商（页壳可忽略；init 仍以 sdk-sign 的 provider 为准）',
+  'WatchSummaryData.title': '本库活动标题',
+  'WatchSummaryData.state': '本库活动状态',
+  'WatchSummaryData.type': '本库活动类型',
+  'WatchSummaryData.startTime': '计划/实际开始，yyyy-MM-dd HH:mm:ss；本库',
+  'WatchSummaryData.endTime': '结束时间；占位 0000-00-00… 时不输出',
+  'WatchSummaryData.playbackEnabled': '本站回放开关；false 时结束页不展示「查看回放」',
+  'WatchSummaryData.playbackValidityType': 'forever 永久有效 / days 直播结束后 N 天有效；缺省按 forever',
+  'WatchSummaryData.playbackValidityDays': 'type=days 时的天数；永久有效时可省略',
+  'WatchSummaryData.playbackExpired':
+    '是否已超过有效期；起算同 replay/start：liveActualEndTime → 计划 endTime；无法起算则 false',
+  'WatchSummaryData.playbackSpeedAllow': '是否允许倍速（原生 video.playbackRate）；缺省 true',
+  'WatchSummaryData.playbackFastForwardAllow': '是否允许快进/拖进度；缺省 true',
+  'WatchSdkData.id': '本站活动 UUID（与 Query id 相同）',
+  'WatchSdkData.provider': '服务商；前端 createWatchAdapter(provider)',
+  'WatchSdkData.viewerId': '观众数字 id（与 sdk.email 一致）',
+  'WatchSdkData.nickname': '与 sdk.username 同值（身份回显）',
+  'WatchSdkData.sdk': '该服务商签名与 init 鉴权参数（不含脚本 CDN，D93）',
+  'WatchAccessData.accessState':
+    'ok 已放行 / need_password 需观看密码 / need_login 需登录 / forbidden 无观看权限 / expired 访问已过期',
+  'WatchAccessData.accessExpired': '访问是否已过期（days 起算：仅 liveActualEndTime）',
+  'WatchAccessData.sellType':
+    'free 免费 / paid 付费（存量） / encrypted 加密 / specified 指定学员',
+  'WatchAccessData.accessValidityType': 'long 长期有效 / days 直播实际结束后 N 天有效',
+  'WatchAccessVerifyPasswordData.accessToken': '本场访问 JWT（请求头 X-Activity-Access）',
+  'WatchAccessVerifyPasswordData.expiresIn': 'accessToken 有效秒数',
+  'WatchChatHistoryItem.senderId': '发送方 id',
+  'WatchChatHistoryItem.senderName': '发送方昵称',
+  'WatchChatHistoryItem.msg': '正文',
+  'WatchChatHistoryItem.msgId': '消息 id；可空',
+  'WatchChatHistoryItem.avatar': '头像；可空',
+  'WatchChatHistoryItem.timestamp': '毫秒时间戳',
+  'WatchChatHistoryItem.roleName': '1 主持 / 2 观众 / 3 助理 / 4 嘉宾；可空',
+  'WatchChatHistoryData.total': '微吼总数；失败为 0',
+  'WatchChatHistoryData.page': '回显请求页码',
+  'WatchChatHistoryData.pageSize': '回显每页条数（固定 50）',
+  'WatchChatHistoryData.list': '旧→新；仅文本类消息',
   'CoursewareItem.id': '素材 UUID',
   'AttendeeItem.online': '是否在线',
   'PresenceTrendPoint.online': '该桶在线人数',
@@ -447,12 +576,11 @@ const FIELD_DESC_BY_PATH = {
   'VhallPresenceCallback.type': 'Join 进房 / Leave 离房',
   'LoginQueryData.user': '扫码成功后的员工信息',
   'LiveReportDetail.host': '报备主播',
-  'WatchSdkData.sdk': '观看 JS SDK 初始化参数',
 }
 
 /** 按字段名补落库类型 / 长度（D61）；已有 maxLength 的保留。 */
 const FIELD_DB_BY_NAME = {
-  id: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
+  id: { db: 'VARCHAR(32)', maxLength: 32, pattern: "^[0-9a-f]{32}$" }, // D74 business default
   title: { db: 'VARCHAR(64)', maxLength: 64 },
   name: { db: 'VARCHAR(256)', maxLength: 256 },
   author: { db: 'VARCHAR(16)', maxLength: 16 },
@@ -482,11 +610,11 @@ const FIELD_DB_BY_NAME = {
   mimeType: { db: 'VARCHAR(128)', maxLength: 128 },
   coverMimeType: { db: 'VARCHAR(128)', maxLength: 128 },
   meta: { db: 'VARCHAR(128)', maxLength: 128 },
-  groupId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
-  reportId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
-  coverMaterialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
-  materialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
-  recordMaterialId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
+  groupId: { db: 'VARCHAR(32)', maxLength: 32, pattern: "^[0-9a-f]{32}$" },
+  reportId: { db: 'VARCHAR(32)', maxLength: 32, pattern: "^[0-9a-f]{32}$" },
+  coverMaterialId: { db: 'VARCHAR(32)', maxLength: 32, pattern: "^[0-9a-f]{32}$" },
+  materialId: { db: 'VARCHAR(32)', maxLength: 32, pattern: "^[0-9a-f]{32}$" },
+  recordMaterialId: { db: 'VARCHAR(32)', maxLength: 32, pattern: "^[0-9a-f]{32}$" },
   recordId: { db: '微吼 integer（本站不落库，透传 create-demand）' },
   ready: { db: 'INT' },
   captchaId: { db: 'VARCHAR(36)', maxLength: 36, format: 'uuid' },
@@ -720,6 +848,7 @@ function inferDbLabel(prop, key, hint, fromPath) {
       prop.maxLength !== hint.maxLength
     if (!maxConflict) return hint.db
   }
+  if (prop.pattern === "^[0-9a-f]{32}$") return 'VARCHAR(32)'
   if (prop.format === 'uuid') return 'VARCHAR(36)'
   if (prop.format === 'int64') return 'BIGINT'
   if (prop.type === 'boolean') return 'TINYINT(1)'
@@ -943,6 +1072,7 @@ function attachApifoxEnums(doc) {
 
 function buildAdmin() {
   const schemas = {
+    BusinessUuid: { ...BUSINESS_UUID },
     ApiResponseBase: {
       type: 'object',
       required: ['code', 'msg'],
@@ -993,7 +1123,8 @@ function buildAdmin() {
     SellType: {
       type: 'string',
       enum: ['free', 'paid', 'encrypted', 'specified'],
-      description: 'free 免费 / paid 付费 / encrypted 加密 / specified 指定学员',
+      description:
+        'free 免费 / paid 付费（PUT sales 已下线，列表仍可能回显）/ encrypted 加密 / specified 指定学员',
     },
     AccessValidityType: {
       type: 'string',
@@ -1041,7 +1172,7 @@ function buildAdmin() {
     IdData: {
       type: 'object',
       required: ['id'],
-      properties: { id: { type: 'string', format: 'uuid' } },
+      properties: { id: { $ref: '#/components/schemas/BusinessUuid' } },
     },
     EmployeeBrief: {
       type: 'object',
@@ -1071,7 +1202,7 @@ function buildAdmin() {
     CoursewareItem: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         name: { type: 'string' },
         type: { $ref: '#/components/schemas/MaterialType' },
         url: { type: 'string' },
@@ -1186,7 +1317,7 @@ function buildAdmin() {
     MaterialGroup: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         name: { type: 'string', maxLength: 64 },
         count: { type: 'integer' },
         isDefault: { type: 'boolean' },
@@ -1195,9 +1326,9 @@ function buildAdmin() {
     MaterialItem: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         type: { $ref: '#/components/schemas/MaterialType' },
-        groupId: { type: 'string', format: 'uuid' },
+        groupId: { $ref: '#/components/schemas/BusinessUuid' },
         name: { type: 'string' },
         url: { type: 'string', description: '文章省略' },
         objectKey: { type: 'string', description: '文章省略' },
@@ -1214,6 +1345,18 @@ function buildAdmin() {
         uploaderName: { type: 'string', description: '上传人姓名快照' },
         departmentName: { type: 'string', description: '上传人部门快照' },
         uploadedTime: { type: 'string', example: '2026-10-12 14:00:00' },
+        vhallVideoId: { type: 'string', description: '仅 video；微吼 video_id' },
+        vhallTranscodeProgress: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100,
+          description: '仅 video；转码进度 0～100',
+        },
+        vhallTranscodeStatus: {
+          type: 'integer',
+          enum: [0, 1, 3],
+          description: '0 转码中 / 1 成功 / 3 失败（仅 video）',
+        },
       },
     },
     MaterialListData: {
@@ -1233,7 +1376,7 @@ function buildAdmin() {
       required: ['type', 'groupId', 'items'],
       properties: {
         type: { $ref: '#/components/schemas/MaterialFileType' },
-        groupId: { type: 'string', format: 'uuid' },
+        groupId: { $ref: '#/components/schemas/BusinessUuid' },
         items: {
           type: 'array',
           minItems: 1,
@@ -1266,7 +1409,7 @@ function buildAdmin() {
       type: 'object',
       required: ['groupId', 'title', 'author', 'content'],
       properties: {
-        groupId: { type: 'string', format: 'uuid' },
+        groupId: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string', maxLength: 45 },
         author: { type: 'string', maxLength: 16 },
         content: { type: 'string', maxLength: 100000 },
@@ -1284,8 +1427,8 @@ function buildAdmin() {
     ArticleDetail: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
-        groupId: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
+        groupId: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string', maxLength: 45 },
         author: { type: 'string', maxLength: 16 },
         content: { type: 'string', maxLength: 100000 },
@@ -1321,9 +1464,7 @@ function buildAdmin() {
             'type=4 且 provider=vhall：微吼回放资源 ID（微吼 integer / JSON number），直接作 create-demand 的 record_id。与 GET .../records 的 list[].id 同型。与 recordMaterialId 二选一，不可同时传；本站不落库',
         },
         recordMaterialId: {
-          type: 'string',
-          format: 'uuid',
-          maxLength: 36,
+          $ref: '#/components/schemas/BusinessUuid',
           description:
             'type=4：本站视频素材 UUID。请求/响应/库列统一：JSON recordMaterialId ↔ 库 record_material_id。须未软删、video、两审通过、有 url。与 recordId 二选一；库：VARCHAR(36)',
         },
@@ -1367,14 +1508,12 @@ function buildAdmin() {
           type: 'array',
           maxLength: 100,
           maxItems: 100,
-          items: { type: 'string', format: 'uuid' },
+          items: { $ref: '#/components/schemas/BusinessUuid' },
         },
         reportId: {
-          type: 'string',
-          format: 'uuid',
-          maxLength: 36,
+          $ref: '#/components/schemas/BusinessUuid',
           description:
-            '创建必填。绑定已通过直播报备 UUID。须 status=passed、未软删；hostIds 须恰好为该报备主播 1 人。创建后不可改绑。库：VARCHAR(36)',
+            '创建必填。绑定已通过直播报备 id（D74）。须 status=passed、未软删；hostIds 须恰好为该报备主播 1 人。创建后不可改绑',
         },
       },
     },
@@ -1410,14 +1549,12 @@ function buildAdmin() {
         coursewareMaterialIds: {
           type: 'array',
           maxItems: 100,
-          items: { type: 'string', format: 'uuid' },
+          items: { $ref: '#/components/schemas/BusinessUuid' },
         },
         recordMaterialId: {
-          type: 'string',
-          format: 'uuid',
-          maxLength: 36,
+          $ref: '#/components/schemas/BusinessUuid',
           description:
-            '仅 type=4：替换录播素材（与创建/详情同名 recordMaterialId）。写入后 ready→0；库：VARCHAR(36)',
+            '仅 type=4：替换录播素材（与创建/详情同名 recordMaterialId）。写入后 ready→0（D74）',
         },
       },
     },
@@ -1462,7 +1599,7 @@ function buildAdmin() {
     SalesSettingsData: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         sellType: { $ref: '#/components/schemas/SellType' },
         validityLabel: { type: 'string' },
       },
@@ -1477,7 +1614,7 @@ function buildAdmin() {
     ShelfData: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         shelfStatus: { $ref: '#/components/schemas/ShelfStatus' },
       },
     },
@@ -1497,7 +1634,7 @@ function buildAdmin() {
     AuditSubmitData: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         riskStatus: { $ref: '#/components/schemas/RiskStatus' },
         shelfStatus: { $ref: '#/components/schemas/ShelfStatus' },
       },
@@ -1505,7 +1642,7 @@ function buildAdmin() {
     AuditRecord: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         action: {
           type: 'string',
           enum: ['submit', 'audit'],
@@ -1529,7 +1666,7 @@ function buildAdmin() {
     ActivitySummary: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         title: { type: 'string' },
         startTime: { type: 'string' },
@@ -1549,11 +1686,9 @@ function buildAdmin() {
           description: '1 就绪（默认）/ 0 转码中 / 2 失败不可重试；库：INT',
         },
         recordMaterialId: {
-          type: 'string',
-          format: 'uuid',
-          maxLength: 36,
+          $ref: '#/components/schemas/BusinessUuid',
           description:
-            '本场绑定的录播素材 UUID（与创建/改活动请求同名）；非录播或不绑可不返回；库：VARCHAR(36)',
+            '本场绑定的录播素材 id（D74，与创建/改活动请求同名）；非录播或不绑可不返回',
         },
         owners: {
           type: 'array',
@@ -1589,8 +1724,7 @@ function buildAdmin() {
             detailHtml: { type: 'string' },
             autoList: { type: 'boolean' },
             reportId: {
-              type: 'string',
-              format: 'uuid',
+              $ref: '#/components/schemas/BusinessUuid',
               description: '绑定的直播报备；未绑定不输出',
             },
             reportTitle: {
@@ -1654,6 +1788,18 @@ function buildAdmin() {
         duration: { type: 'string', example: '01:02:03' },
         createdTime: { type: 'string' },
         coverUrl: { type: 'string' },
+        storage: { type: 'string', description: '体积 KB 字符串' },
+        status: {
+          type: 'integer',
+          enum: [1, 2, 3, 4, 5],
+          description:
+            '1 待打包 / 2 打包中 / 3 下载中 / 4 就绪 / 5 失败；库：INT',
+        },
+        tosUrl: { type: 'string', description: '本站 TOS/CDN URL；无则省略' },
+        downloadUrl: {
+          type: 'string',
+          description: '仅 status=4（ready）时与 tosUrl 同值；否则省略',
+        },
       },
     },
     ActivityRecordListData: {
@@ -1668,26 +1814,29 @@ function buildAdmin() {
     },
     ActivityRecordDownloadData: {
       type: 'object',
-      required: ['recordId', 'status'],
+      required: ['recordId', 'packStatus', 'progress'],
       description:
-        '回放下载：微吼 check-download；对应管理后台回放列表「下载」',
+        '回放下载：按本库状态推进 TOS；对应管理后台回放列表「下载」（D88）',
       properties: {
         recordId: {
           type: 'integer',
           format: 'int64',
-          description: '微吼回放 id（同 GET .../records 的 list[].id）',
+          description: '云侧回放 id（同 GET .../records 的 list[].id）',
           example: 5814669,
+        },
+        tosUrl: {
+          type: 'string',
+          format: 'uri',
+          description: '本站 TOS/CDN；有值时前端直接下载',
         },
         downloadUrl: {
           type: 'string',
           format: 'uri',
-          description:
-            '下载地址；status=1 时可用（微吼侧约 7 天有效）',
-          example: 'https://vod-download.vhall.com/....zip',
+          description: '与 tosUrl 同值（兼容旧前端）；无 TOS 时省略',
         },
-        status: {
+        packStatus: {
           type: 'integer',
-          description: '打包状态：0 未开始 / 1 已完成 / 2 进行中 / 3 失败',
+          description: '0 未开始 / 1 可下载 / 2 处理中 / 3 失败',
           enum: [0, 1, 2, 3],
           example: 1,
         },
@@ -1698,6 +1847,11 @@ function buildAdmin() {
           maximum: 100,
           example: 100,
         },
+        downloadStartedTime: {
+          type: 'string',
+          description:
+            'packStatus=2 且本站 JVM 确有 ingest 任务时返回；否则省略',
+        },
       },
     },
     EndActivityData: {
@@ -1706,7 +1860,7 @@ function buildAdmin() {
       description:
         '结束直播 / 第三方推流开始直播（/activities/start）共用：返回本站活动 id 与写回后的 state',
       properties: {
-        id: { type: 'string', format: 'uuid', description: '本站活动 UUID' },
+        id: { $ref: '#/components/schemas/BusinessUuid', description: '本站活动 id（D74）' },
         state: {
           $ref: '#/components/schemas/ActivityState',
           description: '本站写回后的活动状态；结束多为 3，start 成功多为 1',
@@ -1904,7 +2058,7 @@ function buildAdmin() {
     ActivityStats: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string' },
         state: { $ref: '#/components/schemas/ActivityState' },
         type: { $ref: '#/components/schemas/ActivityType' },
@@ -1922,7 +2076,7 @@ function buildAdmin() {
     OnlineTrend: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         startTime: { type: 'string' },
         endTime: { type: 'string' },
         points: {
@@ -1943,7 +2097,7 @@ function buildAdmin() {
     PresenceTrend: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         startTime: { type: 'string' },
         endTime: { type: 'string' },
         bucketSeconds: { type: 'integer', example: 60 },
@@ -2157,7 +2311,7 @@ function buildAdmin() {
         },
         coverFileSize: { type: 'integer', format: 'int64' },
         coverMimeType: { type: 'string' },
-        coverMaterialId: { type: 'string', format: 'uuid' },
+        coverMaterialId: { $ref: '#/components/schemas/BusinessUuid' },
         hostId: {
           $ref: '#/components/schemas/EmployeeId',
           description: '主播员工 id',
@@ -2187,7 +2341,7 @@ function buildAdmin() {
         coverObjectKey: { type: 'string' },
         coverFileSize: { type: 'integer', format: 'int64' },
         coverMimeType: { type: 'string' },
-        coverMaterialId: { type: 'string', format: 'uuid' },
+        coverMaterialId: { $ref: '#/components/schemas/BusinessUuid' },
         hostId: {
           $ref: '#/components/schemas/EmployeeId',
           description: '主播员工 id',
@@ -2216,14 +2370,14 @@ function buildAdmin() {
       type: 'object',
       required: ['id', 'status'],
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         status: { $ref: '#/components/schemas/LiveReportStatus' },
       },
     },
     LiveReportDetail: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string' },
         content: { type: 'string' },
         planTimes: {
@@ -2234,7 +2388,7 @@ function buildAdmin() {
         coverObjectKey: { type: 'string' },
         coverFileSize: { type: 'integer', format: 'int64' },
         coverMimeType: { type: 'string' },
-        coverMaterialId: { type: 'string', format: 'uuid' },
+        coverMaterialId: { $ref: '#/components/schemas/BusinessUuid' },
         host: { $ref: '#/components/schemas/LiveReportHost' },
         attachments: {
           type: 'array',
@@ -2268,7 +2422,7 @@ function buildAdmin() {
     LiveReportAuditItem: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         action: {
           type: 'string',
           enum: ['submit', 'resubmit', 'audit', 'append'],
@@ -2303,7 +2457,7 @@ function buildAdmin() {
     CourseMaterial: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         name: { type: 'string' },
         url: { type: 'string' },
         type: { $ref: '#/components/schemas/MaterialFileType' },
@@ -2323,9 +2477,8 @@ function buildAdmin() {
           description: '可见文字 ≤10000，原文 ≤200000',
         },
         coverMaterialId: {
-          type: 'string',
-          format: 'uuid',
-          description: '两审通过的 JPG/PNG 图片素材，≤5MB',
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '两审通过的 JPG/PNG 图片素材，≤5MB（D74）',
         },
         autoList: { type: 'boolean' },
         ownerIds: {
@@ -2338,7 +2491,7 @@ function buildAdmin() {
         materialIds: {
           type: 'array',
           maxItems: 100,
-          items: { type: 'string', format: 'uuid' },
+          items: { $ref: '#/components/schemas/BusinessUuid' },
           description: '课件：两审通过的 image/video/document，不含 article',
         },
       },
@@ -2346,7 +2499,7 @@ function buildAdmin() {
     CourseSummary: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string' },
         coverUrl: { type: 'string' },
         shelfStatus: { $ref: '#/components/schemas/ShelfStatus' },
@@ -2382,7 +2535,7 @@ function buildAdmin() {
           properties: {
             introduction: { type: 'string' },
             detailHtml: { type: 'string' },
-            coverMaterialId: { type: 'string', format: 'uuid' },
+            coverMaterialId: { $ref: '#/components/schemas/BusinessUuid' },
             materials: {
               type: 'array',
               items: { $ref: '#/components/schemas/CourseMaterial' },
@@ -2413,7 +2566,7 @@ function buildAdmin() {
     OutsideCourseItem: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string' },
         coverUrl: { type: 'string', description: '空则不返回' },
         introduction: { type: 'string', description: '空则不返回' },
@@ -2438,6 +2591,404 @@ function buildAdmin() {
         },
       },
     },
+
+    MaterialAuditRecord: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: '审核记录 id 或合成 submit id' },
+        action: {
+          type: 'string',
+          enum: ['submit', 'ai', 'risk'],
+          description: 'submit 发起申请 / ai AI审核 / risk 风控审核',
+        },
+        result: {
+          type: 'string',
+          enum: ['passed', 'rejected'],
+          description: 'passed 已通过 / rejected 已驳回；submit 不返回',
+        },
+        operatorId: { $ref: '#/components/schemas/EmployeeId' },
+        operatorName: { type: 'string' },
+        departmentName: { type: 'string', description: '无则省略' },
+        createdTime: { type: 'string' },
+      },
+    },
+    MaterialAuditListData: {
+      type: 'object',
+      properties: {
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/MaterialAuditRecord' },
+        },
+      },
+    },
+    PasscodeData: {
+      type: 'object',
+      required: ['passcode'],
+      properties: {
+        passcode: { type: 'string', pattern: "^\\d{9}$", description: '9 位数字开播口令' },
+      },
+    },
+    PasscodeHostEnterRequest: {
+      type: 'object',
+      required: ['passcode'],
+      properties: {
+        passcode: { type: 'string', pattern: "^\\d{9}$" },
+        nickname: { type: 'string', maxLength: 30, description: '讲师名称；默认「讲师」' },
+      },
+    },
+    PasscodeHostEnterData: {
+      type: 'object',
+      properties: {
+        activityId: { $ref: '#/components/schemas/BusinessUuid' },
+        provider: { $ref: '#/components/schemas/Provider' },
+        hostUrl: { type: 'string', format: 'uri' },
+        role: { type: 'integer', enum: [1], description: '1 主播' },
+        nickname: { type: 'string' },
+      },
+    },
+    ActivityAudienceListItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64', description: '名单行 id' },
+        viewerId: { type: 'integer', format: 'int64' },
+        nickname: { type: 'string' },
+        avatarUrl: { type: 'string' },
+        entitlementStatus: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 无权益 / 1 有权益',
+        },
+        inviterDisplayName: { type: 'string' },
+        inviterKind: {
+          type: 'string',
+          enum: ['employee'],
+          description: 'employee 员工',
+        },
+        inviteTime: { type: 'string' },
+        tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
+        tagLabels: { type: 'array', items: { type: 'string' } },
+        totalWatchDurationSec: { type: 'integer' },
+        liveWatchDurationSec: { type: 'integer' },
+        replayWatchDurationSec: { type: 'integer' },
+        commentCount: { type: 'integer' },
+        dealAmount: { type: 'string', example: '0.00' },
+      },
+    },
+    ActivityAudienceListData: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ActivityAudienceListItem' },
+        },
+      },
+    },
+    ActivityAudienceCreateRequest: {
+      type: 'object',
+      properties: {
+        phone: { type: 'string', description: '与 viewerId 二选一' },
+        viewerId: { type: 'integer', format: 'int64', description: '与 phone 二选一' },
+      },
+    },
+    ActivityAudienceCreateData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        viewerId: { type: 'integer', format: 'int64' },
+        created: { type: 'boolean' },
+      },
+    },
+    ActivityAudienceImportData: {
+      type: 'object',
+      properties: {
+        importId: { type: 'integer', format: 'int64' },
+        total: { type: 'integer' },
+        created: { type: 'integer' },
+        updated: { type: 'integer' },
+        skipped: { type: 'integer' },
+        failed: { type: 'integer' },
+        errors: {
+          type: 'array',
+          maxItems: 50,
+          items: {
+            type: 'object',
+            properties: {
+              row: { type: 'integer' },
+              phone: { type: 'string' },
+              reason: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    ActivityAudienceImportHistoryItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        importTime: { type: 'string' },
+        importerId: { $ref: '#/components/schemas/EmployeeId' },
+        importerName: { type: 'string' },
+        successCount: { type: 'integer' },
+        failCount: { type: 'integer' },
+      },
+    },
+    ActivityAudienceImportHistoryData: {
+      type: 'object',
+      properties: {
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ActivityAudienceImportHistoryItem' },
+        },
+      },
+    },
+    ActivityAudienceEntitlementRequest: {
+      type: 'object',
+      required: ['entitlementStatus'],
+      properties: {
+        entitlementStatus: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 无权益 / 1 有权益',
+        },
+      },
+    },
+    ActivityAudienceEntitlementData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        entitlementStatus: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 无权益 / 1 有权益',
+        },
+      },
+    },
+    ActivityAudienceCommentItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        viewerId: { type: 'integer', format: 'int64' },
+        guestId: { type: 'string' },
+        nickname: { type: 'string' },
+        content: { type: 'string' },
+        commentTime: { type: 'string' },
+        deleted: { type: 'boolean' },
+      },
+    },
+    ActivityAudienceCommentListData: {
+      type: 'object',
+      properties: {
+        total: { type: 'integer', format: 'int64' },
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ActivityAudienceCommentItem' },
+        },
+      },
+    },
+    ViewerListItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        nickname: { type: 'string' },
+        avatarUrl: { type: 'string' },
+        registerChannel: { type: 'integer', enum: [1, 2], description: '1 微信 / 2 导入' },
+        phoneMasked: { type: 'string' },
+        status: { type: 'integer', enum: [0, 1], description: '0 禁用 / 1 正常' },
+        banComment: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        banPurchase: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        banAccess: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        createdTime: { type: 'string' },
+        lastVisitTime: { type: 'string' },
+        consumeCount: { type: 'integer' },
+        consumeAmount: { type: 'string' },
+        totalLearnDurationSec: { type: 'integer' },
+        todayLearnDurationSec: { type: 'integer' },
+        completedCourseCount: { type: 'integer' },
+        tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
+        tagLabels: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    ViewerListData: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: { type: 'array', items: { $ref: '#/components/schemas/ViewerListItem' } },
+      },
+    },
+    ViewerStatusUpdateRequest: {
+      type: 'object',
+      required: ['status'],
+      properties: {
+        status: { type: 'integer', enum: [0, 1], description: '0 禁用 / 1 正常' },
+      },
+    },
+    ViewerStatusUpdateData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        status: { type: 'integer', enum: [0, 1], description: '0 禁用 / 1 正常' },
+      },
+    },
+    ViewerBlacklistUpdateRequest: {
+      type: 'object',
+      required: ['banComment', 'banPurchase', 'banAccess'],
+      properties: {
+        banComment: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        banPurchase: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        banAccess: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+      },
+    },
+    ViewerBlacklistUpdateData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        banComment: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        banPurchase: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        banAccess: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
+        status: { type: 'integer', enum: [0, 1], description: '0 禁用 / 1 正常' },
+      },
+    },
+    ViewerTagsUpdateRequest: {
+      type: 'object',
+      required: ['tagIds'],
+      properties: {
+        tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
+      },
+    },
+    ViewerTagsUpdateData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
+        tagLabels: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    ViewerLearnStatsSummaryItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        nickname: { type: 'string' },
+        avatarUrl: { type: 'string' },
+        tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
+        tagLabels: { type: 'array', items: { type: 'string' } },
+        totalLearnDurationSec: { type: 'integer' },
+        totalLearnDays: { type: 'integer' },
+        viewedCourseCount: { type: 'integer' },
+        completedCourseCount: { type: 'integer' },
+      },
+    },
+    ViewerLearnStatsSummaryData: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ViewerLearnStatsSummaryItem' },
+        },
+      },
+    },
+    ViewerLearnStatsCourseListData: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer', format: 'int64', description: '占位；本轮恒空表' } } } },
+      },
+    },
+    ViewerTagGroupBrief: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        name: { type: 'string' },
+        isDefault: { type: 'boolean' },
+      },
+    },
+    ViewerTagGroupPageItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        name: { type: 'string' },
+        isDefault: { type: 'boolean' },
+        tagCount: { type: 'integer' },
+      },
+    },
+    ViewerTagGroupPageData: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ViewerTagGroupPageItem' },
+        },
+      },
+    },
+    ViewerTagGroupCreateRequest: {
+      type: 'object',
+      required: ['name'],
+      properties: { name: { type: 'string', maxLength: 10 } },
+    },
+    ViewerTagGroupUpdateRequest: {
+      type: 'object',
+      required: ['name'],
+      properties: { name: { type: 'string', maxLength: 10 } },
+    },
+    ViewerTagListItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        name: { type: 'string' },
+        type: { type: 'integer', enum: [1, 2], description: '1 手动 / 2 自动' },
+        definitionSummary: { type: 'string' },
+        userCount: { type: 'integer' },
+        groupId: { type: 'integer', format: 'int64' },
+        groupName: { type: 'string' },
+        createdTime: { type: 'string' },
+      },
+    },
+    ViewerTagListData: {
+      type: 'object',
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: { type: 'array', items: { $ref: '#/components/schemas/ViewerTagListItem' } },
+      },
+    },
+    ViewerTagCreateRequest: {
+      type: 'object',
+      required: ['name', 'type'],
+      properties: {
+        name: { type: 'string', maxLength: 20 },
+        type: { type: 'integer', enum: [1], description: '1 手动' },
+        groupId: { type: 'integer', format: 'int64' },
+      },
+    },
+    ViewerTagUpdateRequest: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string', maxLength: 20 },
+        groupId: { type: 'integer', format: 'int64' },
+      },
+    },
+    ChatFilterAdminData: {
+      type: 'object',
+      required: ['pageUrl'],
+      properties: { pageUrl: { type: 'string', format: 'uri' } },
+    },
+
   }
 
   // response wrappers
@@ -2533,6 +3084,38 @@ function buildAdmin() {
     ApiResponseOutsideCourseList: {
       $ref: '#/components/schemas/OutsideCourseListData',
     },
+
+    ApiResponseMaterialAudits: { $ref: '#/components/schemas/MaterialAuditListData' },
+    ApiResponsePasscode: { $ref: '#/components/schemas/PasscodeData' },
+    ApiResponsePasscodeHostEnter: { $ref: '#/components/schemas/PasscodeHostEnterData' },
+    ApiResponseActivityAudienceList: { $ref: '#/components/schemas/ActivityAudienceListData' },
+    ApiResponseActivityAudienceCreate: { $ref: '#/components/schemas/ActivityAudienceCreateData' },
+    ApiResponseActivityAudienceImport: { $ref: '#/components/schemas/ActivityAudienceImportData' },
+    ApiResponseActivityAudienceImportHistory: {
+      $ref: '#/components/schemas/ActivityAudienceImportHistoryData',
+    },
+    ApiResponseActivityAudienceEntitlement: {
+      $ref: '#/components/schemas/ActivityAudienceEntitlementData',
+    },
+    ApiResponseActivityAudienceComments: {
+      $ref: '#/components/schemas/ActivityAudienceCommentListData',
+    },
+    ApiResponseChatFilterAdmin: { $ref: '#/components/schemas/ChatFilterAdminData' },
+    ApiResponseViewerList: { $ref: '#/components/schemas/ViewerListData' },
+    ApiResponseViewerStatus: { $ref: '#/components/schemas/ViewerStatusUpdateData' },
+    ApiResponseViewerBlacklist: { $ref: '#/components/schemas/ViewerBlacklistUpdateData' },
+    ApiResponseViewerTags: { $ref: '#/components/schemas/ViewerTagsUpdateData' },
+    ApiResponseViewerLearnSummary: { $ref: '#/components/schemas/ViewerLearnStatsSummaryData' },
+    ApiResponseViewerLearnCourses: { $ref: '#/components/schemas/ViewerLearnStatsCourseListData' },
+    ApiResponseViewerTagGroups: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/ViewerTagGroupBrief' },
+    },
+    ApiResponseViewerTagGroupPage: { $ref: '#/components/schemas/ViewerTagGroupPageData' },
+    ApiResponseViewerTagGroupItem: { $ref: '#/components/schemas/ViewerTagGroupPageItem' },
+    ApiResponseViewerTagList: { $ref: '#/components/schemas/ViewerTagListData' },
+    ApiResponseViewerTagDetail: { $ref: '#/components/schemas/ViewerTagListItem' },
+
   })) {
     schemas[name] = wrapData(data)
   }
@@ -2645,6 +3228,8 @@ function buildAdmin() {
       post: {
         tags: ['图片上传'],
         summary: '图片上传（代理微吼）',
+        deprecated: true,
+        description: 'D60 已废弃：请改用 TOS 直传（uploads/tos-sts + 登记）。',
         operationId: 'uploadImage',
         security: bearer,
         requestBody: {
@@ -2766,7 +3351,7 @@ function buildAdmin() {
           {
             name: 'groupId',
             in: 'query',
-            schema: { type: 'string', format: 'uuid' },
+            schema: { $ref: '#/components/schemas/BusinessUuid' },
           },
           { name: 'keyword', in: 'query', schema: { type: 'string' } },
           {
@@ -2897,7 +3482,7 @@ function buildAdmin() {
                 type: 'object',
                 required: ['groupId'],
                 properties: {
-                  groupId: { type: 'string', format: 'uuid' },
+                  groupId: { $ref: '#/components/schemas/BusinessUuid' },
                 },
               },
             },
@@ -3211,7 +3796,7 @@ function buildAdmin() {
         tags: ['活动管理'],
         summary: '回放下载',
         description:
-          '某场活动下一条回放的打包下载地址（管理后台回放「下载」）。路径 id=本站活动 UUID；recordId=回放列表 list[].id。走微吼 check-download。非 vhall / 未接入 → 501。status=1 时 downloadUrl 可用（约 7 天有效）。',
+          '某场活动下一条回放的打包下载地址（管理后台回放「下载」）。路径 id=本站活动 UUID；recordId=回放列表 list[].id。按本库状态推进 TOS（D88）。非 vhall / 未接入 → 501。有 tosUrl 时直接下载。',
         operationId: 'downloadActivityRecord',
         security: bearer,
         parameters: [
@@ -3900,6 +4485,511 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseAuditSubmit'),
       },
     },
+
+    '/api/v1/materials/audits/{id}': {
+      get: {
+        tags: ['素材中心'],
+        summary: '素材审核记录',
+        operationId: 'listMaterialAudits',
+        security: bearer,
+        parameters: [materialId],
+        responses: ok200('#/components/schemas/ApiResponseMaterialAudits'),
+      },
+    },
+    '/api/v1/materials/vhall-transcode/{id}': {
+      post: {
+        tags: ['素材中心'],
+        summary: '上传微吼转码',
+        operationId: 'materialVhallTranscode',
+        security: bearer,
+        parameters: [materialId],
+        responses: ok200('#/components/schemas/ApiResponseMaterialItem'),
+      },
+    },
+    '/api/v1/activities/passcode/{id}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '查本场口令',
+        operationId: 'getActivityPasscode',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponsePasscode'),
+      },
+    },
+    '/api/v1/activities/passcode/reset/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: '重置口令',
+        operationId: 'resetActivityPasscode',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponsePasscode'),
+      },
+    },
+    '/api/v1/outside/host/passcode/enter': {
+      post: {
+        tags: ['活动管理'],
+        summary: '口令进房',
+        description: '不鉴权；H5/App 口令开播共用。',
+        operationId: 'passcodeHostEnter',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/PasscodeHostEnterRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponsePasscodeHostEnter'),
+      },
+    },
+    '/api/v1/activities/audiences/list/{id}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '用户运营名单',
+        operationId: 'listActivityAudiences',
+        security: bearer,
+        parameters: [activityId,
+          ...pageParams,
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], default: 'nickname', description: 'nickname 昵称 / id 用户ID / phone 手机号' } },
+          { name: 'keyword', in: 'query', schema: { type: 'string' } },
+          { name: 'tagIds', in: 'query', schema: { type: 'string' }, description: '逗号分隔标签 id' },
+          { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'none', 'all'], default: 'any', description: 'any 满足其一 / none 不包含 / all 全部满足' } },
+          { name: 'entitlementStatus', in: 'query', schema: { type: 'integer', enum: [0, 1], description: '0 无权益 / 1 有权益' } },
+
+          { name: 'totalWatchDurationOp', in: 'query', schema: { type: 'string', enum: ['gte', 'lte'], description: 'gte 大于等于 / lte 小于等于' } },
+          { name: 'totalWatchDurationSec', in: 'query', schema: { type: 'integer', minimum: 0 } },
+          { name: 'liveWatchDurationOp', in: 'query', schema: { type: 'string', enum: ['gte', 'lte'], description: 'gte 大于等于 / lte 小于等于' } },
+          { name: 'liveWatchDurationSec', in: 'query', schema: { type: 'integer', minimum: 0 } },
+          { name: 'sort', in: 'query', schema: { type: 'string' } },
+          { name: 'order', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc', description: 'asc 升序 / desc 降序' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseActivityAudienceList'),
+      },
+    },
+    '/api/v1/activities/audiences/create/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: '添加用户',
+        operationId: 'createActivityAudience',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ActivityAudienceCreateRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseActivityAudienceCreate'),
+      },
+    },
+    '/api/v1/activities/audiences/import/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: 'CSV 批量导入',
+        operationId: 'importActivityAudiences',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file'],
+                properties: {
+                  file: { type: 'string', format: 'binary', description: 'CSV 文件' },
+                },
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseActivityAudienceImport'),
+      },
+    },
+    '/api/v1/activities/audiences/import-template': {
+      get: {
+        tags: ['活动管理'],
+        summary: '导入模板',
+        operationId: 'downloadActivityAudienceImportTemplate',
+        security: bearer,
+        responses: csvOk200('UTF-8 BOM CSV，表头：手机号'),
+      },
+    },
+    '/api/v1/activities/audiences/imports/list/{activityId}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '导入历史',
+        operationId: 'listActivityAudienceImports',
+        security: bearer,
+        parameters: [
+          {
+            name: 'activityId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '活动 id（D74）',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseActivityAudienceImportHistory'),
+      },
+    },
+    '/api/v1/activities/audiences/imports/failures/{importId}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '失败明细 CSV',
+        operationId: 'downloadActivityAudienceImportFailures',
+        security: bearer,
+        parameters: [
+          {
+            name: 'importId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: '导入批次 id',
+          },
+        ],
+        responses: csvOk200('失败明细 CSV：行号,手机号,原因'),
+      },
+    },
+    '/api/v1/activities/audiences/export/{id}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '导出用户名单 CSV',
+        operationId: 'exportActivityAudiences',
+        security: bearer,
+        parameters: [activityId,
+          ...pageParams,
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], default: 'nickname', description: 'nickname 昵称 / id 用户ID / phone 手机号' } },
+          { name: 'keyword', in: 'query', schema: { type: 'string' } },
+          { name: 'tagIds', in: 'query', schema: { type: 'string' }, description: '逗号分隔标签 id' },
+          { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'none', 'all'], default: 'any', description: 'any 满足其一 / none 不包含 / all 全部满足' } },
+          { name: 'entitlementStatus', in: 'query', schema: { type: 'integer', enum: [0, 1], description: '0 无权益 / 1 有权益' } },
+],
+        responses: csvOk200('按 list 同筛选导出 CSV（不分页）'),
+      },
+    },
+    '/api/v1/activities/audiences/entitlement/{rowId}': {
+      put: {
+        tags: ['活动管理'],
+        summary: '开关观看权益',
+        operationId: 'updateActivityAudienceEntitlement',
+        security: bearer,
+        parameters: [
+          {
+            name: 'rowId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: '名单行 id',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ActivityAudienceEntitlementRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseActivityAudienceEntitlement'),
+      },
+    },
+    '/api/v1/activities/audiences/comments/{id}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '本场评论列表',
+        operationId: 'listActivityAudienceComments',
+        security: bearer,
+        parameters: [
+          activityId,
+          ...pageParams,
+          { name: 'nickname', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseActivityAudienceComments'),
+      },
+    },
+    '/api/v1/activities/chat-filter/{id}': {
+      get: {
+        tags: ['活动管理'],
+        summary: '评论管理 iframe URL',
+        description: '用户运营 · 评论管理；仅 provider=vhall，否则 501。',
+        operationId: 'getActivityChatFilter',
+        security: bearer,
+        parameters: [
+          activityId,
+          { name: 'email', in: 'query', schema: { type: 'string' } },
+          { name: 'name', in: 'query', schema: { type: 'string', maxLength: 30 } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseChatFilterAdmin'),
+      },
+    },
+    '/api/v1/live-reports/delete/{id}': {
+      delete: {
+        tags: ['直播报备'],
+        summary: '软删报备',
+        operationId: 'deleteLiveReport',
+        security: bearer,
+        parameters: [liveReportId],
+        responses: ok200('#/components/schemas/ApiResponseId'),
+      },
+    },
+    '/api/v1/viewers/list': {
+      get: {
+        tags: ['用户管理'],
+        summary: '顶栏用户列表',
+        operationId: 'listViewers',
+        security: bearer,
+        parameters: [
+          ...pageParams,
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], description: 'nickname 昵称 / id 用户ID / phone 手机号' } },
+          { name: 'keyword', in: 'query', schema: { type: 'string' } },
+          { name: 'tagIds', in: 'query', schema: { type: 'string' } },
+          { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'none', 'all'], description: 'any 满足其一 / none 不包含 / all 全部满足' } },
+          { name: 'sort', in: 'query', schema: { type: 'string' } },
+          { name: 'order', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], description: 'asc 升序 / desc 降序' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseViewerList'),
+      },
+    },
+    '/api/v1/viewers/update-status/{id}': {
+      put: {
+        tags: ['用户管理'],
+        summary: '更新观众状态（兼容）',
+        operationId: 'updateViewerStatus',
+        security: bearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: 'viewer.id',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ViewerStatusUpdateRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerStatus'),
+      },
+    },
+    '/api/v1/viewers/update-blacklist/{id}': {
+      put: {
+        tags: ['用户管理'],
+        summary: '更新黑名单三开关',
+        operationId: 'updateViewerBlacklist',
+        security: bearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: 'viewer.id',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ViewerBlacklistUpdateRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerBlacklist'),
+      },
+    },
+    '/api/v1/viewers/update-tags/{id}': {
+      put: {
+        tags: ['用户管理'],
+        summary: '贴手动标签',
+        operationId: 'updateViewerTags',
+        security: bearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: 'viewer.id',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ViewerTagsUpdateRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTags'),
+      },
+    },
+    '/api/v1/viewers/learning-stats/summary': {
+      get: {
+        tags: ['用户管理'],
+        summary: '学习统计汇总',
+        operationId: 'viewerLearnStatsSummary',
+        security: bearer,
+        parameters: [...pageParams, { name: 'keywordType', in: 'query', schema: { type: 'string' } }, { name: 'keyword', in: 'query', schema: { type: 'string' } }],
+        responses: ok200('#/components/schemas/ApiResponseViewerLearnSummary'),
+      },
+    },
+    '/api/v1/viewers/learning-stats/courses': {
+      get: {
+        tags: ['用户管理'],
+        summary: '学习统计课程',
+        description: '本轮恒空表，仍返回分页结构。',
+        operationId: 'viewerLearnStatsCourses',
+        security: bearer,
+        parameters: [...pageParams],
+        responses: ok200('#/components/schemas/ApiResponseViewerLearnCourses'),
+      },
+    },
+    '/api/v1/viewer-tags/list': {
+      get: {
+        tags: ['用户管理'],
+        summary: '标签分页列表',
+        operationId: 'listViewerTags',
+        security: bearer,
+        parameters: [
+          ...pageParams,
+          { name: 'type', in: 'query', schema: { type: 'integer', enum: [1, 2], description: '1 手动 / 2 自动' } },
+          { name: 'name', in: 'query', schema: { type: 'string' } },
+          { name: 'groupId', in: 'query', schema: { type: 'integer', format: 'int64' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseViewerTagList'),
+      },
+    },
+    '/api/v1/viewer-tags/detail/{id}': {
+      get: {
+        tags: ['用户管理'],
+        summary: '标签详情',
+        operationId: 'getViewerTagDetail',
+        security: bearer,
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseViewerTagDetail'),
+      },
+    },
+    '/api/v1/viewer-tags/create': {
+      post: {
+        tags: ['用户管理'],
+        summary: '创建手动标签',
+        operationId: 'createViewerTag',
+        security: bearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerTagCreateRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTagDetail'),
+      },
+    },
+    '/api/v1/viewer-tags/update/{id}': {
+      put: {
+        tags: ['用户管理'],
+        summary: '更新标签',
+        operationId: 'updateViewerTag',
+        security: bearer,
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerTagUpdateRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTagDetail'),
+      },
+    },
+    '/api/v1/viewer-tags/delete/{id}': {
+      delete: {
+        tags: ['用户管理'],
+        summary: '软删标签',
+        operationId: 'deleteViewerTag',
+        security: bearer,
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseId'),
+      },
+    },
+    '/api/v1/viewer-tags/groups/list': {
+      get: {
+        tags: ['用户管理'],
+        summary: '标签分组下拉',
+        operationId: 'listViewerTagGroups',
+        security: bearer,
+        responses: ok200('#/components/schemas/ApiResponseViewerTagGroups'),
+      },
+    },
+    '/api/v1/viewer-tags/groups/page': {
+      get: {
+        tags: ['用户管理'],
+        summary: '标签分组分页',
+        operationId: 'pageViewerTagGroups',
+        security: bearer,
+        parameters: [...pageParams, { name: 'name', in: 'query', schema: { type: 'string' } }],
+        responses: ok200('#/components/schemas/ApiResponseViewerTagGroupPage'),
+      },
+    },
+    '/api/v1/viewer-tags/groups/create': {
+      post: {
+        tags: ['用户管理'],
+        summary: '创建标签分组',
+        operationId: 'createViewerTagGroup',
+        security: bearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerTagGroupCreateRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTagGroupItem'),
+      },
+    },
+    '/api/v1/viewer-tags/groups/update/{id}': {
+      put: {
+        tags: ['用户管理'],
+        summary: '更新标签分组',
+        operationId: 'updateViewerTagGroup',
+        security: bearer,
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerTagGroupUpdateRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTagGroupItem'),
+      },
+    },
+    '/api/v1/viewer-tags/groups/delete/{id}': {
+      delete: {
+        tags: ['用户管理'],
+        summary: '软删标签分组',
+        operationId: 'deleteViewerTagGroup',
+        security: bearer,
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseId'),
+      },
+    },
     '/api/v1/outside/courses/list': {
       get: {
         tags: ['对外课程'],
@@ -3937,12 +5027,12 @@ function buildAdmin() {
         '**通则**',
         '- 成功：`code === 0`（HTTP 仍多为 200）',
         '- 失败：业务 `code` —— `400` 参数、`401` 未登录、`403` 停用、`500` 服务器、`501` 服务商未接入、云侧失败透传或 `502`',
-        '- 活动路径 `{id}` 均为本站 **UUID**',
+        '- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**',
         '- 时间：`yyyy-MM-dd HH:mm:ss`',
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.5.0',
+      version: '2.6.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -3956,6 +5046,7 @@ function buildAdmin() {
       { name: '直播报备' },
       { name: '课程' },
       { name: '对外课程' },
+      { name: '用户管理' },
       { name: '统计' },
       { name: '中控台' },
       { name: '员工组织' },
@@ -3976,32 +5067,31 @@ function buildAdmin() {
           in: 'path',
           required: true,
           schema: {
-            type: 'string',
-            format: 'uuid',
-            example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+            ...BUSINESS_UUID,
+            example: 'a1b2c3d4e5f67890abcdef1234567890',
           },
-          description: '本站活动 UUID',
+          description: '本站活动 id（D74）',
         },
         MaterialId: {
           name: 'id',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' },
-          description: '素材 / 分组 UUID',
+          schema: { ...BUSINESS_UUID },
+          description: '素材 / 分组 id（D74）',
         },
         CourseId: {
           name: 'id',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' },
-          description: '本站课程 UUID',
+          schema: { ...BUSINESS_UUID },
+          description: '本站课程 id（D74）',
         },
         LiveReportId: {
           name: 'id',
           in: 'path',
           required: true,
-          schema: { type: 'string', format: 'uuid' },
-          description: '直播报备 UUID',
+          schema: { ...BUSINESS_UUID },
+          description: '直播报备 id（D74）',
         },
       },
       schemas,
@@ -4012,6 +5102,7 @@ function buildAdmin() {
 
 function buildLive() {
   const schemas = {
+    BusinessUuid: { ...BUSINESS_UUID },
     ApiResponseBase: {
       type: 'object',
       required: ['code', 'msg'],
@@ -4038,12 +5129,12 @@ function buildLive() {
     IdData: {
       type: 'object',
       required: ['id'],
-      properties: { id: { type: 'string', format: 'uuid' } },
+      properties: { id: { $ref: '#/components/schemas/BusinessUuid' } },
     },
     WatchActivitySummary: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string' },
         state: { $ref: '#/components/schemas/ActivityState' },
         startTime: { type: 'string' },
@@ -4063,7 +5154,7 @@ function buildLive() {
     WatchEmbedData: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         title: { type: 'string' },
         state: { $ref: '#/components/schemas/ActivityState' },
         type: { $ref: '#/components/schemas/ActivityType' },
@@ -4076,123 +5167,108 @@ function buildLive() {
     },
     VhallSdkPayload: {
       type: 'object',
+      description: '微吼签名/init 鉴权字段；脚本 CDN 由前端适配器加载（D93）',
       properties: {
-        scriptUrl: { type: 'string', format: 'uri' },
-        jqueryUrl: { type: 'string', nullable: true },
-        account: { type: 'string', description: '回显用；init 不要传' },
-        email: { type: 'string' },
-        username: { type: 'string' },
-        webinarId: { type: 'string' },
-        appKey: { type: 'string' },
-        signedAt: { type: 'string' },
-        signType: { type: 'integer', example: 0 },
-        sign: { type: 'string' },
+        account: { type: 'string', description: '回显 String(viewerId)；init 不要传（与 email 互斥）' },
+        email: { type: 'string', description: '{viewerId}@qkzb.com，参与签名；new VhallSDK 必须用这份' },
+        username: { type: 'string', description: '优先 Query nickname；空则默认「观众」' },
+        webinarId: { type: 'string', description: '微吼活动号（= provider_room_id）；仅 provider=vhall' },
+        appKey: { type: 'string', description: '微吼 app_key' },
+        signedAt: { type: 'string', description: '签名时间戳（约 5 分钟有效）' },
+        signType: { type: 'integer', example: 0, description: '签名类型；通常 0' },
+        sign: { type: 'string', description: '服务端 SecretKey 算出的签名；勿返回 secret' },
       },
     },
-    WatchSdkData: {
+    WatchSummaryData: {
       type: 'object',
+      description:
+        '观看页活动摘要 / 页面壳（D95）：标题、态、时间、回放开关与有效期；全部取本库 Activity，不含 SDK 签名',
       properties: {
-        id: { type: 'string', format: 'uuid' },
+        id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         title: { type: 'string' },
         state: { $ref: '#/components/schemas/ActivityState' },
         type: { $ref: '#/components/schemas/ActivityType' },
-        nickname: { type: 'string' },
-        guestId: { type: 'string' },
         startTime: { type: 'string' },
         endTime: { type: 'string' },
+        playbackEnabled: { type: 'boolean' },
+        playbackValidityType: { $ref: '#/components/schemas/PlaybackValidityType' },
+        playbackValidityDays: { type: 'integer' },
+        playbackExpired: { type: 'boolean' },
+        playbackSpeedAllow: { type: 'boolean' },
+        playbackFastForwardAllow: { type: 'boolean' },
+      },
+    },
+    WatchSdkData: {
+      type: 'object',
+      description:
+        '观看 SDK 签名载荷（D92/D93/D94/D95）：仅 id / provider / viewerId / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*',
+      properties: {
+        id: { $ref: '#/components/schemas/BusinessUuid' },
+        provider: { $ref: '#/components/schemas/Provider' },
+        nickname: { type: 'string' },
+        viewerId: { type: 'integer', format: 'int64' },
         sdk: { $ref: '#/components/schemas/VhallSdkPayload' },
-        embedUrl: { type: 'string', format: 'uri' },
       },
     },
-    AttendanceEnterRequest: {
+    WatchAccessData: {
       type: 'object',
-      required: ['userId', 'enterTime'],
+      description: '观看售卖门禁状态（D90）',
       properties: {
-        userId: { type: 'string' },
-        enterTime: {
+        id: { $ref: '#/components/schemas/BusinessUuid' },
+        sellAlone: { type: 'boolean' },
+        sellType: { $ref: '#/components/schemas/SellType' },
+        accessState: {
           type: 'string',
-          example: '2026-09-30 10:00:00',
+          enum: ['ok', 'need_password', 'need_login', 'forbidden', 'expired'],
+          description:
+            'ok 已放行 / need_password 需观看密码 / need_login 需登录 / forbidden 无观看权限 / expired 访问已过期',
         },
-        mid: { type: 'string' },
-        nickname: { type: 'string' },
-        avatarUrl: { type: 'string' },
+        accessExpired: { type: 'boolean' },
+        accessValidityType: { $ref: '#/components/schemas/AccessValidityType' },
+        accessValidityDays: { type: 'integer' },
       },
     },
-    AttendanceLeaveRequest: {
+    WatchAccessVerifyPasswordRequest: {
       type: 'object',
-      required: ['items'],
+      required: ['password'],
       properties: {
-        items: {
-          type: 'array',
-          minItems: 1,
-          maxItems: 100,
-          items: {
-            type: 'object',
-            required: ['userId', 'enterTime', 'leaveTime'],
-            properties: {
-              userId: { type: 'string' },
-              enterTime: { type: 'string' },
-              leaveTime: { type: 'string' },
-              mid: { type: 'string' },
-            },
-          },
+        password: {
+          type: 'string',
+          pattern: '^\\d{6}$',
+          description: '明文 6 位数字观看密码',
         },
       },
     },
-    AttendanceLeaveData: {
+    WatchAccessVerifyPasswordData: {
       type: 'object',
       properties: {
-        updated: { type: 'integer' },
-        skipped: { type: 'integer' },
-        missing: { type: 'integer' },
+        accessToken: { type: 'string' },
+        expiresIn: { type: 'integer', format: 'int64' },
       },
     },
-    AttendeeItem: {
+    WatchChatHistoryItem: {
       type: 'object',
-      required: ['userId', 'enterTime', 'online'],
       properties: {
-        userId: { type: 'string' },
-        nickname: { type: 'string' },
-        avatarUrl: { type: 'string' },
-        enterTime: { type: 'string' },
-        leaveTime: { type: 'string' },
-        online: { type: 'boolean' },
+        senderId: { type: 'string' },
+        senderName: { type: 'string' },
+        msg: { type: 'string' },
+        msgId: { type: 'string' },
+        avatar: { type: 'string' },
+        roleName: { type: 'integer' },
+        timestamp: { type: 'integer', format: 'int64' },
       },
     },
-    AttendeeListData: {
+    WatchChatHistoryData: {
       type: 'object',
-      required: ['activityState', 'total', 'page', 'pageSize', 'list'],
+      description: '回放页只读聊天历史（D91）',
       properties: {
-        activityState: { $ref: '#/components/schemas/ActivityState' },
         total: { type: 'integer', format: 'int64' },
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
         list: {
           type: 'array',
-          items: { $ref: '#/components/schemas/AttendeeItem' },
-        },
-      },
-    },
-    PresenceTrendPoint: {
-      type: 'object',
-      properties: {
-        time: { type: 'string' },
-        online: { type: 'integer' },
-        enter: { type: 'integer' },
-        leave: { type: 'integer' },
-      },
-    },
-    PresenceTrend: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        startTime: { type: 'string' },
-        endTime: { type: 'string' },
-        bucketSeconds: { type: 'integer', example: 60 },
-        points: {
-          type: 'array',
-          items: { $ref: '#/components/schemas/PresenceTrendPoint' },
+          items: { $ref: '#/components/schemas/WatchChatHistoryItem' },
         },
       },
     },
@@ -4203,6 +5279,265 @@ function buildLive() {
         pageUrl: { type: 'string', format: 'uri' },
       },
     },
+
+    ViewerUserInfo: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        hasPhone: { type: 'boolean' },
+        phoneMasked: { type: 'string' },
+        nickname: { type: 'string' },
+        avatarUrl: { type: 'string' },
+        avatarObjectKey: { type: 'string' },
+      },
+    },
+    ViewerTokenPairData: {
+      type: 'object',
+      properties: {
+        accessToken: { type: 'string' },
+        expiresIn: { type: 'integer' },
+        refreshToken: { type: 'string' },
+        refreshExpiresIn: { type: 'integer' },
+        user: { $ref: '#/components/schemas/ViewerUserInfo' },
+      },
+    },
+    ViewerAuthWechatLoginRequest: {
+      type: 'object',
+      required: ['code', 'agreed'],
+      properties: {
+        code: { type: 'string' },
+        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
+      },
+    },
+    ViewerAuthPhoneLoginRequest: {
+      type: 'object',
+      required: ['loginCode', 'phoneCode', 'agreed'],
+      properties: {
+        loginCode: { type: 'string' },
+        phoneCode: { type: 'string' },
+        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
+      },
+    },
+    ViewerAuthDevPhoneLoginRequest: {
+      type: 'object',
+      required: ['phone', 'agreed'],
+      properties: {
+        phone: { type: 'string', pattern: "^1\\d{10}$" },
+        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
+      },
+    },
+    ViewerAuthRefreshRequest: {
+      type: 'object',
+      required: ['accessToken', 'refreshToken'],
+      properties: {
+        accessToken: { type: 'string' },
+        refreshToken: { type: 'string' },
+      },
+    },
+    ViewerProfileUpdateRequest: {
+      type: 'object',
+      properties: {
+        nickname: { type: 'string', maxLength: 16 },
+        avatarUrl: { type: 'string', maxLength: 512 },
+        avatarObjectKey: { type: 'string', maxLength: 1024 },
+      },
+    },
+    ViewerUploadFileData: {
+      type: 'object',
+      properties: {
+        objectKey: { type: 'string' },
+        url: { type: 'string' },
+        location: { type: 'string' },
+      },
+    },
+    ViewerTosStsData: {
+      type: 'object',
+      properties: {
+        region: { type: 'string' },
+        endpoint: { type: 'string' },
+        bucketName: { type: 'string' },
+        accessKeyId: { type: 'string' },
+        secretAccessKey: { type: 'string' },
+        sessionToken: { type: 'string' },
+        expiredTime: { type: 'string' },
+        cdnUrl: { type: 'string' },
+      },
+    },
+    ViewerFeedbackImageRef: {
+      type: 'object',
+      required: ['url', 'objectKey'],
+      properties: { url: { type: 'string' }, objectKey: { type: 'string' } },
+    },
+    ViewerFeedbackSubmitRequest: {
+      type: 'object',
+      required: ['category', 'content'],
+      properties: {
+        category: { type: 'integer', enum: [1, 2, 3, 4], description: '1 课程权益 / 2 视频播放 / 3 学习体验 / 4 其他' },
+        content: { type: 'string', maxLength: 200 },
+        contactPhone: { type: 'string' },
+        images: {
+          type: 'array',
+          maxItems: 4,
+          items: { $ref: '#/components/schemas/ViewerFeedbackImageRef' },
+        },
+      },
+    },
+    ViewerFeedbackListItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        category: { type: 'integer' },
+        categoryLabel: { type: 'string' },
+        content: { type: 'string' },
+        imageCount: { type: 'integer' },
+        createdTime: { type: 'string' },
+      },
+    },
+    ViewerFeedbackListData: {
+      type: 'object',
+      properties: {
+        total: { type: 'integer', format: 'int64' },
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        list: { type: 'array', items: { $ref: '#/components/schemas/ViewerFeedbackListItem' } },
+      },
+    },
+    ViewerFeedbackDetailData: {
+      allOf: [
+        { $ref: '#/components/schemas/ViewerFeedbackListItem' },
+        {
+          type: 'object',
+          properties: {
+            contactPhone: { type: 'string' },
+            images: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ViewerFeedbackImageRef' },
+            },
+          },
+        },
+      ],
+    },
+    ViewerPresencePingRequest: {
+      type: 'object',
+      properties: {
+        scene: {
+          type: 'string',
+          enum: ['miniapp', 'live'],
+          description: 'miniapp 小程序 / live 直播间',
+        },
+      },
+    },
+    ViewerPresencePingData: {
+      type: 'object',
+      properties: { lastVisitTime: { type: 'string' } },
+    },
+    WatchProductItem: {
+      type: 'object',
+      properties: {
+        spuId: { type: 'string' },
+        productName: { type: 'string' },
+      },
+    },
+    WatchProductListData: {
+      type: 'object',
+      properties: {
+        list: { type: 'array', items: { $ref: '#/components/schemas/WatchProductItem' } },
+      },
+    },
+    WatchRecordPlayItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        title: { type: 'string' },
+        duration: { type: 'string' },
+        coverUrl: { type: 'string' },
+        tosUrl: { type: 'string' },
+        createdTime: { type: 'string' },
+      },
+    },
+    WatchRecordPlayListData: {
+      type: 'object',
+      properties: {
+        list: { type: 'array', items: { $ref: '#/components/schemas/WatchRecordPlayItem' } },
+      },
+    },
+    WatchReplayStartRequest: {
+      type: 'object',
+      required: ['recordId'],
+      properties: { recordId: { type: 'integer', format: 'int64' } },
+    },
+    WatchReplayStartData: {
+      type: 'object',
+      properties: { socketId: { type: 'string', maxLength: 32 } },
+    },
+    WatchReplayHeartbeatRequest: {
+      type: 'object',
+      required: ['socketId'],
+      properties: { socketId: { type: 'string' } },
+    },
+    WatchReplayHeartbeatData: {
+      type: 'object',
+      properties: { lastReportTime: { type: 'string' } },
+    },
+    WatchDevPresenceRequest: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['Join', 'Leave'],
+          description: 'Join 进房 / Leave 离房',
+        },
+        userId: { type: 'string' },
+        nickname: { type: 'string' },
+        email: { type: 'string' },
+      },
+    },
+    WatchCommentReportRequest: {
+      type: 'object',
+      required: ['content'],
+      properties: {
+        content: { type: 'string', maxLength: 500 },
+        guestId: { type: 'string' },
+        viewerId: { type: 'integer', format: 'int64' },
+        nickname: { type: 'string' },
+        roleName: { type: 'integer' },
+        providerMsgId: { type: 'string' },
+        commentTime: { type: 'string' },
+      },
+    },
+    WatchCommentDeleteRequest: {
+      type: 'object',
+      properties: {
+        providerMsgId: { type: 'string' },
+        commentId: { type: 'integer', format: 'int64' },
+      },
+    },
+    WatchAudienceAttributeRequest: {
+      type: 'object',
+      required: ['viewerId', 'inviterId'],
+      properties: {
+        viewerId: { type: 'integer', format: 'int64' },
+        inviterId: { type: 'integer', format: 'int64', description: '员工 rs_mainkey_id' },
+        inviterKind: {
+          type: 'string',
+          enum: ['employee'],
+          description: 'employee 员工',
+        },
+      },
+    },
+    WatchAudienceAttributeData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        viewerId: { type: 'integer', format: 'int64' },
+      },
+    },
+    IdDataInt: {
+      type: 'object',
+      required: ['id'],
+      properties: { id: { type: 'integer', format: 'int64' } },
+    },
+
     VhallPresenceCallback: {
       type: 'object',
       description: '微吼上下线回调 body（字段以微吼文档为准）',
@@ -4229,24 +5564,44 @@ function buildLive() {
     ApiResponseId: { $ref: '#/components/schemas/IdData' },
     ApiResponseWatchList: { $ref: '#/components/schemas/WatchActivityListData' },
     ApiResponseWatchEmbed: { $ref: '#/components/schemas/WatchEmbedData' },
+    ApiResponseWatchSummary: { $ref: '#/components/schemas/WatchSummaryData' },
     ApiResponseWatchSdk: { $ref: '#/components/schemas/WatchSdkData' },
-    ApiResponseAttendanceLeave: {
-      $ref: '#/components/schemas/AttendanceLeaveData',
+    ApiResponseWatchAccess: { $ref: '#/components/schemas/WatchAccessData' },
+    ApiResponseWatchAccessVerifyPassword: {
+      $ref: '#/components/schemas/WatchAccessVerifyPasswordData',
     },
+    ApiResponseWatchChatHistory: { $ref: '#/components/schemas/WatchChatHistoryData' },
     ApiResponseAttendeeList: { $ref: '#/components/schemas/AttendeeListData' },
     ApiResponsePresenceTrend: { $ref: '#/components/schemas/PresenceTrend' },
     ApiResponseChatFilter: { $ref: '#/components/schemas/ChatFilterData' },
+
+    ApiResponseViewerTokenPair: { $ref: '#/components/schemas/ViewerTokenPairData' },
+    ApiResponseViewerUserInfo: { $ref: '#/components/schemas/ViewerUserInfo' },
+    ApiResponseViewerUploadFile: { $ref: '#/components/schemas/ViewerUploadFileData' },
+    ApiResponseViewerTosSts: { $ref: '#/components/schemas/ViewerTosStsData' },
+    ApiResponseViewerFeedbackId: { $ref: '#/components/schemas/IdDataInt' },
+    ApiResponseViewerFeedbackList: { $ref: '#/components/schemas/ViewerFeedbackListData' },
+    ApiResponseViewerFeedbackDetail: { $ref: '#/components/schemas/ViewerFeedbackDetailData' },
+    ApiResponseViewerPresencePing: { $ref: '#/components/schemas/ViewerPresencePingData' },
+    ApiResponseWatchProducts: { $ref: '#/components/schemas/WatchProductListData' },
+    ApiResponseWatchPlayRecords: { $ref: '#/components/schemas/WatchRecordPlayListData' },
+    ApiResponseWatchReplayStart: { $ref: '#/components/schemas/WatchReplayStartData' },
+    ApiResponseWatchReplayHeartbeat: { $ref: '#/components/schemas/WatchReplayHeartbeatData' },
+    ApiResponseWatchAudienceAttribute: { $ref: '#/components/schemas/WatchAudienceAttributeData' },
+    ApiResponseIntId: { $ref: '#/components/schemas/IdDataInt' },
+
   })) {
     schemas[name] = wrapData(data)
   }
+
 
   const watchId = { $ref: '#/components/parameters/WatchActivityId' }
   const guestParams = [
     {
       name: 'guestId',
       in: 'query',
-      schema: { type: 'string', pattern: '^[A-Za-z0-9]+$' },
-      description: '只能字母数字；不传则后端生成',
+      schema: { type: 'string', pattern: "^[A-Za-z0-9]+$" },
+      description: '只能字母数字；不传则后端生成（仅 detail 嵌入）',
     },
     {
       name: 'nickname',
@@ -4254,9 +5609,233 @@ function buildLive() {
       schema: { type: 'string', maxLength: 50 },
       description: '默认「观众」',
     },
+    {
+      name: 'viewerId',
+      in: 'query',
+      schema: { type: 'integer', format: 'int64' },
+      description: '观众数字 id；有则 email 为 {id}@qkzb.com',
+    },
   ]
-
+  const sdkSignParams = [
+    {
+      name: 'id',
+      in: 'query',
+      required: true,
+      schema: {
+        ...BUSINESS_UUID,
+        example: 'a1b2c3d4e5f67890abcdef1234567890',
+      },
+      description: '本站活动 UUID（Query；相对 D62 的明确例外，见 D92）',
+    },
+    {
+      name: 'viewerId',
+      in: 'query',
+      required: false,
+      schema: { type: 'integer', format: 'int64' },
+      description: '观众数字 id；优先 Query，未传可从观众 JWT 解析；都无 → 400',
+    },
+    {
+      name: 'nickname',
+      in: 'query',
+      schema: { type: 'string', maxLength: 50 },
+      description: '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL',
+    },
+  ]
+  const activityAccessHeader = {
+    name: 'X-Activity-Access',
+    in: 'header',
+    required: false,
+    schema: { type: 'string' },
+    description: '本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）',
+  }
+  const viewerBearer = [{ BearerViewer: [] }]
   const paths = {
+    '/api/v1/viewer/auth/wechat-login': {
+      post: {
+        tags: ['观众鉴权'],
+        summary: '微信小程序登录',
+        operationId: 'viewerWechatLogin',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerAuthWechatLoginRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTokenPair'),
+      },
+    },
+    '/api/v1/viewer/auth/phone-login': {
+      post: {
+        tags: ['观众鉴权'],
+        summary: '手机号授权登录',
+        operationId: 'viewerPhoneLogin',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerAuthPhoneLoginRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTokenPair'),
+      },
+    },
+    '/api/v1/viewer/auth/dev-phone-login': {
+      post: {
+        tags: ['观众鉴权'],
+        summary: '本地造号登录',
+        description: '仅 spring profile=local；非 local 返回 404「接口不存在」。',
+        operationId: 'viewerDevPhoneLogin',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerAuthDevPhoneLoginRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTokenPair'),
+      },
+    },
+    '/api/v1/viewer/auth/refresh': {
+      post: {
+        tags: ['观众鉴权'],
+        summary: '刷新双票',
+        operationId: 'viewerAuthRefresh',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerAuthRefreshRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerTokenPair'),
+      },
+    },
+    '/api/v1/viewer/auth/user-info': {
+      get: {
+        tags: ['观众鉴权'],
+        summary: '当前观众',
+        operationId: 'viewerAuthUserInfo',
+        security: viewerBearer,
+        responses: ok200('#/components/schemas/ApiResponseViewerUserInfo'),
+      },
+    },
+    '/api/v1/viewer/profile/update': {
+      put: {
+        tags: ['观众资料'],
+        summary: '更新昵称/头像',
+        operationId: 'viewerProfileUpdate',
+        security: viewerBearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerProfileUpdateRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerUserInfo'),
+      },
+    },
+    '/api/v1/viewer/uploads/file': {
+      post: {
+        tags: ['观众上传'],
+        summary: '中转上传',
+        operationId: 'viewerUploadFile',
+        security: viewerBearer,
+        parameters: [
+          { name: 'biz', in: 'query', required: true, schema: { type: 'integer', enum: [1, 2], description: '1 头像 / 2 意见反馈截图' } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file', 'objectKey'],
+                properties: {
+                  file: { type: 'string', format: 'binary' },
+                  objectKey: { type: 'string' },
+                  contentType: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerUploadFile'),
+      },
+    },
+    '/api/v1/viewer/uploads/tos-sts': {
+      get: {
+        tags: ['观众上传'],
+        summary: '直传 STS',
+        operationId: 'viewerUploadTosSts',
+        security: viewerBearer,
+        responses: ok200('#/components/schemas/ApiResponseViewerTosSts'),
+      },
+    },
+    '/api/v1/viewer/feedback/submit': {
+      post: {
+        tags: ['意见反馈'],
+        summary: '提交反馈',
+        operationId: 'viewerFeedbackSubmit',
+        security: viewerBearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerFeedbackSubmitRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerFeedbackId'),
+      },
+    },
+    '/api/v1/viewer/feedback/list': {
+      get: {
+        tags: ['意见反馈'],
+        summary: '我的反馈列表',
+        operationId: 'viewerFeedbackList',
+        security: viewerBearer,
+        parameters: [...pageParams],
+        responses: ok200('#/components/schemas/ApiResponseViewerFeedbackList'),
+      },
+    },
+    '/api/v1/viewer/feedback/detail/{id}': {
+      get: {
+        tags: ['意见反馈'],
+        summary: '反馈详情',
+        operationId: 'viewerFeedbackDetail',
+        security: viewerBearer,
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseViewerFeedbackDetail'),
+      },
+    },
+    '/api/v1/viewer/learning/lives': {
+      get: {
+        tags: ['我的学习'],
+        summary: '我的学习·直播',
+        operationId: 'viewerLearningLives',
+        security: viewerBearer,
+        parameters: [
+          ...pageParams,
+          { name: 'state', in: 'query', schema: { $ref: '#/components/schemas/ActivityState' } },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseWatchList'),
+      },
+    },
+    '/api/v1/viewer/presence/ping': {
+      post: {
+        tags: ['观众鉴权'],
+        summary: '访问心跳',
+        operationId: 'viewerPresencePing',
+        security: viewerBearer,
+        requestBody: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ViewerPresencePingRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerPresencePing'),
+      },
+    },
     '/api/v1/watch/activities': {
       get: {
         tags: ['观看'],
@@ -4274,57 +5853,212 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseWatchList'),
       },
     },
+    '/api/v1/watch/access/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '观看售卖门禁状态',
+        description:
+          '可匿名。可选观众 Authorization；加密已解锁则带 X-Activity-Access。返回 accessState（D90）。',
+        operationId: 'getWatchAccess',
+        security: [],
+        parameters: [watchId, activityAccessHeader],
+        responses: ok200('#/components/schemas/ApiResponseWatchAccess'),
+      },
+    },
+    '/api/v1/watch/access/verify-password/{id}': {
+      post: {
+        tags: ['观看'],
+        summary: '校验观看密码并发本场访问 JWT',
+        description:
+          '仅 sellAlone=true 且 sellType=encrypted；密码错 → 400；已过期 → 403（D90）。',
+        operationId: 'verifyWatchAccessPassword',
+        security: [],
+        parameters: [watchId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WatchAccessVerifyPasswordRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseWatchAccessVerifyPassword'),
+      },
+    },
     '/api/v1/watch/detail/{id}': {
       get: {
         tags: ['观看'],
-        summary: '观看嵌入（iframe 兜底）',
+        summary: '观看嵌入页地址',
+        description:
+          '独立用途的嵌入 URL（兜底）；观看默认走 /watch/summary + /watch/sdk-sign（D94/D95 签名不再回 embedUrl）。',
         operationId: 'getWatchEmbed',
         parameters: [watchId, ...guestParams],
         responses: ok200('#/components/schemas/ApiResponseWatchEmbed'),
       },
     },
-    '/api/v1/watch/sdk/{id}': {
+    '/api/v1/watch/summary/{id}': {
       get: {
         tags: ['观看'],
-        summary: '学生端观看 SDK 初始化载荷',
-        operationId: 'getWatchSdk',
-        parameters: [watchId, ...guestParams],
+        summary: '观看页活动摘要（页面壳）',
+        description: [
+          '观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95）。',
+          '字段全部取本库 Activity，不调微吼、不含 SDK 签名。',
+          '勿用 /watch/detail（嵌入专用）顶替。须过售卖门禁，未过 → 403。',
+        ].join('\n'),
+        operationId: 'getWatchSummary',
+        parameters: [watchId, activityAccessHeader],
+        responses: ok200('#/components/schemas/ApiResponseWatchSummary'),
+      },
+    },
+    '/api/v1/watch/sdk-sign': {
+      get: {
+        tags: ['观看'],
+        summary: '观看 SDK 签名与初始化载荷',
+        description: [
+          '旧路径 GET /api/v1/watch/sdk/{id} 已删除。',
+          'Query 必填 id；viewerId 优先 Query，可从观众 JWT 解析；都无 → 400「请先登录」。',
+          '仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
+          '不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。',
+          '签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。',
+        ].join('\n'),
+        operationId: 'getWatchSdkSign',
+        parameters: [...sdkSignParams, activityAccessHeader],
         responses: ok200('#/components/schemas/ApiResponseWatchSdk'),
       },
     },
-    '/api/v1/watch/attendance/enter/{id}': {
-      post: {
-        tags: ['进出房'],
-        summary: '进入（辅通道）',
-        description: '前端在 VITE_ATTENDANCE_CLIENT_REPORT=true 时调用。',
-        operationId: 'attendanceEnter',
+    '/api/v1/watch/products/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '本场商品元数据',
+        operationId: 'getWatchProducts',
         parameters: [watchId],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/AttendanceEnterRequest' },
-            },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseId'),
+        responses: ok200('#/components/schemas/ApiResponseWatchProducts'),
       },
     },
-    '/api/v1/watch/attendance/leave/{id}': {
+    '/api/v1/watch/chat-history/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '观看端聊天历史（回放只读）',
+        description:
+          '回放页只读聊天；代理微吼 get-list。须过售卖门禁，未过 → 403。page 从 1 起，每页 50（D91）。',
+        operationId: 'getWatchChatHistory',
+        parameters: [
+          watchId,
+          activityAccessHeader,
+          {
+            name: 'page',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, default: 1 },
+            description: '从 1 起；缺省 1；每页 50 条',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseWatchChatHistory'),
+      },
+    },
+    '/api/v1/watch/records/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '可播回放列表',
+        description: '本库 ready 且 tosUrl 非空；未过售卖门禁 → 403（D89/D90）。',
+        operationId: 'listWatchPlayRecords',
+        parameters: [watchId, activityAccessHeader],
+        responses: ok200('#/components/schemas/ApiResponseWatchPlayRecords'),
+      },
+    },
+    '/api/v1/watch/replay/start/{id}': {
       post: {
-        tags: ['进出房'],
-        summary: '离开（辅通道，批量）',
-        operationId: 'attendanceLeave',
+        tags: ['回放'],
+        summary: '回放开始',
+        operationId: 'watchReplayStart',
+        security: viewerBearer,
         parameters: [watchId],
         requestBody: {
           required: true,
           content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/AttendanceLeaveRequest' },
-            },
+            'application/json': { schema: { $ref: '#/components/schemas/WatchReplayStartRequest' } },
           },
         },
-        responses: ok200('#/components/schemas/ApiResponseAttendanceLeave'),
+        responses: ok200('#/components/schemas/ApiResponseWatchReplayStart'),
+      },
+    },
+    '/api/v1/watch/replay/heartbeat/{id}': {
+      post: {
+        tags: ['回放'],
+        summary: '回放心跳',
+        operationId: 'watchReplayHeartbeat',
+        security: viewerBearer,
+        parameters: [watchId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WatchReplayHeartbeatRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseWatchReplayHeartbeat'),
+      },
+    },
+    '/api/v1/watch/dev/presence/{id}': {
+      post: {
+        tags: ['开发'],
+        summary: '本地模拟进出',
+        description: '仅 local profile；非 local 返回 404。',
+        operationId: 'watchDevPresence',
+        security: [],
+        parameters: [watchId],
+        requestBody: {
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WatchDevPresenceRequest' } },
+          },
+        },
+        responses: plainTextSuccess200(),
+      },
+    },
+    '/api/v1/watch/comments/report/{id}': {
+      post: {
+        tags: ['评论'],
+        summary: '上报评论',
+        operationId: 'watchCommentReport',
+        security: [],
+        parameters: [watchId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WatchCommentReportRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseIntId'),
+      },
+    },
+    '/api/v1/watch/comments/delete/{id}': {
+      post: {
+        tags: ['评论'],
+        summary: '软删评论',
+        operationId: 'watchCommentDelete',
+        security: [],
+        parameters: [watchId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WatchCommentDeleteRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseIntId'),
+      },
+    },
+    '/api/v1/watch/audience/attribute/{id}': {
+      post: {
+        tags: ['用户运营'],
+        summary: '邀请归因',
+        operationId: 'watchAudienceAttribute',
+        security: [],
+        parameters: [watchId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WatchAudienceAttributeRequest' } },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseWatchAudienceAttribute'),
       },
     },
     '/api/v1/callbacks/vhall/presence': {
@@ -4333,6 +6067,7 @@ function buildLive() {
         summary: '微吼上下线回调（主通道）',
         description: '微吼主动 POST，不是前端调用。method_id 须为 20。',
         operationId: 'vhallPresenceCallback',
+        security: [],
         requestBody: {
           required: true,
           content: {
@@ -4341,9 +6076,46 @@ function buildLive() {
             },
           },
         },
-        responses: {
-          '200': { description: '按微吼约定响应' },
-        },
+        responses: plainTextSuccess200(),
+      },
+    },
+    '/api/v1/callbacks/vhall/live-state': {
+      post: {
+        tags: ['回调'],
+        summary: '微吼开播/结束回调',
+        description: 'method_id=1；校签失败 403，成功纯文本 success。',
+        operationId: 'vhallLiveStateCallback',
+        security: [],
+        responses: plainTextSuccess200(),
+      },
+    },
+    '/api/v1/callbacks/vhall/transcode': {
+      post: {
+        tags: ['回调'],
+        summary: '微吼转码回调',
+        operationId: 'vhallTranscodeCallback',
+        security: [],
+        responses: plainTextSuccess200(),
+      },
+    },
+    '/api/v1/callbacks/vhall/record-generate': {
+      post: {
+        tags: ['回调'],
+        summary: '微吼回放生成回调',
+        description: 'method_id=4（D88）',
+        operationId: 'vhallRecordGenerateCallback',
+        security: [],
+        responses: plainTextSuccess200(),
+      },
+    },
+    '/api/v1/callbacks/vhall/record-download': {
+      post: {
+        tags: ['回调'],
+        summary: '微吼回放打包完成回调',
+        description: 'method_id=6（D88）',
+        operationId: 'vhallRecordDownloadCallback',
+        security: [],
+        responses: plainTextSuccess200(),
       },
     },
     '/api/v1/watch/attendees/{id}': {
@@ -4374,31 +6146,16 @@ function buildLive() {
       get: {
         tags: ['中控台'],
         summary: '进出三线走势',
-        description: '数据来自 presence_event，不要调微吼 report/online。',
+        description: '数据来自 room_presence_event，不要调微吼 report/online。',
         operationId: 'getWatchPresenceTrend',
         parameters: [
           watchId,
-          {
-            name: 'startTime',
-            in: 'query',
-            required: true,
-            schema: { type: 'string' },
-          },
-          {
-            name: 'endTime',
-            in: 'query',
-            required: true,
-            schema: { type: 'string' },
-          },
+          { name: 'startTime', in: 'query', required: true, schema: { type: 'string' } },
+          { name: 'endTime', in: 'query', required: true, schema: { type: 'string' } },
           {
             name: 'bucketSeconds',
             in: 'query',
-            schema: {
-              type: 'integer',
-              default: 60,
-              enum: [60],
-              description: '60 秒',
-            },
+            schema: { type: 'integer', default: 60, enum: [60], description: '60 秒' },
           },
         ],
         responses: ok200('#/components/schemas/ApiResponsePresenceTrend'),
@@ -4411,23 +6168,14 @@ function buildLive() {
         operationId: 'getChatFilterPage',
         parameters: [
           watchId,
-          {
-            name: 'email',
-            in: 'query',
-            schema: { type: 'string' },
-            description: '默认 assistant@zhibo.local',
-          },
-          {
-            name: 'name',
-            in: 'query',
-            schema: { type: 'string', maxLength: 30 },
-            description: '默认「助理」',
-          },
+          { name: 'email', in: 'query', schema: { type: 'string' }, description: '默认 assistant@zhibo.local' },
+          { name: 'name', in: 'query', schema: { type: 'string', maxLength: 30 }, description: '默认「助理」' },
         ],
         responses: ok200('#/components/schemas/ApiResponseChatFilter'),
       },
     },
   }
+
 
   finalizeSchemas(schemas)
 
@@ -4443,12 +6191,12 @@ function buildLive() {
         '',
         '**通则**',
         '- 成功：`code === 0`（HTTP 仍多为 200）',
-        '- 活动路径 `{id}` 均为本站 **UUID**',
+        '- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**',
         '- 时间：`yyyy-MM-dd HH:mm:ss`',
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.5.0',
+      version: '2.6.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -4456,23 +6204,38 @@ function buildLive() {
     ],
     tags: [
       { name: '观看' },
-      { name: '进出房' },
+      { name: '观众鉴权' },
+      { name: '观众资料' },
+      { name: '观众上传' },
+      { name: '意见反馈' },
+      { name: '我的学习' },
+      { name: '回放' },
+      { name: '评论' },
+      { name: '用户运营' },
+      { name: '开发' },
       { name: '中控台' },
       { name: '回调' },
     ],
     paths,
     components: {
+      securitySchemes: {
+        BearerViewer: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: '观众 access JWT；不要带 refresh / 本场访问 token',
+        },
+      },
       parameters: {
         WatchActivityId: {
           name: 'id',
           in: 'path',
           required: true,
           schema: {
-            type: 'string',
-            format: 'uuid',
-            example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+            ...BUSINESS_UUID,
+            example: 'a1b2c3d4e5f67890abcdef1234567890',
           },
-          description: '本站活动 UUID',
+          description: '本站活动 id（D74）',
         },
       },
       schemas,
@@ -4525,7 +6288,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.5.0',
+      version: '2.6.0',
       contact: { name: 'zhibo' },
     },
     servers: [
@@ -4540,6 +6303,7 @@ function mergeDocs(admin, live) {
     components: {
       securitySchemes: {
         ...(admin.components.securitySchemes || {}),
+        ...(live.components.securitySchemes || {}),
       },
       parameters: {
         ...(admin.components.parameters || {}),
