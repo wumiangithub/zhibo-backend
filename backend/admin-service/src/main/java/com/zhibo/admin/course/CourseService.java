@@ -18,6 +18,7 @@ import com.zhibo.admin.course.dto.CourseShelfResponse;
 import com.zhibo.admin.course.dto.CourseSummary;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseItem;
+import com.zhibo.admin.course.dto.UpdateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
 import com.zhibo.admin.course.dto.OutsideCourseOwner;
 import com.zhibo.course.CourseAuditEntity;
@@ -115,6 +116,50 @@ public class CourseService {
         replaceOwners(entity.getId(), ownerIds);
         replaceMaterials(entity.getId(), materials);
         addAudit(entity.getId(), "submit", null, null, operator);
+        return new CourseIdResponse(entity.getId());
+    }
+
+    /**
+     * 更新课程基本信息。审核中不可改；通过/驳回后再保存则回 {@code pending} 并追加 {@code submit}。
+     */
+    @Transactional
+    public CourseIdResponse update(String id, UpdateCourseRequest request, long operatorId) {
+        if (request == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        if (request.getAutoList() == null) {
+            throw new IllegalArgumentException("是否自动上架不能为空");
+        }
+        CourseEntity entity = requireCourse(id);
+        if (isRiskPending(entity.getRiskStatus())) {
+            throw new IllegalArgumentException("审核中不可编辑");
+        }
+        boolean reapply = isRiskReapply(entity.getRiskStatus());
+
+        String title = requireTitle(request.getTitle());
+        String introduction = trimToNull(request.getIntroduction());
+        if (introduction != null && introduction.length() > 256) {
+            throw new IllegalArgumentException("课程简介不能超过256个字");
+        }
+        String detailHtml = normalizeDetail(request.getDetailHtml());
+        MaterialEntity cover = requireCover(request.getCoverMaterialId());
+        List<Long> ownerIds = parseOwnerIds(request.getOwnerIds());
+        List<BoundMaterial> materials = parseBoundMaterials(request.getMaterials(), request.getMaterialIds());
+        SysUserAccountEntity operator = requireOperator(operatorId);
+
+        entity.setTitle(title);
+        entity.setIntroduction(introduction);
+        entity.setDetailHtml(detailHtml);
+        entity.setCoverMaterialId(cover.getId());
+        entity.setCoverUrl(cover.getUrl().trim());
+        entity.setAutoList(request.getAutoList());
+        entity.setRiskStatus("pending");
+        courseRepository.save(entity);
+        replaceOwners(entity.getId(), ownerIds);
+        replaceMaterials(entity.getId(), materials);
+        if (reapply) {
+            addAudit(entity.getId(), "submit", null, null, operator);
+        }
         return new CourseIdResponse(entity.getId());
     }
 
@@ -810,6 +855,20 @@ public class CourseService {
             throw new IllegalArgumentException(label + " 无效");
         }
         return value;
+    }
+
+    /** 待审核或未写状态时，课程基本信息不可改。 */
+    private static boolean isRiskPending(String status) {
+        return status == null || status.isBlank() || "pending".equalsIgnoreCase(status.trim());
+    }
+
+    /** 已通过或已驳回后再保存，视为重新发起申请。 */
+    private static boolean isRiskReapply(String status) {
+        if (status == null) {
+            return false;
+        }
+        String value = status.trim();
+        return "passed".equalsIgnoreCase(value) || "rejected".equalsIgnoreCase(value);
     }
 
     private static String trimToNull(String value) {

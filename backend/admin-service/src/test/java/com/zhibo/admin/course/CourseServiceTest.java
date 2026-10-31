@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
+import com.zhibo.admin.course.dto.UpdateCourseRequest;
 import com.zhibo.course.CourseAuditEntity;
 import com.zhibo.course.CourseAuditRepository;
 import com.zhibo.course.CourseEntity;
@@ -197,6 +198,41 @@ class CourseServiceTest {
     }
 
     @Test
+    void update_rejectsWhenRiskPending() {
+        CourseEntity entity = stored("pending", "pending", true);
+        entity.setTitle("旧标题");
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> courseService.update(entity.getId(), updateRequest(true), OPERATOR_ID));
+        assertTrue(ex.getMessage().contains("审核中不可编辑"));
+    }
+
+    @Test
+    void update_reappliesAfterPassed() {
+        CourseEntity entity = stored("on", "passed", true);
+        entity.setTitle("旧标题");
+        entity.setCoverMaterialId("cover-old");
+        entity.setCoverUrl("https://cdn.example/old.jpg");
+        stubPeople();
+        when(materialRepository.findById("cover-1")).thenReturn(Optional.of(cover("cover-1")));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CourseIdResponse response = courseService.update(entity.getId(), updateRequest(false), OPERATOR_ID);
+
+        assertEquals(entity.getId(), response.getId());
+        assertEquals("新课程", entity.getTitle());
+        assertEquals("pending", entity.getRiskStatus());
+        assertEquals("on", entity.getShelfStatus());
+        assertEquals(Boolean.FALSE, entity.getAutoList());
+        assertEquals("cover-1", entity.getCoverMaterialId());
+        ArgumentCaptor<CourseAuditEntity> audit = ArgumentCaptor.forClass(CourseAuditEntity.class);
+        verify(auditRepository).save(audit.capture());
+        assertEquals("submit", audit.getValue().getAction());
+        assertNull(audit.getValue().getResult());
+    }
+
+    @Test
     void shelf_rejectsWhenRiskPending() {
         CourseEntity entity = stored("pending", "pending", true);
         CourseShelfRequest body = new CourseShelfRequest();
@@ -320,6 +356,16 @@ class CourseServiceTest {
         request.setCoverMaterialId("cover-1");
         request.setAutoList(autoList);
         request.setOwnerIds(List.of(OPERATOR_ID));
+        return request;
+    }
+
+    private UpdateCourseRequest updateRequest(boolean autoList) {
+        UpdateCourseRequest request = new UpdateCourseRequest();
+        request.setTitle(" 新课程 ");
+        request.setCoverMaterialId("cover-1");
+        request.setAutoList(autoList);
+        request.setOwnerIds(List.of(OPERATOR_ID));
+        request.setMaterials(List.of());
         return request;
     }
 
