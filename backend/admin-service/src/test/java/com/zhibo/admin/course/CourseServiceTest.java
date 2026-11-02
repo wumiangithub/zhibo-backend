@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.course.dto.CourseSalesUpdateRequest;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
+import com.zhibo.admin.course.dto.OutsideCourseListRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
 import com.zhibo.admin.course.dto.UpdateCourseRequest;
 import com.zhibo.course.CourseAuditEntity;
@@ -381,13 +382,9 @@ class CourseServiceTest {
     }
 
     @Test
-    void outsideList_onlyListedAndPassed_omitsCountFields() throws Exception {
+    void outsideList_onlyListedAndPassed_returnsOwnerDepartment() throws Exception {
         CourseEntity listed = outsideCourse("on", "passed", null);
         listed.setTitle("已上架课");
-        listed.setIntroduction("  ");
-        listed.setCoverUrl("https://cdn.example/cover.jpg");
-        listed.setListedTime(null);
-        listed.setUpdatedTime(LocalDateTime.of(2026, 10, 17, 9, 30, 0));
         listed.setContentCount(3);
         listed.setEntitledUserCount(4);
         listed.setTotalUserCount(5);
@@ -400,10 +397,7 @@ class CourseServiceTest {
         CourseEntity deleted = outsideCourse("on", "passed", LocalDateTime.of(2026, 10, 1, 0, 0));
         CourseEntity noOwner = outsideCourse("on", "passed", null);
         noOwner.setTitle("无归属人");
-        noOwner.setCoverUrl(" ");
-        noOwner.setIntroduction(null);
-        noOwner.setListedTime(LocalDateTime.of(2026, 10, 16, 8, 0, 0));
-        noOwner.setUpdatedTime(LocalDateTime.of(2026, 10, 16, 8, 1, 2));
+        noOwner.setContentCount(0);
 
         Pageable requested = org.springframework.data.domain.PageRequest.of(0, 20);
         when(courseRepository.search(eq("数学"), eq("on"), eq("passed"), any())).thenReturn(
@@ -413,9 +407,15 @@ class CourseServiceTest {
         owner.setId(new CourseOwnerId(listed.getId(), OPERATOR_ID));
         owner.setSortOrder(0);
         when(ownerRepository.findByCourseIds(any())).thenReturn(List.of(owner));
-        when(userRepository.findAllById(any())).thenReturn(List.of(operator()));
+        SysUserAccountEntity user = operator();
+        user.setQwBmxx("[{\"department_name\":\"教研一部\"},{\"department_name\":\"内容中心\"}]");
+        when(userRepository.findAllById(any())).thenReturn(List.of(user));
 
-        OutsideCourseListResponse response = courseService.outsideList(1, 20, " 数学 ");
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setPage(1);
+        request.setPageSize(20);
+        request.setCourseName(" 数学 ");
+        OutsideCourseListResponse response = courseService.outsideList(request);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(courseRepository).search(eq("数学"), eq("on"), eq("passed"), pageable.capture());
@@ -427,32 +427,49 @@ class CourseServiceTest {
         assertEquals(20, response.getPageSize());
         assertEquals(100, response.getTotal());
         assertEquals(2, response.getList().size());
-        assertEquals(listed.getId(), response.getList().get(0).getId());
-        assertEquals(noOwner.getId(), response.getList().get(1).getId());
-        assertEquals(1, response.getList().get(0).getOwners().size());
-        assertEquals(OPERATOR_ID, response.getList().get(0).getOwners().get(0).getId());
-        assertEquals("张三", response.getList().get(0).getOwners().get(0).getUserName());
-        assertTrue(response.getList().get(1).getOwners().isEmpty());
+        assertEquals(listed.getId(), response.getList().get(0).getCourseId());
+        assertEquals("已上架课", response.getList().get(0).getCourseName());
+        assertEquals(3, response.getList().get(0).getContentCount());
+        assertEquals("教研一部、内容中心", response.getList().get(0).getDepartmentName());
+        assertEquals(noOwner.getId(), response.getList().get(1).getCourseId());
+        assertNull(response.getList().get(1).getDepartmentName());
 
         ObjectMapper mapper = new ObjectMapper();
         mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
         String json = mapper.writeValueAsString(response);
         for (String forbidden : List.of(
-                "contentCount", "entitledUserCount", "totalUserCount", "salesCount",
+                "entitledUserCount", "totalUserCount", "salesCount",
                 "riskStatus", "shelfStatus", "autoList", "canList", "canUnlist", "canDelete",
-                "detailHtml", "avatar", "department")) {
+                "detailHtml", "avatar", "owners", "coverUrl", "introduction", "listedTime",
+                "\"title\"")) {
             assertFalse(json.contains(forbidden), forbidden);
         }
         String first = mapper.writeValueAsString(response.getList().get(0));
-        assertFalse(first.contains("\"introduction\""));
-        assertFalse(first.contains("\"listedTime\""));
-        assertTrue(first.contains("\"coverUrl\":\"https://cdn.example/cover.jpg\""));
-        assertTrue(first.contains("\"updatedTime\":\"2026-10-17 09:30:00\""));
+        assertTrue(first.contains("\"courseId\""));
+        assertTrue(first.contains("\"courseName\":\"已上架课\""));
+        assertTrue(first.contains("\"contentCount\":3"));
+        assertTrue(first.contains("\"departmentName\":\"教研一部、内容中心\""));
         String second = mapper.writeValueAsString(response.getList().get(1));
-        assertFalse(second.contains("\"coverUrl\""));
-        assertFalse(second.contains("\"introduction\""));
-        assertTrue(second.contains("\"owners\":[]"));
-        assertTrue(second.contains("\"listedTime\":\"2026-10-16 08:00:00\""));
+        assertFalse(second.contains("\"departmentName\""));
+        assertTrue(second.contains("\"contentCount\":0"));
+    }
+
+    @Test
+    void outsideList_pageSizeOverMax_isClampedTo100() {
+        when(courseRepository.search(eq(null), eq("on"), eq("passed"), any())).thenReturn(
+                new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 100), 0));
+
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setPage(0);
+        request.setPageSize(500);
+        OutsideCourseListResponse response = courseService.outsideList(request);
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(courseRepository).search(eq(null), eq("on"), eq("passed"), pageable.capture());
+        assertEquals(0, pageable.getValue().getPageNumber());
+        assertEquals(100, pageable.getValue().getPageSize());
+        assertEquals(1, response.getPage());
+        assertEquals(100, response.getPageSize());
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.zhibo.live.watch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -34,16 +35,19 @@ class WatchCommentServiceTest {
     @BeforeEach
     void setUp() {
         service = new WatchCommentService(activityRepository, commentRepository);
+    }
+
+    private void stubActivity() {
         ActivityEntity activity = new ActivityEntity();
         activity.setId(ACTIVITY_ID);
         when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(activity));
     }
 
     @Test
-    void report_persistsComment() {
+    void report_persistsCommentWithJwtViewerId() {
+        stubActivity();
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("hello");
-        request.setGuestId("guest-1");
         request.setNickname("wyh");
         request.setProviderMsgId("msg-1");
         request.setCommentTime("2026-10-27 12:00:00");
@@ -56,33 +60,36 @@ class WatchCommentServiceTest {
             return e;
         });
 
-        var resp = service.report(ACTIVITY_ID, request);
+        var resp = service.report(ACTIVITY_ID, 12L, request);
         assertEquals(9L, resp.getId());
 
         ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
         assertEquals("hello", cap.getValue().getContent());
-        assertEquals("guest-1", cap.getValue().getGuestId());
+        assertEquals(12L, cap.getValue().getViewerId());
+        assertNull(cap.getValue().getGuestId());
         assertEquals("msg-1", cap.getValue().getProviderMsgId());
     }
 
     @Test
     void report_idempotentByProviderMsgId() {
+        stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
+        existing.setViewerId(12L);
         when(commentRepository.findByActivityIdAndProviderMsgId(ACTIVITY_ID, "msg-1"))
                 .thenReturn(Optional.of(existing));
 
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("hello");
-        request.setGuestId("guest-1");
         request.setProviderMsgId("msg-1");
 
-        assertEquals(3L, service.report(ACTIVITY_ID, request).getId());
+        assertEquals(3L, service.report(ACTIVITY_ID, 12L, request).getId());
     }
 
     @Test
     void report_idempotentBackfillsViewerId() {
+        stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
         existing.setViewerId(null);
@@ -92,19 +99,17 @@ class WatchCommentServiceTest {
 
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("hello");
-        request.setGuestId("guest-1");
-        request.setViewerId(12L);
         request.setProviderMsgId("msg-1");
 
-        assertEquals(3L, service.report(ACTIVITY_ID, request).getId());
+        assertEquals(3L, service.report(ACTIVITY_ID, 12L, request).getId());
         assertEquals(12L, existing.getViewerId());
         verify(commentRepository).save(existing);
     }
 
     @Test
-    void report_requiresGuestOrViewer() {
+    void report_rejectsInvalidViewerId() {
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("x");
-        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, request));
+        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, 0L, request));
     }
 }

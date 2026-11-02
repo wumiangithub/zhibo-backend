@@ -21,9 +21,9 @@ import com.zhibo.admin.course.dto.CourseShelfResponse;
 import com.zhibo.admin.course.dto.CourseSummary;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseItem;
+import com.zhibo.admin.course.dto.OutsideCourseListRequest;
 import com.zhibo.admin.course.dto.UpdateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
-import com.zhibo.admin.course.dto.OutsideCourseOwner;
 import com.zhibo.course.CourseAuditEntity;
 import com.zhibo.course.CourseAuditRepository;
 import com.zhibo.course.CourseEntity;
@@ -227,18 +227,23 @@ public class CourseService {
     }
 
     /**
-     * 对外列表：只含已上架且风控已通过、未软删的课程。不带管理端计数字段与操作标记。
+     * 对外列表：只含已上架且风控已通过、未软删的课程。
+     * 字段：courseId / courseName / contentCount / departmentName（归属人部门）。
      */
-    public OutsideCourseListResponse outsideList(int page, int pageSize, String keyword) {
-        if (page < 1) {
-            throw new IllegalArgumentException("page 不能小于 1");
+    public OutsideCourseListResponse outsideList(OutsideCourseListRequest request) {
+        OutsideCourseListRequest body = request == null ? new OutsideCourseListRequest() : request;
+        int page = body.getPage() == null || body.getPage() < 1 ? 1 : body.getPage();
+        int pageSize;
+        if (body.getPageSize() == null || body.getPageSize() < 1) {
+            pageSize = 20;
+        } else if (body.getPageSize() > 100) {
+            pageSize = 100;
+        } else {
+            pageSize = body.getPageSize();
         }
-        if (pageSize < 1 || pageSize > 100) {
-            throw new IllegalArgumentException("pageSize 需在 1~100");
-        }
-        String keywordFilter = trimToNull(keyword);
+        String nameFilter = trimToNull(body.getCourseName());
         PageRequest pageable = PageRequest.of(page - 1, pageSize, Sort.by("listedTime").descending());
-        Page<CourseEntity> result = courseRepository.search(keywordFilter, "on", "passed", pageable);
+        Page<CourseEntity> result = courseRepository.search(nameFilter, "on", "passed", pageable);
 
         List<OutsideCourseItem> items = new ArrayList<>();
         for (CourseEntity entity : result.getContent()) {
@@ -247,7 +252,7 @@ public class CourseService {
             }
             items.add(toOutsideItem(entity));
         }
-        attachOutsideOwners(items);
+        attachOutsideDepartment(items);
 
         OutsideCourseListResponse response = new OutsideCourseListResponse();
         response.setPage(page);
@@ -829,16 +834,15 @@ public class CourseService {
         }
     }
 
-    private void attachOutsideOwners(List<OutsideCourseItem> items) {
-        for (OutsideCourseItem item : items) {
-            if (item.getOwners() == null) {
-                item.setOwners(new ArrayList<>());
-            }
-        }
+    /**
+     * 课程部门 = 归属人部门。多人归属时取 {@code sort_order} 最小的第一人；
+     * 该员工多部门时用顿号连接（同 {@link AuthService#resolveDepartmentName}）。
+     */
+    private void attachOutsideDepartment(List<OutsideCourseItem> items) {
         if (items.isEmpty()) {
             return;
         }
-        List<String> ids = items.stream().map(OutsideCourseItem::getId).toList();
+        List<String> ids = items.stream().map(OutsideCourseItem::getCourseId).toList();
         Map<String, List<CourseOwnerEntity>> owners = ownerRepository.findByCourseIds(ids).stream()
                 .collect(Collectors.groupingBy(row -> row.getId().getCourseId(), LinkedHashMap::new, Collectors.toList()));
         Set<Long> userIds = owners.values().stream()
@@ -850,29 +854,25 @@ public class CourseService {
                 : userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(SysUserAccountEntity::getId, user -> user, (a, b) -> a));
         for (OutsideCourseItem item : items) {
-            List<OutsideCourseOwner> people = new ArrayList<>();
-            for (CourseOwnerEntity row : owners.getOrDefault(item.getId(), List.of())) {
+            SysUserAccountEntity primary = null;
+            for (CourseOwnerEntity row : owners.getOrDefault(item.getCourseId(), List.of())) {
                 SysUserAccountEntity user = users.get(row.getId().getUserId());
-                if (user == null) {
-                    continue;
+                if (user != null) {
+                    primary = user;
+                    break;
                 }
-                OutsideCourseOwner person = new OutsideCourseOwner();
-                person.setId(user.getId());
-                person.setUserName(user.getUserName());
-                people.add(person);
             }
-            item.setOwners(people);
+            if (primary != null) {
+                item.setDepartmentName(AuthService.resolveDepartmentName(primary));
+            }
         }
     }
 
     private static OutsideCourseItem toOutsideItem(CourseEntity entity) {
         OutsideCourseItem item = new OutsideCourseItem();
-        item.setId(entity.getId());
-        item.setTitle(entity.getTitle());
-        item.setCoverUrl(trimToNull(entity.getCoverUrl()));
-        item.setIntroduction(trimToNull(entity.getIntroduction()));
-        item.setListedTime(formatTime(entity.getListedTime()));
-        item.setUpdatedTime(formatTime(entity.getUpdatedTime()));
+        item.setCourseId(entity.getId());
+        item.setCourseName(entity.getTitle());
+        item.setContentCount(entity.getContentCount());
         return item;
     }
 

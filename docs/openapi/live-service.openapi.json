@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo live-service",
     "description": "钱坤直播观看端 / 中控台 API（live-service :8082）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 观看端不走管理端 JWT",
-    "version": "2.6.0",
+    "version": "2.7.0",
     "contact": {
       "name": "zhibo-backend"
     }
@@ -1240,6 +1240,57 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseWatchAudienceAttribute"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/watch/course/enroll/{id}": {
+      "post": {
+        "tags": [
+          "用户运营"
+        ],
+        "summary": "课程分享链进房 enroll",
+        "description": "路径 {id}=课程 UUID。须观众 JWT；viewerId 只从 JWT 取，Body 不接受 viewerId。无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。课程不存在/已软删或观众不存在 → 400；无票 → 401。",
+        "operationId": "watchCourseEnroll",
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+            },
+            "description": "本站课程 id（D74）"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchCourseEnrollRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWatchCourseEnroll"
                 }
               }
             }
@@ -2982,6 +3033,44 @@
           }
         }
       },
+      "WatchCourseEnrollRequest": {
+        "type": "object",
+        "properties": {
+          "inviterId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "选填；员工 rs_mainkey_id；有值且行上邀请仍空则写入；省略则只 upsert 学员行；库：BIGINT"
+          }
+        }
+      },
+      "WatchCourseEnrollData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "course_user 行 id；库：VARCHAR(32)"
+          },
+          "viewerId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "观众 id；库：BIGINT"
+          },
+          "courseId": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "课程 UUID"
+          },
+          "created": {
+            "type": "boolean",
+            "description": "true 新建；false 已有行（不改权益/到期）；库：TINYINT(1)"
+          },
+          "title": {
+            "type": "string",
+            "description": "课程标题；库：VARCHAR(64)",
+            "maxLength": 64
+          }
+        }
+      },
       "IdDataInt": {
         "type": "object",
         "required": [
@@ -3442,6 +3531,22 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/WatchAudienceAttributeData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseWatchCourseEnroll": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/WatchCourseEnrollData"
               }
             }
           }

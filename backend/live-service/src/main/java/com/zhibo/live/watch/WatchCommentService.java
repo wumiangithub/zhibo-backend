@@ -23,9 +23,12 @@ public class WatchCommentService {
     private final RoomCommentRepository commentRepository;
 
     @Transactional
-    public ReportCommentResponse report(String activityId, ReportCommentRequest request) {
+    public ReportCommentResponse report(String activityId, long viewerId, ReportCommentRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
+        }
+        if (viewerId <= 0) {
+            throw new IllegalArgumentException("viewerId 无效");
         }
         ActivityEntity activity = requireActivity(activityId);
         String content = request.getContent() == null ? "" : request.getContent().trim();
@@ -35,18 +38,12 @@ public class WatchCommentService {
         if (content.length() > 500) {
             throw new IllegalArgumentException("content 最长 500");
         }
-        Long viewerId = request.getViewerId();
-        String guestId = blankToNull(request.getGuestId(), 64);
-        if (viewerId == null && guestId == null) {
-            throw new IllegalArgumentException("guestId 与 viewerId 至少一个");
-        }
         String providerMsgId = blankToNull(request.getProviderMsgId(), 64);
         if (providerMsgId != null) {
             var existing = commentRepository.findByActivityIdAndProviderMsgId(activity.getId(), providerMsgId);
             if (existing.isPresent()) {
-                // 他端可能先以 guestId 幂等入库；本人回声补上 viewerId，评论次数才有数
                 RoomCommentEntity row = existing.get();
-                if (row.getViewerId() == null && viewerId != null) {
+                if (row.getViewerId() == null) {
                     row.setViewerId(viewerId);
                     commentRepository.save(row);
                 }
@@ -61,7 +58,6 @@ public class WatchCommentService {
         RoomCommentEntity entity = new RoomCommentEntity();
         entity.setActivityId(activity.getId());
         entity.setViewerId(viewerId);
-        entity.setGuestId(guestId);
         entity.setContent(content);
         entity.setNickname(blankToNull(request.getNickname(), 64));
         entity.setRoleName(request.getRoleName());
@@ -73,7 +69,13 @@ public class WatchCommentService {
             if (providerMsgId != null) {
                 return commentRepository
                         .findByActivityIdAndProviderMsgId(activity.getId(), providerMsgId)
-                        .map(c -> new ReportCommentResponse(c.getId()))
+                        .map(c -> {
+                            if (c.getViewerId() == null) {
+                                c.setViewerId(viewerId);
+                                commentRepository.save(c);
+                            }
+                            return new ReportCommentResponse(c.getId());
+                        })
                         .orElseThrow(() -> dup);
             }
             throw dup;
@@ -118,17 +120,14 @@ public class WatchCommentService {
                 .orElseThrow(() -> new IllegalArgumentException("活动不存在"));
     }
 
-    private static String blankToNull(String raw, int max) {
-        if (raw == null) {
+    private static String blankToNull(String value, int maxLen) {
+        if (value == null) {
             return null;
         }
-        String t = raw.trim();
-        if (t.isEmpty()) {
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
             return null;
         }
-        if (t.length() > max) {
-            throw new IllegalArgumentException("字段过长");
-        }
-        return t;
+        return trimmed.length() <= maxLen ? trimmed : trimmed.substring(0, maxLen);
     }
 }

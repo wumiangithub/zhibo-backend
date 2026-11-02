@@ -11,7 +11,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
  * 观众接口 Bearer 鉴权。挂 {@code /api/v1/viewer/**}、回放上报 {@code /api/v1/watch/replay/**}、
- * 邀请归因 {@code /api/v1/watch/audience/**}。白名单是登录和刷新；其它观看与回调不进这里。
+ * 邀请归因 {@code /api/v1/watch/audience/**}、评论上报 {@code /api/v1/watch/comments/**}。
+ * 白名单是登录和刷新；其它观看与回调不进这里。
  */
 @Component
 public class ViewerAuthInterceptor implements HandlerInterceptor {
@@ -47,12 +48,14 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
         }
     }
 
-    /** 观众业务路径。普通 watch / callback 不是；回放上报与邀请归因需要登录。 */
+    /** 观众业务路径。普通 watch / callback 不是；回放、邀请归因、课程 enroll、评论上报需要登录。 */
     static boolean isViewerApi(String path) {
         return path != null && (path.equals("/api/v1/viewer")
                 || path.startsWith("/api/v1/viewer/")
                 || path.startsWith("/api/v1/watch/replay/")
-                || path.startsWith("/api/v1/watch/audience/"));
+                || path.startsWith("/api/v1/watch/audience/")
+                || path.startsWith("/api/v1/watch/course/")
+                || path.startsWith("/api/v1/watch/comments/"));
     }
 
     /** 白名单 POST：微信一键、手机号授权、local 明文手机号、刷新。{@code /user-info} 不在里面。 */

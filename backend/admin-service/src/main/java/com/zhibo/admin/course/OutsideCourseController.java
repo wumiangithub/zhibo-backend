@@ -1,11 +1,12 @@
 package com.zhibo.admin.course;
 
+import com.zhibo.admin.course.dto.OutsideCourseListRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
 import com.zhibo.admin.web.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 第三方课程列表。当前不鉴权，管理端登录拦截器已放行本路径。 */
@@ -16,11 +17,10 @@ public class OutsideCourseController {
 
     private final CourseService courseService;
 
-    @GetMapping("/list")
+    @PostMapping("/list")
     public ApiResponse<OutsideCourseListResponse> list(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize,
-            @RequestParam(required = false) String keyword) {
-        return ApiResponse.ok(courseService.outsideList(page, pageSize, keyword));
+            @RequestBody(required = false) OutsideCourseListRequest request) {
+        OutsideCourseListRequest body = request == null ? new OutsideCourseListRequest() : request;
+        return ApiResponse.ok(courseService.outsideList(body));
     }
 }

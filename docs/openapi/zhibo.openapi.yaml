@@ -12,7 +12,7 @@ info:
     分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。
     
     导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。
-  version: "2.6.0"
+  version: "2.7.0"
   contact:
     name: zhibo
 servers:
@@ -1818,11 +1818,36 @@ paths:
       tags:
         - admin/课程
       summary: 新建课程
-      description: "成功后 riskStatus 与 shelfStatus 均为 pending，并写一条 action=submit。"
+      description: "成功后 riskStatus 与 shelfStatus 均为 pending，并写一条 action=submit。售卖默认 sellAlone=true、sellType=free、accessValidityType=long。"
       operationId: admin_createCourse
       security:
         - BearerAuth:
             []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCourseRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/courses/update/{id}:
+    post:
+      tags:
+        - admin/课程
+      summary: 更新课程基本信息
+      description: "Body 与创建同形。riskStatus=pending → 400。passed/rejected 保存后回 pending 并写 submit。课件传空数组表示清空。"
+      operationId: admin_updateCourse
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
       requestBody:
         required: true
         content:
@@ -1973,7 +1998,7 @@ paths:
       tags:
         - admin/课程
       summary: 软删课程
-      description: 仅内容数与总销量均为 0，否则 400。
+      description: 写 deleted_time。不要求内容数/总销量为 0。
       operationId: admin_deleteCourse
       security:
         - BearerAuth:
@@ -1987,6 +2012,453 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
+  /api/v1/courses/sales/{id}:
+    put:
+      tags:
+        - admin/课程
+      summary: 课程售卖设置
+      description: 对齐活动售卖；拒收 paid。D100：long→days 对本课 expire 仍空的行写 created_time+N；保存 fixed 对 expire 仍空的行写入该固定时刻。
+      operationId: admin_updateCourseSales
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseSalesUpdateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseSales"
+  /api/v1/courses/users/list/{courseId}:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程用户列表
+      description: "D100。entitlementState：valid/expired/invalid；省略=全部。计算态见 API约定。"
+      operationId: admin_listCourseUsers
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - id
+              - phone
+            default: nickname
+            description: nickname 昵称 / id 用户ID / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: id
+                name: 用户ID
+                description: 用户ID
+              - value: phone
+                name: 手机号
+                description: 手机号
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 关键词；配合 keywordType
+        - name: entitlementState
+          in: query
+          schema:
+            $ref: "#/components/schemas/CourseEntitlementState"
+            x-apifox-enum:
+              - value: valid
+                name: 有效
+                description: 有效
+              - value: expired
+                name: 已到期
+                description: 已到期
+              - value: invalid
+                name: 已失效
+                description: 已失效
+          description: "可选；省略=全部"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserList"
+  /api/v1/courses/users/entitlement/{rowId}:
+    put:
+      tags:
+        - admin/课程
+      summary: 开关课程用户观看权益
+      operationId: admin_updateCourseUserEntitlement
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: rowId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: course_user 行 id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUserEntitlementRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserEntitlement"
+  /api/v1/courses/users/expire/{rowId}:
+    put:
+      tags:
+        - admin/课程
+      summary: 延迟用户时间 / 自定义到期
+      description: 改 entitlement_expire_time；不改 entitlement_status。售卖仍为长期时列表展示仍按「长期」。
+      operationId: admin_updateCourseUserExpire
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: rowId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: course_user 行 id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUserExpireRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserExpire"
+  /api/v1/courses/users/create/{courseId}:
+    post:
+      tags:
+        - admin/课程
+      summary: 单个添加学员
+      description: "Body 二选一 phone 或 viewerId；选填 expireTime。新建 acquire_way=import；已有行仅补空导入人、不改 expire。"
+      operationId: admin_createCourseUser
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUserCreateRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserCreate"
+  /api/v1/courses/users/import/{courseId}:
+    post:
+      tags:
+        - admin/课程
+      summary: CSV 批量导入学员
+      description: multipart：必填 file（仅 CSV）；选填 expireTime（弹窗级共用）。写 course_user_import 历史。
+      operationId: admin_importCourseUsers
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV 文件；首列/列名「手机号」
+                expireTime:
+                  type: string
+                  description: "选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserImport"
+  /api/v1/courses/users/import-by-tags/estimate/{courseId}:
+    post:
+      tags:
+        - admin/课程
+      summary: 标签导入预计人数
+      description: 只算人数、不写入；满足其一去重。
+      operationId: admin_estimateCourseUsersByTags
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUserImportByTagsRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserImportByTagsEstimate"
+  /api/v1/courses/users/import-by-tags/{courseId}:
+    post:
+      tags:
+        - admin/课程
+      summary: 按标签导入学员
+      description: upsert course_user；不写 CSV 导入历史；已有行不改权益/expire。
+      operationId: admin_importCourseUsersByTags
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CourseUserImportByTagsRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserImportByTags"
+  /api/v1/courses/users/import-template:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程用户导入模板
+      operationId: admin_downloadCourseUserImportTemplate
+      security:
+        - BearerAuth:
+            []
+      responses:
+        200:
+          description: UTF-8 BOM CSV，表头：手机号
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+  /api/v1/courses/users/imports/list/{courseId}:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程用户导入历史
+      description: 最多 100 条。
+      operationId: admin_listCourseUserImports
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseCourseUserImportHistory"
+  /api/v1/courses/users/imports/failures/{importId}:
+    get:
+      tags:
+        - admin/课程
+      summary: 课程用户导入失败明细 CSV
+      operationId: admin_downloadCourseUserImportFailures
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 导入批次 id
+      responses:
+        200:
+          description: "失败明细 CSV：行号,手机号,原因"
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+  /api/v1/courses/users/export/{courseId}:
+    get:
+      tags:
+        - admin/课程
+      summary: 导出课程学员 CSV
+      description: 按 list 同筛选不分页导出（UTF-8 BOM）。筛选项不含 page/pageSize。
+      operationId: admin_exportCourseUsers
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - id
+              - phone
+            default: nickname
+            description: nickname 昵称 / id 用户ID / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: id
+                name: 用户ID
+                description: 用户ID
+              - value: phone
+                name: 手机号
+                description: 手机号
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 关键词
+        - name: entitlementState
+          in: query
+          schema:
+            $ref: "#/components/schemas/CourseEntitlementState"
+            x-apifox-enum:
+              - value: valid
+                name: 有效
+                description: 有效
+              - value: expired
+                name: 已到期
+                description: 已到期
+              - value: invalid
+                name: 已失效
+                description: 已失效
+          description: "可选；省略=全部"
+      responses:
+        200:
+          description: 学员 CSV：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
   /api/v1/courses/shelf/{id}:
     post:
       tags:
@@ -2361,6 +2833,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseActivityAudienceImport"
+  /api/v1/activities/audiences/import-by-tags/estimate/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 标签导入预计人数
+      description: 只算人数、不写入；满足其一去重。
+      operationId: admin_estimateActivityAudiencesByTags
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityAudienceImportByTagsRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceImportByTagsEstimate"
+  /api/v1/activities/audiences/import-by-tags/{id}:
+    post:
+      tags:
+        - admin/活动管理
+      summary: 按标签导入本场观众
+      description: upsert activity_audience；不写 CSV 导入历史；已有行不改权益。
+      operationId: admin_importActivityAudiencesByTags
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityAudienceImportByTagsRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseActivityAudienceImportByTags"
   /api/v1/activities/audiences/import-template:
     get:
       tags:
@@ -3180,34 +3702,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiResponseId"
   /api/v1/outside/courses/list:
-    get:
+    post:
       tags:
         - admin/对外课程
       summary: 对外课程列表
-      description: 当前不鉴权。只返回已上架且风控已通过、未软删的课程。默认按 listedTime 倒序。
+      description: "当前不鉴权；不要 X-Outside-Token。只返回 shelfStatus=on 且 riskStatus=passed、未软删的课程。待审核、驳回、待上架、已下架、强制封禁都不返回。Body 可空 {} 或不传，等价于第 1 页全部已上架课程。默认按 listedTime 倒序。旧版 GET + keyword 已废止。"
       operationId: admin_listOutsideCourses
       security: []
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 1
-            minimum: 1
-          description: 页码，从 1 起（D37）；默认 1
-        - name: pageSize
-          in: query
-          schema:
-            type: integer
-            default: 20
-            minimum: 1
-            maximum: 100
-          description: 每页条数；默认 20，最大 100
-        - name: keyword
-          in: query
-          schema:
-            type: string
-          description: 课程名称模糊
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutsideCourseListRequest"
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -3967,6 +4474,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseWatchAudienceAttribute"
+  /api/v1/watch/course/enroll/{id}:
+    post:
+      tags:
+        - live/用户运营
+      summary: 课程分享链进房 enroll
+      description: "路径 {id}=课程 UUID。须观众 JWT；viewerId 只从 JWT 取，Body 不接受 viewerId。无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。课程不存在/已软删或观众不存在 → 400；无票 → 401。"
+      operationId: live_watchCourseEnroll
+      security:
+        - BearerViewer:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 32
+            pattern: "^[0-9a-f]{32}$"
+            description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+          description: 本站课程 id（D74）
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchCourseEnrollRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseWatchCourseEnroll"
   /api/v1/callbacks/vhall/presence:
     post:
       tags:
@@ -4414,14 +4954,82 @@ components:
       enum:
         - long
         - days
-      description: long 长期有效 / days 购买后 N 天有效；库：VARCHAR(16)
+        - fixed
+      description: long 长期有效 / days 权益生效后 N 天有效 / fixed 固定时刻到期；库：VARCHAR(16)
       x-apifox-enum:
         - value: long
           name: 长期有效
           description: 长期有效
         - value: days
-          name: 购买后 N 天有效
-          description: 购买后 N 天有效
+          name: 权益生效后 N 天有效
+          description: 权益生效后 N 天有效
+        - value: fixed
+          name: 固定时刻到期
+          description: 固定时刻到期
+    CourseSellType:
+      type: string
+      enum:
+        - free
+        - encrypted
+        - specified
+      description: free 免费 / encrypted 加密 / specified 指定学员（课程 PUT sales 拒收 paid）；库：VARCHAR(16)
+      x-apifox-enum:
+        - value: free
+          name: 免费
+          description: 免费
+        - value: encrypted
+          name: 加密
+          description: 加密
+        - value: specified
+          name: 指定学员（课程 PUT sales 拒收 paid）
+          description: 指定学员（课程 PUT sales 拒收 paid）
+    CourseEntitlementState:
+      type: string
+      enum:
+        - valid
+        - expired
+        - invalid
+      description: valid 有效 / expired 已到期 / invalid 已失效；库：VARCHAR(16)
+      x-apifox-enum:
+        - value: valid
+          name: 有效
+          description: 有效
+        - value: expired
+          name: 已到期
+          description: 已到期
+        - value: invalid
+          name: 已失效
+          description: 已失效
+    CourseAcquireWay:
+      type: string
+      enum:
+        - purchase
+        - import
+      description: purchase 购买 / import 导入；库：VARCHAR(16)
+      x-apifox-enum:
+        - value: purchase
+          name: 购买
+          description: 购买
+        - value: import
+          name: 导入
+          description: 导入
+    MaterialAccessPermission:
+      type: integer
+      enum:
+        - 1
+        - 2
+        - 3
+      description: "1 预览及下载 / 2 仅预览 / 3 仅下载；库：INT"
+      x-apifox-enum:
+        - value: 1
+          name: 预览及下载
+          description: 预览及下载
+        - value: 2
+          name: 仅预览
+          description: 仅预览
+        - value: 3
+          name: 仅下载
+          description: 仅下载
     PlaybackValidityType:
       type: string
       enum:
@@ -5325,14 +5933,17 @@ components:
           maxLength: 64
         accessValidityType:
           $ref: "#/components/schemas/AccessValidityType"
-          description: long 长期有效 / days 购买后 N 天有效
+          description: long 长期有效 / days 权益生效后 N 天有效 / fixed 固定时刻到期
           x-apifox-enum:
             - value: long
               name: 长期有效
               description: 长期有效
             - value: days
-              name: 购买后 N 天有效
-              description: 购买后 N 天有效
+              name: 权益生效后 N 天有效
+              description: 权益生效后 N 天有效
+            - value: fixed
+              name: 固定时刻到期
+              description: 固定时刻到期
         accessValidityDays:
           type: integer
           minimum: 1
@@ -5753,14 +6364,17 @@ components:
               multipleOf: 0.01
             accessValidityType:
               $ref: "#/components/schemas/AccessValidityType"
-              description: long 长期有效 / days 购买后 N 天有效
+              description: long 长期有效 / days 权益生效后 N 天有效 / fixed 固定时刻到期
               x-apifox-enum:
                 - value: long
                   name: 长期有效
                   description: 长期有效
                 - value: days
-                  name: 购买后 N 天有效
-                  description: 购买后 N 天有效
+                  name: 权益生效后 N 天有效
+                  description: 权益生效后 N 天有效
+                - value: fixed
+                  name: 固定时刻到期
+                  description: 固定时刻到期
             accessValidityDays:
               type: integer
               description: 购买后有效天数；库：INT
@@ -7009,6 +7623,40 @@ components:
           type: string
           description: MIME 类型；库：VARCHAR(128)
           maxLength: 128
+        accessPermission:
+          $ref: "#/components/schemas/MaterialAccessPermission"
+          description: "1 预览及下载 / 2 仅预览 / 3 仅下载；库：INT"
+          x-apifox-enum:
+            - value: 1
+              name: 预览及下载
+              description: 预览及下载
+            - value: 2
+              name: 仅预览
+              description: 仅预览
+            - value: 3
+              name: 仅下载
+              description: 仅下载
+    CourseMaterialInput:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 课件素材 UUID（D74）
+        accessPermission:
+          $ref: "#/components/schemas/MaterialAccessPermission"
+          description: 选填；压缩包扩展名固定 3；可预览格式默认 1，仅允许 1/2
+          x-apifox-enum:
+            - value: 1
+              name: 预览及下载
+              description: 预览及下载
+            - value: 2
+              name: 仅预览
+              description: 仅预览
+            - value: 3
+              name: 仅下载
+              description: 仅下载
     CreateCourseRequest:
       type: object
       required:
@@ -7042,12 +7690,92 @@ components:
           items:
             $ref: "#/components/schemas/EmployeeId"
           description: 在职员工 id（JSON 数字，D56）
+        materials:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CourseMaterialInput"
+          description: 课件（优先）：有序数组，每项 id + accessPermission；与 materialIds 同时传时以 materials 为准
         materialIds:
           type: array
           maxItems: 100
           items:
             $ref: "#/components/schemas/BusinessUuid"
-          description: 课件：两审通过的 image/video/document，不含 article
+          description: 兼容旧字段：仅 id、权限按扩展名默认；两审通过的 image/video/document，不含 article
+    CourseSalesUpdateRequest:
+      type: object
+      required:
+        - sellAlone
+        - sellType
+      properties:
+        sellAlone:
+          type: boolean
+          description: 是否单独售卖；库：TINYINT(1)
+        sellType:
+          $ref: "#/components/schemas/CourseSellType"
+          description: free 免费 / encrypted 加密 / specified 指定学员（课程 PUT sales 拒收 paid）
+          x-apifox-enum:
+            - value: free
+              name: 免费
+              description: 免费
+            - value: encrypted
+              name: 加密
+              description: 加密
+            - value: specified
+              name: 指定学员（课程 PUT sales 拒收 paid）
+              description: 指定学员（课程 PUT sales 拒收 paid）
+        password:
+          type: string
+          pattern: "^\\d{6}$"
+          description: encrypted 时必填；恰好 6 位数字明文；库：VARCHAR(64)
+          maxLength: 64
+        accessValidityType:
+          $ref: "#/components/schemas/AccessValidityType"
+          description: free 时服务端强制 long；其余必填
+          x-apifox-enum:
+            - value: long
+              name: 长期有效
+              description: 长期有效
+            - value: days
+              name: 权益生效后 N 天有效
+              description: 权益生效后 N 天有效
+            - value: fixed
+              name: 固定时刻到期
+              description: 固定时刻到期
+        accessValidityDays:
+          type: integer
+          minimum: 1
+          description: "accessValidityType=days 时必填；库：INT"
+        accessValidityFixedTime:
+          type: string
+          description: "accessValidityType=fixed 时必填，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    CourseSalesUpdateData:
+      type: object
+      required:
+        - id
+        - sellType
+        - validityLabel
+      properties:
+        id:
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+        sellType:
+          $ref: "#/components/schemas/CourseSellType"
+          description: free 免费 / encrypted 加密 / specified 指定学员（课程 PUT sales 拒收 paid）
+          x-apifox-enum:
+            - value: free
+              name: 免费
+              description: 免费
+            - value: encrypted
+              name: 加密
+              description: 加密
+            - value: specified
+              name: 指定学员（课程 PUT sales 拒收 paid）
+              description: 指定学员（课程 PUT sales 拒收 paid）
+        validityLabel:
+          type: string
+          description: 有效期展示文案；库：VARCHAR(64)
+          maxLength: 64
     CourseSummary:
       type: object
       properties:
@@ -7128,7 +7856,24 @@ components:
           description: 已上架；库：TINYINT(1)
         canDelete:
           type: boolean
-          description: 内容数与总销量均为 0；库：TINYINT(1)
+          description: 内容数与总销量均为 0（标记位；软删本身不拦）；库：TINYINT(1)
+        sellType:
+          $ref: "#/components/schemas/CourseSellType"
+          description: free 免费 / encrypted 加密 / specified 指定学员（课程 PUT sales 拒收 paid）
+          x-apifox-enum:
+            - value: free
+              name: 免费
+              description: 免费
+            - value: encrypted
+              name: 加密
+              description: 加密
+            - value: specified
+              name: 指定学员（课程 PUT sales 拒收 paid）
+              description: 指定学员（课程 PUT sales 拒收 paid）
+        validityLabel:
+          type: string
+          description: 有效期展示文案；库：VARCHAR(64)
+          maxLength: 64
     CourseDetail:
       allOf:
         - $ref: "#/components/schemas/CourseSummary"
@@ -7150,6 +7895,32 @@ components:
               items:
                 $ref: "#/components/schemas/CourseMaterial"
               description: 课件/素材列表
+            sellAlone:
+              type: boolean
+              description: 是否单独售卖；库：TINYINT(1)
+            accessValidityType:
+              $ref: "#/components/schemas/AccessValidityType"
+              description: long 长期有效 / days 权益生效后 N 天有效 / fixed 固定时刻到期
+              x-apifox-enum:
+                - value: long
+                  name: 长期有效
+                  description: 长期有效
+                - value: days
+                  name: 权益生效后 N 天有效
+                  description: 权益生效后 N 天有效
+                - value: fixed
+                  name: 固定时刻到期
+                  description: 固定时刻到期
+            accessValidityDays:
+              type: integer
+              description: 仅 days 时返回；库：INT
+            accessValidityFixedTime:
+              type: string
+              description: "仅 fixed 时返回，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+            password:
+              type: string
+              description: "仅 sellType=encrypted 时回显 AES 解密明文（6 位）；禁止写入列表/对外/导出；库：VARCHAR(64)"
+              maxLength: 64
     CourseListData:
       type: object
       properties:
@@ -7168,47 +7939,47 @@ components:
           items:
             $ref: "#/components/schemas/CourseSummary"
           description: 列表数据
-    OutsideCourseOwner:
+    OutsideCourseListRequest:
       type: object
       properties:
-        id:
-          $ref: "#/components/schemas/EmployeeId"
-          description: 员工 rs_mainkey_id（JSON 数字，D56）
-        userName:
+        page:
+          type: integer
+          default: 1
+          description: "页码，从 1 开始；<1 按 1；库：INT"
+        pageSize:
+          type: integer
+          default: 20
+          description: "每页条数；<1 按 20；>100 按 100（不抛 400）；库：INT"
+        courseName:
           type: string
-          description: 员工姓名；库：VARCHAR(50)
-          maxLength: 50
+          description: 课程名称模糊；空或不传则不过滤
     OutsideCourseItem:
       type: object
+      required:
+        - courseId
+        - courseName
+        - contentCount
       properties:
-        id:
+        courseId:
           $ref: "#/components/schemas/BusinessUuid"
-          description: 课程 UUID
-        title:
+          description: 课程 UUID（D74：32 位无横线）
+        courseName:
           type: string
-          description: 标题；库：VARCHAR(45)
           maxLength: 45
-        coverUrl:
+          description: 课程名称；库：VARCHAR(45)
+        contentCount:
+          type: integer
+          description: 内容数（读 course.content_count）；库：INT
+        departmentName:
           type: string
-          description: 空则不返回；库：VARCHAR(2048)
-          maxLength: 2048
-        introduction:
-          type: string
-          description: 空则不返回；库：VARCHAR(256)
-          maxLength: 256
-        listedTime:
-          type: string
-          description: 空则不返回；库：DATETIME(3)
-        updatedTime:
-          type: string
-          description: "最近更新时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
-        owners:
-          type: array
-          description: "没有时为 []，不省略"
-          items:
-            $ref: "#/components/schemas/OutsideCourseOwner"
+          description: "课程部门=归属人（sort_order 最小第一人）员工部门；多部门顿号「、」连接；无则省略；库：VARCHAR(255)"
     OutsideCourseListData:
       type: object
+      required:
+        - page
+        - pageSize
+        - total
+        - list
       properties:
         page:
           type: integer
@@ -7225,6 +7996,393 @@ components:
           items:
             $ref: "#/components/schemas/OutsideCourseItem"
           description: 列表数据
+    CourseUserListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: course_user.id；库：BIGINT
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id；库：BIGINT
+        nickname:
+          type: string
+          description: 展示昵称（必有非空串）；落在「学员」列；库：VARCHAR(64)
+          maxLength: 64
+        avatar:
+          type: string
+          description: 头像 URL，可空则省略；库：VARCHAR(512)
+          maxLength: 512
+        phoneMasked:
+          type: string
+          description: 脱敏手机号，可空则省略
+        tagIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: "观众全局标签 id（未软删）；无则 []"
+        tagLabels:
+          type: array
+          items:
+            type: string
+          description: "与 tagIds 对齐的标签名；无则 []"
+        chapterCompletionRate:
+          type: number
+          description: "小节完成率；本轮恒 0；库：DECIMAL(10,2)"
+        entitlementStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 已取消 / 1 有效；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 已取消
+              description: 已取消
+            - value: 1
+              name: 有效
+              description: 有效
+        entitlementState:
+          $ref: "#/components/schemas/CourseEntitlementState"
+          description: valid 有效 / expired 已到期 / invalid 已失效
+          x-apifox-enum:
+            - value: valid
+              name: 有效
+              description: 有效
+            - value: expired
+              name: 已到期
+              description: 已到期
+            - value: invalid
+              name: 已失效
+              description: 已失效
+        entitlementStateLabel:
+          type: string
+          description: 有效 / 已到期 / 已失效
+        acquireWay:
+          $ref: "#/components/schemas/CourseAcquireWay"
+          description: purchase 购买 / import 导入
+          x-apifox-enum:
+            - value: purchase
+              name: 购买
+              description: 购买
+            - value: import
+              name: 导入
+              description: 导入
+        acquireWayLabel:
+          type: string
+          description: 购买 / 导入
+        firstAcquireTime:
+          type: string
+          description: "权益首次获取时间（created_time），yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        employeeInviterId:
+          type: integer
+          format: int64
+          description: 员工邀请人 id；无则省略；库：BIGINT
+        inviterDisplayName:
+          type: string
+          description: 所属邀请人展示名；无则省略
+        inviteTime:
+          type: string
+          description: "有邀请人时 = created_time；库：DATETIME(3)"
+        importerId:
+          type: integer
+          format: int64
+          description: 添加/导入人 id；无则省略；库：BIGINT
+        importerName:
+          type: string
+          description: 导入人姓名；无则省略
+        importTime:
+          type: string
+          description: "有导入人时 = created_time；库：DATETIME(3)"
+        expireTime:
+          type: string
+          description: 库内到期，可空；售卖长期时前端展示「长期」勿当已过期；库：DATETIME(3)
+        expireDisplay:
+          type: string
+          description: 展示串：售卖长期→长期；有到期则格式化；无则 —
+    CourseUserListData:
+      type: object
+      required:
+        - page
+        - pageSize
+        - total
+        - accessValidityType
+        - list
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        accessValidityType:
+          $ref: "#/components/schemas/AccessValidityType"
+          description: 课程当前售卖有效期类型，供前端到期列展示
+          x-apifox-enum:
+            - value: long
+              name: 长期有效
+              description: 长期有效
+            - value: days
+              name: 权益生效后 N 天有效
+              description: 权益生效后 N 天有效
+            - value: fixed
+              name: 固定时刻到期
+              description: 固定时刻到期
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseUserListItem"
+          description: 列表数据
+    CourseUserEntitlementRequest:
+      type: object
+      required:
+        - entitlementStatus
+      properties:
+        entitlementStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 已取消 / 1 有效；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 已取消
+              description: 已取消
+            - value: 1
+              name: 有效
+              description: 有效
+    CourseUserEntitlementData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        entitlementStatus:
+          type: integer
+          enum:
+            - 0
+            - 1
+          description: "0 已取消 / 1 有效；库：INT"
+          x-apifox-enum:
+            - value: 0
+              name: 已取消
+              description: 已取消
+            - value: 1
+              name: 有效
+              description: 有效
+    CourseUserExpireRequest:
+      type: object
+      required:
+        - expireTime
+      properties:
+        expireTime:
+          type: string
+          description: "必填，yyyy-MM-dd HH:mm:ss；改 entitlement_expire_time；库：DATETIME(3)"
+    CourseUserExpireData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        expireTime:
+          type: string
+          description: "yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+    CourseUserCreateRequest:
+      type: object
+      properties:
+        phone:
+          type: string
+          description: 与 viewerId 二选一
+        viewerId:
+          type: integer
+          format: int64
+          description: 与 phone 二选一；库：BIGINT
+        expireTime:
+          type: string
+          description: "选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00；空则按售卖 expireAtJoin；库：DATETIME(3)"
+    CourseUserCreateData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id（viewer 表主键）；库：BIGINT
+        created:
+          type: boolean
+          description: true 新建；false 已有行；库：TINYINT(1)
+    CourseUserImportData:
+      type: object
+      properties:
+        importId:
+          type: integer
+          format: int64
+          description: 导入批次 id；库：BIGINT
+        total:
+          type: integer
+          description: 总条数；库：BIGINT
+          format: int64
+        created:
+          type: integer
+          description: 是否新建；库：INT
+        updated:
+          type: integer
+          description: 成功更新条数；库：INT
+        skipped:
+          type: integer
+          description: 跳过条数；库：INT
+        failed:
+          type: integer
+          description: 失败条数；库：INT
+        errors:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            properties:
+              row:
+                type: integer
+                description: 行号；库：INT
+              phone:
+                type: string
+                description: 手机号
+              reason:
+                type: string
+                description: 失败原因；库：VARCHAR(500)
+                maxLength: 500
+          description: 失败明细
+    CourseUserImportByTagsRequest:
+      type: object
+      required:
+        - tagIds
+      properties:
+        tagIds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: integer
+            format: int64
+          description: 标签 id，去重后 1～5 个；满足其一匹配
+        expireTime:
+          type: string
+          description: "选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；estimate 无需此字段；库：DATETIME(3)"
+    CourseUserImportByTagsEstimateData:
+      type: object
+      required:
+        - total
+      properties:
+        total:
+          type: integer
+          description: 所选标签满足其一去重后的观众数；库：BIGINT
+          format: int64
+    CourseUserImportByTagsData:
+      type: object
+      required:
+        - total
+        - created
+        - updated
+        - skipped
+      properties:
+        total:
+          type: integer
+          description: 命中去重观众数；库：BIGINT
+          format: int64
+        created:
+          type: integer
+          description: 新建行数；库：INT
+        updated:
+          type: integer
+          description: 补写导入人数；库：INT
+        skipped:
+          type: integer
+          description: 已有导入人跳过数；库：INT
+    CourseUserImportHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 主键 id；库：VARCHAR(32)
+        importTime:
+          type: string
+          description: 导入时间；库：DATETIME(3)
+        importerId:
+          $ref: "#/components/schemas/EmployeeId"
+          description: 员工 rs_mainkey_id（JSON 数字，D56）
+        importerName:
+          type: string
+          description: 导入操作人
+        successCount:
+          type: integer
+          description: 成功条数；库：INT
+        failCount:
+          type: integer
+          description: 失败条数；库：INT
+    CourseUserImportHistoryData:
+      type: object
+      properties:
+        list:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CourseUserImportHistoryItem"
+          description: 列表数据
+    ActivityAudienceImportByTagsRequest:
+      type: object
+      required:
+        - tagIds
+      properties:
+        tagIds:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: integer
+            format: int64
+          description: 标签 id，去重后 1～5 个；满足其一匹配
+    ActivityAudienceImportByTagsEstimateData:
+      type: object
+      required:
+        - total
+      properties:
+        total:
+          type: integer
+          description: 所选标签满足其一去重后的观众数；库：BIGINT
+          format: int64
+    ActivityAudienceImportByTagsData:
+      type: object
+      required:
+        - total
+        - created
+        - updated
+        - skipped
+      properties:
+        total:
+          type: integer
+          description: 命中去重观众数；库：BIGINT
+          format: int64
+        created:
+          type: integer
+          description: 新建行数；库：INT
+        updated:
+          type: integer
+          description: 补写导入人数；库：INT
+        skipped:
+          type: integer
+          description: 已有导入人跳过数；库：INT
     MaterialAuditRecord:
       type: object
       properties:
@@ -8549,6 +9707,14 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/CourseDetail"
+    ApiResponseCourseSales:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseSalesUpdateData"
     ApiResponseOutsideCourseList:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
@@ -8557,6 +9723,86 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/OutsideCourseListData"
+    ApiResponseCourseUserList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserListData"
+    ApiResponseCourseUserEntitlement:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserEntitlementData"
+    ApiResponseCourseUserExpire:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserExpireData"
+    ApiResponseCourseUserCreate:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserCreateData"
+    ApiResponseCourseUserImport:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserImportData"
+    ApiResponseCourseUserImportByTagsEstimate:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserImportByTagsEstimateData"
+    ApiResponseCourseUserImportByTags:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserImportByTagsData"
+    ApiResponseCourseUserImportHistory:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/CourseUserImportHistoryData"
+    ApiResponseActivityAudienceImportByTagsEstimate:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceImportByTagsEstimateData"
+    ApiResponseActivityAudienceImportByTags:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ActivityAudienceImportByTagsData"
     ApiResponseMaterialAudits:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"
@@ -9598,6 +10844,34 @@ components:
           type: integer
           format: int64
           description: 观众 id（viewer 表主键）；库：BIGINT
+    WatchCourseEnrollRequest:
+      type: object
+      properties:
+        inviterId:
+          type: integer
+          format: int64
+          description: 选填；员工 rs_mainkey_id；有值且行上邀请仍空则写入；省略则只 upsert 学员行；库：BIGINT
+    WatchCourseEnrollData:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: course_user 行 id；库：VARCHAR(32)
+        viewerId:
+          type: integer
+          format: int64
+          description: 观众 id；库：BIGINT
+        courseId:
+          $ref: "#/components/schemas/BusinessUuid"
+          description: 课程 UUID
+        created:
+          type: boolean
+          description: true 新建；false 已有行（不改权益/到期）；库：TINYINT(1)
+        title:
+          type: string
+          description: 课程标题；库：VARCHAR(64)
+          maxLength: 64
     IdDataInt:
       type: object
       required:
@@ -9824,6 +11098,14 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/WatchAudienceAttributeData"
+    ApiResponseWatchCourseEnroll:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/WatchCourseEnrollData"
     ApiResponseIntId:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"

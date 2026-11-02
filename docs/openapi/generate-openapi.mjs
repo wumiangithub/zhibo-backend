@@ -494,6 +494,18 @@ const FIELD_DESC_BY_NAME = {
   roleName: '评论角色名',
   providerMsgId: '第三方消息 id',
   commentId: '评论 id',
+  courseId: '课程 UUID（D74）',
+  courseName: '课程名称',
+  contentCount: '内容数',
+  entitlementState: '权益计算态',
+  entitlementStateLabel: '权益状态展示文案',
+  acquireWay: '权益获取方式',
+  acquireWayLabel: '权益获取方式展示文案',
+  firstAcquireTime: '权益首次获取时间',
+  expireDisplay: '到期展示文案',
+  chapterCompletionRate: '小节完成率',
+  accessValidityFixedTime: '固定到期时刻，yyyy-MM-dd HH:mm:ss',
+  accessPermission: '课件访问权限',
 }
 
 const FIELD_DESC_BY_PATH = {
@@ -521,7 +533,10 @@ const FIELD_DESC_BY_PATH = {
   'LiveReportAuditItem.id': '审核记录 UUID',
   'CourseSummary.id': '课程 UUID',
   'CourseMaterial.id': '素材 UUID',
-  'OutsideCourseItem.id': '课程 UUID',
+  'OutsideCourseItem.courseId': '课程 UUID（D74）',
+  'OutsideCourseItem.courseName': '课程名称',
+  'OutsideCourseItem.contentCount': '内容数',
+  'OutsideCourseItem.departmentName': '课程部门（归属人部门）',
   'WatchActivitySummary.id': '本站活动 UUID',
   'WatchEmbedData.id': '本站活动 UUID',
   'WatchSummaryData.id': '本站活动 UUID',
@@ -683,6 +698,9 @@ const FIELD_DB_BY_NAME = {
   online: { db: 'TINYINT(1)' },
   playbackValidityDays: { db: 'INT' },
   accessValidityDays: { db: 'INT' },
+  accessValidityFixedTime: { db: 'DATETIME(3)' },
+  accessPermission: { db: 'INT' },
+  chapterCompletionRate: { db: 'DECIMAL(10,2)' },
   contentCount: { db: 'INT' },
   entitledUserCount: { db: 'INT' },
   totalUserCount: { db: 'INT' },
@@ -715,7 +733,9 @@ const FIELD_DB_BY_PATH = {
   'CourseSummary.title': { db: 'VARCHAR(45)', maxLength: 45 },
   'CourseDetail.title': { db: 'VARCHAR(45)', maxLength: 45 },
   'CourseDetail.detailHtml': { db: 'MEDIUMTEXT', maxLength: 200000 },
-  'OutsideCourseItem.title': { db: 'VARCHAR(45)', maxLength: 45 },
+  'OutsideCourseItem.courseName': { db: 'VARCHAR(45)', maxLength: 45 },
+  'OutsideCourseItem.contentCount': { db: 'INT' },
+  'OutsideCourseItem.departmentName': { db: 'VARCHAR(255)' },
   'LiveReportSaveRequest.content': { db: 'VARCHAR(500)', maxLength: 500 },
   'LiveReportUpdateRequest.content': { db: 'VARCHAR(500)', maxLength: 500 },
   'LiveReportDetail.content': { db: 'VARCHAR(500)', maxLength: 500 },
@@ -1128,8 +1148,30 @@ function buildAdmin() {
     },
     AccessValidityType: {
       type: 'string',
-      enum: ['long', 'days'],
-      description: 'long 长期有效 / days 购买后 N 天有效',
+      enum: ['long', 'days', 'fixed'],
+      description:
+        'long 长期有效 / days 权益生效后 N 天有效 / fixed 固定时刻到期',
+    },
+    CourseSellType: {
+      type: 'string',
+      enum: ['free', 'encrypted', 'specified'],
+      description:
+        'free 免费 / encrypted 加密 / specified 指定学员（课程 PUT sales 拒收 paid）',
+    },
+    CourseEntitlementState: {
+      type: 'string',
+      enum: ['valid', 'expired', 'invalid'],
+      description: 'valid 有效 / expired 已到期 / invalid 已失效',
+    },
+    CourseAcquireWay: {
+      type: 'string',
+      enum: ['purchase', 'import'],
+      description: 'purchase 购买 / import 导入',
+    },
+    MaterialAccessPermission: {
+      type: 'integer',
+      enum: [1, 2, 3],
+      description: '1 预览及下载 / 2 仅预览 / 3 仅下载；库：INT',
     },
     PlaybackValidityType: {
       type: 'string',
@@ -2463,6 +2505,24 @@ function buildAdmin() {
         type: { $ref: '#/components/schemas/MaterialFileType' },
         fileSize: { type: 'integer', format: 'int64' },
         mimeType: { type: 'string' },
+        accessPermission: {
+          $ref: '#/components/schemas/MaterialAccessPermission',
+        },
+      },
+    },
+    CourseMaterialInput: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '课件素材 UUID（D74）',
+        },
+        accessPermission: {
+          $ref: '#/components/schemas/MaterialAccessPermission',
+          description:
+            '选填；压缩包扩展名固定 3；可预览格式默认 1，仅允许 1/2',
+        },
       },
     },
     CreateCourseRequest: {
@@ -2488,12 +2548,56 @@ function buildAdmin() {
           items: { $ref: '#/components/schemas/EmployeeId' },
           description: '在职员工 id（JSON 数字，D56）',
         },
+        materials: {
+          type: 'array',
+          maxItems: 100,
+          items: { $ref: '#/components/schemas/CourseMaterialInput' },
+          description:
+            '课件（优先）：有序数组，每项 id + accessPermission；与 materialIds 同时传时以 materials 为准',
+        },
         materialIds: {
           type: 'array',
           maxItems: 100,
           items: { $ref: '#/components/schemas/BusinessUuid' },
-          description: '课件：两审通过的 image/video/document，不含 article',
+          description:
+            '兼容旧字段：仅 id、权限按扩展名默认；两审通过的 image/video/document，不含 article',
         },
+      },
+    },
+    CourseSalesUpdateRequest: {
+      type: 'object',
+      required: ['sellAlone', 'sellType'],
+      properties: {
+        sellAlone: { type: 'boolean', description: '是否单独售卖' },
+        sellType: { $ref: '#/components/schemas/CourseSellType' },
+        password: {
+          type: 'string',
+          pattern: '^\\d{6}$',
+          description: 'encrypted 时必填；恰好 6 位数字明文',
+        },
+        accessValidityType: {
+          $ref: '#/components/schemas/AccessValidityType',
+          description: 'free 时服务端强制 long；其余必填',
+        },
+        accessValidityDays: {
+          type: 'integer',
+          minimum: 1,
+          description: 'accessValidityType=days 时必填',
+        },
+        accessValidityFixedTime: {
+          type: 'string',
+          description:
+            'accessValidityType=fixed 时必填，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)',
+        },
+      },
+    },
+    CourseSalesUpdateData: {
+      type: 'object',
+      required: ['id', 'sellType', 'validityLabel'],
+      properties: {
+        id: { $ref: '#/components/schemas/BusinessUuid' },
+        sellType: { $ref: '#/components/schemas/CourseSellType' },
+        validityLabel: { type: 'string', description: '有效期展示文案' },
       },
     },
     CourseSummary: {
@@ -2523,8 +2627,10 @@ function buildAdmin() {
         canUnlist: { type: 'boolean', description: '已上架' },
         canDelete: {
           type: 'boolean',
-          description: '内容数与总销量均为 0',
+          description: '内容数与总销量均为 0（标记位；软删本身不拦）',
         },
+        sellType: { $ref: '#/components/schemas/CourseSellType' },
+        validityLabel: { type: 'string', description: '有效期展示文案' },
       },
     },
     CourseDetail: {
@@ -2539,6 +2645,23 @@ function buildAdmin() {
             materials: {
               type: 'array',
               items: { $ref: '#/components/schemas/CourseMaterial' },
+            },
+            sellAlone: { type: 'boolean' },
+            accessValidityType: {
+              $ref: '#/components/schemas/AccessValidityType',
+            },
+            accessValidityDays: {
+              type: 'integer',
+              description: '仅 days 时返回',
+            },
+            accessValidityFixedTime: {
+              type: 'string',
+              description: '仅 fixed 时返回，yyyy-MM-dd HH:mm:ss',
+            },
+            password: {
+              type: 'string',
+              description:
+                '仅 sellType=encrypted 时回显 AES 解密明文（6 位）；禁止写入列表/对外/导出',
             },
           },
         },
@@ -2556,31 +2679,52 @@ function buildAdmin() {
         },
       },
     },
-    OutsideCourseOwner: {
+    OutsideCourseListRequest: {
       type: 'object',
       properties: {
-        id: { $ref: '#/components/schemas/EmployeeId' },
-        userName: { type: 'string', description: '员工姓名' },
+        page: {
+          type: 'integer',
+          default: 1,
+          description: '页码，从 1 开始；<1 按 1',
+        },
+        pageSize: {
+          type: 'integer',
+          default: 20,
+          description: '每页条数；<1 按 20；>100 按 100（不抛 400）',
+        },
+        courseName: {
+          type: 'string',
+          description: '课程名称模糊；空或不传则不过滤',
+        },
       },
     },
     OutsideCourseItem: {
       type: 'object',
+      required: ['courseId', 'courseName', 'contentCount'],
       properties: {
-        id: { $ref: '#/components/schemas/BusinessUuid' },
-        title: { type: 'string' },
-        coverUrl: { type: 'string', description: '空则不返回' },
-        introduction: { type: 'string', description: '空则不返回' },
-        listedTime: { type: 'string', description: '空则不返回' },
-        updatedTime: { type: 'string' },
-        owners: {
-          type: 'array',
-          description: '没有时为 []，不省略',
-          items: { $ref: '#/components/schemas/OutsideCourseOwner' },
+        courseId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '课程 UUID（D74：32 位无横线）',
+        },
+        courseName: {
+          type: 'string',
+          maxLength: 45,
+          description: '课程名称；库：VARCHAR(45)',
+        },
+        contentCount: {
+          type: 'integer',
+          description: '内容数（读 course.content_count）；库：INT',
+        },
+        departmentName: {
+          type: 'string',
+          description:
+            '课程部门=归属人（sort_order 最小第一人）员工部门；多部门顿号「、」连接；无则省略',
         },
       },
     },
     OutsideCourseListData: {
       type: 'object',
+      required: ['page', 'pageSize', 'total', 'list'],
       properties: {
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
@@ -2589,6 +2733,286 @@ function buildAdmin() {
           type: 'array',
           items: { $ref: '#/components/schemas/OutsideCourseItem' },
         },
+      },
+    },
+    CourseUserListItem: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: 'course_user.id；库：BIGINT',
+        },
+        viewerId: {
+          type: 'integer',
+          format: 'int64',
+          description: '观众 id；库：BIGINT',
+        },
+        nickname: {
+          type: 'string',
+          description: '展示昵称（必有非空串）；落在「学员」列',
+        },
+        avatar: { type: 'string', description: '头像 URL，可空则省略' },
+        phoneMasked: { type: 'string', description: '脱敏手机号，可空则省略' },
+        tagIds: {
+          type: 'array',
+          items: { type: 'integer', format: 'int64' },
+          description: '观众全局标签 id（未软删）；无则 []',
+        },
+        tagLabels: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '与 tagIds 对齐的标签名；无则 []',
+        },
+        chapterCompletionRate: {
+          type: 'number',
+          description: '小节完成率；本轮恒 0',
+        },
+        entitlementStatus: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 已取消 / 1 有效；库：INT',
+        },
+        entitlementState: {
+          $ref: '#/components/schemas/CourseEntitlementState',
+        },
+        entitlementStateLabel: {
+          type: 'string',
+          description: '有效 / 已到期 / 已失效',
+        },
+        acquireWay: { $ref: '#/components/schemas/CourseAcquireWay' },
+        acquireWayLabel: { type: 'string', description: '购买 / 导入' },
+        firstAcquireTime: {
+          type: 'string',
+          description: '权益首次获取时间（created_time），yyyy-MM-dd HH:mm:ss',
+        },
+        employeeInviterId: {
+          type: 'integer',
+          format: 'int64',
+          description: '员工邀请人 id；无则省略',
+        },
+        inviterDisplayName: {
+          type: 'string',
+          description: '所属邀请人展示名；无则省略',
+        },
+        inviteTime: {
+          type: 'string',
+          description: '有邀请人时 = created_time',
+        },
+        importerId: {
+          type: 'integer',
+          format: 'int64',
+          description: '添加/导入人 id；无则省略',
+        },
+        importerName: { type: 'string', description: '导入人姓名；无则省略' },
+        importTime: {
+          type: 'string',
+          description: '有导入人时 = created_time',
+        },
+        expireTime: {
+          type: 'string',
+          description:
+            '库内到期，可空；售卖长期时前端展示「长期」勿当已过期；库：DATETIME(3)',
+        },
+        expireDisplay: {
+          type: 'string',
+          description: '展示串：售卖长期→长期；有到期则格式化；无则 —',
+        },
+      },
+    },
+    CourseUserListData: {
+      type: 'object',
+      required: ['page', 'pageSize', 'total', 'accessValidityType', 'list'],
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        accessValidityType: {
+          $ref: '#/components/schemas/AccessValidityType',
+          description: '课程当前售卖有效期类型，供前端到期列展示',
+        },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/CourseUserListItem' },
+        },
+      },
+    },
+    CourseUserEntitlementRequest: {
+      type: 'object',
+      required: ['entitlementStatus'],
+      properties: {
+        entitlementStatus: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 已取消 / 1 有效',
+        },
+      },
+    },
+    CourseUserEntitlementData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        entitlementStatus: {
+          type: 'integer',
+          enum: [0, 1],
+          description: '0 已取消 / 1 有效',
+        },
+      },
+    },
+    CourseUserExpireRequest: {
+      type: 'object',
+      required: ['expireTime'],
+      properties: {
+        expireTime: {
+          type: 'string',
+          description: '必填，yyyy-MM-dd HH:mm:ss；改 entitlement_expire_time',
+        },
+      },
+    },
+    CourseUserExpireData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        expireTime: { type: 'string', description: 'yyyy-MM-dd HH:mm:ss' },
+      },
+    },
+    CourseUserCreateRequest: {
+      type: 'object',
+      properties: {
+        phone: { type: 'string', description: '与 viewerId 二选一' },
+        viewerId: {
+          type: 'integer',
+          format: 'int64',
+          description: '与 phone 二选一',
+        },
+        expireTime: {
+          type: 'string',
+          description:
+            '选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00；空则按售卖 expireAtJoin',
+        },
+      },
+    },
+    CourseUserCreateData: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        viewerId: { type: 'integer', format: 'int64' },
+        created: { type: 'boolean', description: 'true 新建；false 已有行' },
+      },
+    },
+    CourseUserImportData: {
+      type: 'object',
+      properties: {
+        importId: { type: 'integer', format: 'int64' },
+        total: { type: 'integer' },
+        created: { type: 'integer' },
+        updated: { type: 'integer' },
+        skipped: { type: 'integer' },
+        failed: { type: 'integer' },
+        errors: {
+          type: 'array',
+          maxItems: 50,
+          items: {
+            type: 'object',
+            properties: {
+              row: { type: 'integer', description: '行号' },
+              phone: { type: 'string', description: '手机号' },
+              reason: { type: 'string', description: '失败原因' },
+            },
+          },
+        },
+      },
+    },
+    CourseUserImportByTagsRequest: {
+      type: 'object',
+      required: ['tagIds'],
+      properties: {
+        tagIds: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 5,
+          items: { type: 'integer', format: 'int64' },
+          description: '标签 id，去重后 1～5 个；满足其一匹配',
+        },
+        expireTime: {
+          type: 'string',
+          description:
+            '选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；estimate 无需此字段',
+        },
+      },
+    },
+    CourseUserImportByTagsEstimateData: {
+      type: 'object',
+      required: ['total'],
+      properties: {
+        total: {
+          type: 'integer',
+          description: '所选标签满足其一去重后的观众数',
+        },
+      },
+    },
+    CourseUserImportByTagsData: {
+      type: 'object',
+      required: ['total', 'created', 'updated', 'skipped'],
+      properties: {
+        total: { type: 'integer', description: '命中去重观众数' },
+        created: { type: 'integer', description: '新建行数' },
+        updated: { type: 'integer', description: '补写导入人数' },
+        skipped: { type: 'integer', description: '已有导入人跳过数' },
+      },
+    },
+    CourseUserImportHistoryItem: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', format: 'int64' },
+        importTime: { type: 'string' },
+        importerId: { $ref: '#/components/schemas/EmployeeId' },
+        importerName: { type: 'string' },
+        successCount: { type: 'integer' },
+        failCount: { type: 'integer' },
+      },
+    },
+    CourseUserImportHistoryData: {
+      type: 'object',
+      properties: {
+        list: {
+          type: 'array',
+          maxItems: 100,
+          items: { $ref: '#/components/schemas/CourseUserImportHistoryItem' },
+        },
+      },
+    },
+    ActivityAudienceImportByTagsRequest: {
+      type: 'object',
+      required: ['tagIds'],
+      properties: {
+        tagIds: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 5,
+          items: { type: 'integer', format: 'int64' },
+          description: '标签 id，去重后 1～5 个；满足其一匹配',
+        },
+      },
+    },
+    ActivityAudienceImportByTagsEstimateData: {
+      type: 'object',
+      required: ['total'],
+      properties: {
+        total: {
+          type: 'integer',
+          description: '所选标签满足其一去重后的观众数',
+        },
+      },
+    },
+    ActivityAudienceImportByTagsData: {
+      type: 'object',
+      required: ['total', 'created', 'updated', 'skipped'],
+      properties: {
+        total: { type: 'integer', description: '命中去重观众数' },
+        created: { type: 'integer', description: '新建行数' },
+        updated: { type: 'integer', description: '补写导入人数' },
+        skipped: { type: 'integer', description: '已有导入人跳过数' },
       },
     },
 
@@ -3082,8 +3506,37 @@ function buildAdmin() {
     },
     ApiResponseCourseList: { $ref: '#/components/schemas/CourseListData' },
     ApiResponseCourseDetail: { $ref: '#/components/schemas/CourseDetail' },
+    ApiResponseCourseSales: { $ref: '#/components/schemas/CourseSalesUpdateData' },
     ApiResponseOutsideCourseList: {
       $ref: '#/components/schemas/OutsideCourseListData',
+    },
+    ApiResponseCourseUserList: { $ref: '#/components/schemas/CourseUserListData' },
+    ApiResponseCourseUserEntitlement: {
+      $ref: '#/components/schemas/CourseUserEntitlementData',
+    },
+    ApiResponseCourseUserExpire: {
+      $ref: '#/components/schemas/CourseUserExpireData',
+    },
+    ApiResponseCourseUserCreate: {
+      $ref: '#/components/schemas/CourseUserCreateData',
+    },
+    ApiResponseCourseUserImport: {
+      $ref: '#/components/schemas/CourseUserImportData',
+    },
+    ApiResponseCourseUserImportByTagsEstimate: {
+      $ref: '#/components/schemas/CourseUserImportByTagsEstimateData',
+    },
+    ApiResponseCourseUserImportByTags: {
+      $ref: '#/components/schemas/CourseUserImportByTagsData',
+    },
+    ApiResponseCourseUserImportHistory: {
+      $ref: '#/components/schemas/CourseUserImportHistoryData',
+    },
+    ApiResponseActivityAudienceImportByTagsEstimate: {
+      $ref: '#/components/schemas/ActivityAudienceImportByTagsEstimateData',
+    },
+    ApiResponseActivityAudienceImportByTags: {
+      $ref: '#/components/schemas/ActivityAudienceImportByTagsData',
     },
 
     ApiResponseMaterialAudits: { $ref: '#/components/schemas/MaterialAuditListData' },
@@ -4339,9 +4792,30 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '新建课程',
-        description: '成功后 riskStatus 与 shelfStatus 均为 pending，并写一条 action=submit。',
+        description:
+          '成功后 riskStatus 与 shelfStatus 均为 pending，并写一条 action=submit。售卖默认 sellAlone=true、sellType=free、accessValidityType=long。',
         operationId: 'createCourse',
         security: bearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CreateCourseRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseId'),
+      },
+    },
+    '/api/v1/courses/update/{id}': {
+      post: {
+        tags: ['课程'],
+        summary: '更新课程基本信息',
+        description:
+          'Body 与创建同形。riskStatus=pending → 400。passed/rejected 保存后回 pending 并写 submit。课件传空数组表示清空。',
+        operationId: 'updateCourse',
+        security: bearer,
+        parameters: [courseId],
         requestBody: {
           required: true,
           content: {
@@ -4428,11 +4902,356 @@ function buildAdmin() {
       delete: {
         tags: ['课程'],
         summary: '软删课程',
-        description: '仅内容数与总销量均为 0，否则 400。',
+        description: '写 deleted_time。不要求内容数/总销量为 0。',
         operationId: 'deleteCourse',
         security: bearer,
         parameters: [courseId],
         responses: ok200('#/components/schemas/ApiResponseId'),
+      },
+    },
+    '/api/v1/courses/sales/{id}': {
+      put: {
+        tags: ['课程'],
+        summary: '课程售卖设置',
+        description:
+          '对齐活动售卖；拒收 paid。D100：long→days 对本课 expire 仍空的行写 created_time+N；保存 fixed 对 expire 仍空的行写入该固定时刻。',
+        operationId: 'updateCourseSales',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CourseSalesUpdateRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseSales'),
+      },
+    },
+    '/api/v1/courses/users/list/{courseId}': {
+      get: {
+        tags: ['课程'],
+        summary: '课程用户列表',
+        description:
+          'D100。entitlementState：valid/expired/invalid；省略=全部。计算态见 API约定。',
+        operationId: 'listCourseUsers',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+          ...pageParams,
+          {
+            name: 'keywordType',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['nickname', 'id', 'phone'],
+              default: 'nickname',
+              description: 'nickname 昵称 / id 用户ID / phone 手机号',
+            },
+          },
+          {
+            name: 'keyword',
+            in: 'query',
+            schema: { type: 'string' },
+            description: '关键词；配合 keywordType',
+          },
+          {
+            name: 'entitlementState',
+            in: 'query',
+            schema: { $ref: '#/components/schemas/CourseEntitlementState' },
+            description: '可选；省略=全部',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseCourseUserList'),
+      },
+    },
+    '/api/v1/courses/users/entitlement/{rowId}': {
+      put: {
+        tags: ['课程'],
+        summary: '开关课程用户观看权益',
+        operationId: 'updateCourseUserEntitlement',
+        security: bearer,
+        parameters: [
+          {
+            name: 'rowId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: 'course_user 行 id',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseUserEntitlementRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseUserEntitlement'),
+      },
+    },
+    '/api/v1/courses/users/expire/{rowId}': {
+      put: {
+        tags: ['课程'],
+        summary: '延迟用户时间 / 自定义到期',
+        description:
+          '改 entitlement_expire_time；不改 entitlement_status。售卖仍为长期时列表展示仍按「长期」。',
+        operationId: 'updateCourseUserExpire',
+        security: bearer,
+        parameters: [
+          {
+            name: 'rowId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: 'course_user 行 id',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CourseUserExpireRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseUserExpire'),
+      },
+    },
+    '/api/v1/courses/users/create/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '单个添加学员',
+        description:
+          'Body 二选一 phone 或 viewerId；选填 expireTime。新建 acquire_way=import；已有行仅补空导入人、不改 expire。',
+        operationId: 'createCourseUser',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CourseUserCreateRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseUserCreate'),
+      },
+    },
+    '/api/v1/courses/users/import/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: 'CSV 批量导入学员',
+        description:
+          'multipart：必填 file（仅 CSV）；选填 expireTime（弹窗级共用）。写 course_user_import 历史。',
+        operationId: 'importCourseUsers',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file'],
+                properties: {
+                  file: {
+                    type: 'string',
+                    format: 'binary',
+                    description: 'CSV 文件；首列/列名「手机号」',
+                  },
+                  expireTime: {
+                    type: 'string',
+                    description:
+                      '选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseUserImport'),
+      },
+    },
+    '/api/v1/courses/users/import-by-tags/estimate/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '标签导入预计人数',
+        description: '只算人数、不写入；满足其一去重。',
+        operationId: 'estimateCourseUsersByTags',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseUserImportByTagsRequest',
+              },
+            },
+          },
+        },
+        responses: ok200(
+          '#/components/schemas/ApiResponseCourseUserImportByTagsEstimate',
+        ),
+      },
+    },
+    '/api/v1/courses/users/import-by-tags/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '按标签导入学员',
+        description:
+          'upsert course_user；不写 CSV 导入历史；已有行不改权益/expire。',
+        operationId: 'importCourseUsersByTags',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseUserImportByTagsRequest',
+              },
+            },
+          },
+        },
+        responses: ok200(
+          '#/components/schemas/ApiResponseCourseUserImportByTags',
+        ),
+      },
+    },
+    '/api/v1/courses/users/import-template': {
+      get: {
+        tags: ['课程'],
+        summary: '课程用户导入模板',
+        operationId: 'downloadCourseUserImportTemplate',
+        security: bearer,
+        responses: csvOk200('UTF-8 BOM CSV，表头：手机号'),
+      },
+    },
+    '/api/v1/courses/users/imports/list/{courseId}': {
+      get: {
+        tags: ['课程'],
+        summary: '课程用户导入历史',
+        description: '最多 100 条。',
+        operationId: 'listCourseUserImports',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        responses: ok200(
+          '#/components/schemas/ApiResponseCourseUserImportHistory',
+        ),
+      },
+    },
+    '/api/v1/courses/users/imports/failures/{importId}': {
+      get: {
+        tags: ['课程'],
+        summary: '课程用户导入失败明细 CSV',
+        operationId: 'downloadCourseUserImportFailures',
+        security: bearer,
+        parameters: [
+          {
+            name: 'importId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: '导入批次 id',
+          },
+        ],
+        responses: csvOk200('失败明细 CSV：行号,手机号,原因'),
+      },
+    },
+    '/api/v1/courses/users/export/{courseId}': {
+      get: {
+        tags: ['课程'],
+        summary: '导出课程学员 CSV',
+        description:
+          '按 list 同筛选不分页导出（UTF-8 BOM）。筛选项不含 page/pageSize。',
+        operationId: 'exportCourseUsers',
+        security: bearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+          {
+            name: 'keywordType',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['nickname', 'id', 'phone'],
+              default: 'nickname',
+              description: 'nickname 昵称 / id 用户ID / phone 手机号',
+            },
+          },
+          {
+            name: 'keyword',
+            in: 'query',
+            schema: { type: 'string' },
+            description: '关键词',
+          },
+          {
+            name: 'entitlementState',
+            in: 'query',
+            schema: { $ref: '#/components/schemas/CourseEntitlementState' },
+            description: '可选；省略=全部',
+          },
+        ],
+        responses: csvOk200(
+          '学员 CSV：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间',
+        ),
       },
     },
     '/api/v1/courses/shelf/{id}': {
@@ -4609,6 +5428,53 @@ function buildAdmin() {
           },
         },
         responses: ok200('#/components/schemas/ApiResponseActivityAudienceImport'),
+      },
+    },
+    '/api/v1/activities/audiences/import-by-tags/estimate/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: '标签导入预计人数',
+        description: '只算人数、不写入；满足其一去重。',
+        operationId: 'estimateActivityAudiencesByTags',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ActivityAudienceImportByTagsRequest',
+              },
+            },
+          },
+        },
+        responses: ok200(
+          '#/components/schemas/ApiResponseActivityAudienceImportByTagsEstimate',
+        ),
+      },
+    },
+    '/api/v1/activities/audiences/import-by-tags/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: '按标签导入本场观众',
+        description:
+          'upsert activity_audience；不写 CSV 导入历史；已有行不改权益。',
+        operationId: 'importActivityAudiencesByTags',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/ActivityAudienceImportByTagsRequest',
+              },
+            },
+          },
+        },
+        responses: ok200(
+          '#/components/schemas/ApiResponseActivityAudienceImportByTags',
+        ),
       },
     },
     '/api/v1/activities/audiences/import-template': {
@@ -4992,22 +5858,28 @@ function buildAdmin() {
       },
     },
     '/api/v1/outside/courses/list': {
-      get: {
+      post: {
         tags: ['对外课程'],
         summary: '对外课程列表',
-        description:
-          '当前不鉴权。只返回已上架且风控已通过、未软删的课程。默认按 listedTime 倒序。',
+        description: [
+          '当前不鉴权；不要 X-Outside-Token。',
+          '只返回 shelfStatus=on 且 riskStatus=passed、未软删的课程。',
+          '待审核、驳回、待上架、已下架、强制封禁都不返回。',
+          'Body 可空 {} 或不传，等价于第 1 页全部已上架课程。',
+          '默认按 listedTime 倒序。旧版 GET + keyword 已废止。',
+        ].join(''),
         operationId: 'listOutsideCourses',
         security: [],
-        parameters: [
-          ...pageParams,
-          {
-            name: 'keyword',
-            in: 'query',
-            schema: { type: 'string' },
-            description: '课程名称模糊',
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/OutsideCourseListRequest',
+              },
+            },
           },
-        ],
+        },
         responses: ok200('#/components/schemas/ApiResponseOutsideCourseList'),
       },
     },
@@ -5033,7 +5905,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.6.0',
+      version: '2.7.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -5539,6 +6411,37 @@ function buildLive() {
         viewerId: { type: 'integer', format: 'int64' },
       },
     },
+    WatchCourseEnrollRequest: {
+      type: 'object',
+      properties: {
+        inviterId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '选填；员工 rs_mainkey_id；有值且行上邀请仍空则写入；省略则只 upsert 学员行',
+        },
+      },
+    },
+    WatchCourseEnrollData: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: 'course_user 行 id',
+        },
+        viewerId: { type: 'integer', format: 'int64', description: '观众 id' },
+        courseId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '课程 UUID',
+        },
+        created: {
+          type: 'boolean',
+          description: 'true 新建；false 已有行（不改权益/到期）',
+        },
+        title: { type: 'string', description: '课程标题' },
+      },
+    },
     IdDataInt: {
       type: 'object',
       required: ['id'],
@@ -5595,6 +6498,7 @@ function buildLive() {
     ApiResponseWatchReplayStart: { $ref: '#/components/schemas/WatchReplayStartData' },
     ApiResponseWatchReplayHeartbeat: { $ref: '#/components/schemas/WatchReplayHeartbeatData' },
     ApiResponseWatchAudienceAttribute: { $ref: '#/components/schemas/WatchAudienceAttributeData' },
+    ApiResponseWatchCourseEnroll: { $ref: '#/components/schemas/WatchCourseEnrollData' },
     ApiResponseIntId: { $ref: '#/components/schemas/IdDataInt' },
 
   })) {
@@ -6069,6 +6973,37 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseWatchAudienceAttribute'),
       },
     },
+    '/api/v1/watch/course/enroll/{id}': {
+      post: {
+        tags: ['用户运营'],
+        summary: '课程分享链进房 enroll',
+        description: [
+          '路径 {id}=课程 UUID。须观众 JWT；viewerId 只从 JWT 取，Body 不接受 viewerId。',
+          '无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。',
+          '课程不存在/已软删或观众不存在 → 400；无票 → 401。',
+        ].join(''),
+        operationId: 'watchCourseEnroll',
+        security: viewerBearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WatchCourseEnrollRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseWatchCourseEnroll'),
+      },
+    },
     '/api/v1/callbacks/vhall/presence': {
       post: {
         tags: ['回调'],
@@ -6204,7 +7139,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.6.0',
+      version: '2.7.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -6296,7 +7231,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.6.0',
+      version: '2.7.0',
       contact: { name: 'zhibo' },
     },
     servers: [
@@ -6342,6 +7277,61 @@ function writeDoc(baseName, doc) {
   console.log(`  ${jsonPath}`)
 }
 
+/** 对外课程片段：同步到 zhibo-shared/docs/openapi/outside-courses.yaml（供 Apifox 单接口导入） */
+function writeSharedOutsideCourses(adminDoc) {
+  const sharedDir = path.resolve(
+    __dirname,
+    '../../../zhibo-shared/docs/openapi',
+  )
+  fs.mkdirSync(sharedDir, { recursive: true })
+  const pathItem = adminDoc.paths['/api/v1/outside/courses/list']
+  if (!pathItem) {
+    throw new Error('admin doc missing /api/v1/outside/courses/list')
+  }
+  const schemaNames = [
+    'BusinessUuid',
+    'ApiResponseBase',
+    'OutsideCourseListRequest',
+    'OutsideCourseItem',
+    'OutsideCourseListData',
+    'ApiResponseOutsideCourseList',
+  ]
+  const schemas = {}
+  for (const name of schemaNames) {
+    if (!adminDoc.components.schemas[name]) {
+      throw new Error(`missing schema for shared outside export: ${name}`)
+    }
+    schemas[name] = adminDoc.components.schemas[name]
+  }
+  const frag = {
+    openapi: '3.0.3',
+    info: {
+      title: '对外课程列表',
+      version: adminDoc.info.version,
+      description: [
+        '对外课程列表，只包含 POST /api/v1/outside/courses/list。',
+        '当前不鉴权，不需要登录，也不要 token。域名白名单后续再做。',
+        '只返回已上架且风控已通过、未软删的课程。',
+        '列表项字段：courseId / courseName / contentCount / departmentName?。',
+        '旧版 GET + keyword + id/title/owners 已废止。',
+      ].join('\n'),
+    },
+    servers: adminDoc.servers,
+    tags: [{ name: '对外课程' }],
+    paths: {
+      '/api/v1/outside/courses/list': pathItem,
+    },
+    components: { schemas },
+  }
+  const yamlPath = path.join(sharedDir, 'outside-courses.yaml')
+  const jsonPath = path.join(sharedDir, 'outside-courses.json')
+  fs.writeFileSync(yamlPath, toYaml(frag), 'utf8')
+  fs.writeFileSync(jsonPath, JSON.stringify(frag, null, 2) + '\n', 'utf8')
+  console.log(`wrote shared outside-courses →`)
+  console.log(`  ${yamlPath}`)
+  console.log(`  ${jsonPath}`)
+}
+
 const admin = buildAdmin()
 const live = buildLive()
 attachApifoxEnums(admin)
@@ -6351,5 +7341,6 @@ const all = mergeDocs(admin, live)
 writeDoc('admin-service', admin)
 writeDoc('live-service', live)
 writeDoc('zhibo', all)
+writeSharedOutsideCourses(admin)
 
 console.log('\nApifox 导入建议：优先导入 zhibo.openapi.yaml（或 .json）一次搞定。')
