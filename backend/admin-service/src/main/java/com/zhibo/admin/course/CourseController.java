@@ -4,6 +4,8 @@ import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
 import com.zhibo.admin.course.dto.BindLivesRequest;
 import com.zhibo.admin.course.dto.BindLivesResponse;
+import com.zhibo.admin.course.dto.BindMaterialsRequest;
+import com.zhibo.admin.course.dto.BindMaterialsResponse;
 import com.zhibo.admin.course.dto.CatalogListResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CatalogUsedContentsResponse;
@@ -13,6 +15,8 @@ import com.zhibo.admin.course.dto.CourseAuditResultResponse;
 import com.zhibo.admin.course.dto.CourseDetailResponse;
 import com.zhibo.admin.course.dto.CourseIdResponse;
 import com.zhibo.admin.course.dto.CourseListResponse;
+import com.zhibo.admin.course.dto.CourseSalesUpdateRequest;
+import com.zhibo.admin.course.dto.CourseSalesUpdateResponse;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
 import com.zhibo.admin.course.dto.CourseShelfResponse;
 import com.zhibo.admin.course.dto.CreateChapterRequest;
@@ -36,6 +40,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -84,6 +89,13 @@ public class CourseController {
         return ApiResponse.ok(courseService.detail(id));
     }
 
+    @PutMapping("/sales/{id}")
+    public ApiResponse<CourseSalesUpdateResponse> updateSales(
+            @PathVariable String id,
+            @Valid @RequestBody CourseSalesUpdateRequest request) {
+        return ApiResponse.ok(courseService.updateSales(id, request));
+    }
+
     @DeleteMapping("/delete/{id}")
     public ApiResponse<CourseIdResponse> delete(@PathVariable String id) {
         return ApiResponse.ok(courseService.delete(id));
@@ -124,6 +136,13 @@ public class CourseController {
             @PathVariable String courseId,
             @Valid @RequestBody BindLivesRequest request) {
         return ApiResponse.ok(courseCatalogService.bindLives(courseId, request));
+    }
+
+    @PostMapping("/catalog/lessons/bind-materials/{courseId}")
+    public ApiResponse<BindMaterialsResponse> bindMaterials(
+            @PathVariable String courseId,
+            @Valid @RequestBody BindMaterialsRequest request) {
+        return ApiResponse.ok(courseCatalogService.bindMaterials(courseId, request));
     }
 
     @PostMapping("/catalog/chapters/create/{courseId}")

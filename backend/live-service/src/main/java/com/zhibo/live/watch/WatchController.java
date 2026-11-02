@@ -56,16 +56,13 @@ public class WatchController {
         return ApiResponse.ok(watchService.summary(id));
     }
 
-    /** 观看 SDK 签名（D92/D95）；活动 id / viewerId 均在 Query；仅签名字段。 */
+    /** 观看 SDK 签名（D92/D95/D96）；Query 仅 id + nickname；viewerId 只从 JWT。 */
     @GetMapping("/sdk-sign")
     public ApiResponse<WatchSdkResponse> sdkSign(
             @RequestParam String id,
             @RequestParam(required = false) String nickname,
-            @RequestParam(required = false) Long viewerId,
             HttpServletRequest request) {
-        Long resolvedViewer = viewerId != null && viewerId > 0
-                ? viewerId
-                : WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
+        Long resolvedViewer = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
         watchAccessService.assertAllowed(
                 id, resolvedViewer, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchSdkService.sdk(id, nickname, resolvedViewer));

@@ -4,6 +4,8 @@ import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.course.dto.BindLivesRequest;
 import com.zhibo.admin.course.dto.BindLivesResponse;
+import com.zhibo.admin.course.dto.BindMaterialsRequest;
+import com.zhibo.admin.course.dto.BindMaterialsResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CreateChapterRequest;
 import com.zhibo.admin.course.dto.CatalogNodeIdResponse;
@@ -37,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -127,6 +130,69 @@ class CourseCatalogServiceTest {
                 IllegalArgumentException.class,
                 () -> catalogService.bindLives(course.getId(), body));
         assertTrue(ex.getMessage().contains("根目录"));
+    }
+
+    @Test
+    void bindMaterials_createsLessonsAndSyncsCount() {
+        CourseEntity course = course();
+        String materialId = UuidIds.newId();
+        when(catalogRepository.countActiveByCourseIdAndNodeType(course.getId(), CourseCatalogNodeType.SUBCOURSE))
+                .thenReturn(0L);
+        when(catalogRepository.findActiveByCourseIdAndParentId(course.getId(), 0L)).thenReturn(List.of());
+        when(catalogRepository.existsActiveContent(eq(course.getId()), anyInt(), eq(materialId)))
+                .thenReturn(false);
+        MaterialEntity material = new MaterialEntity();
+        material.setId(materialId);
+        material.setType("document");
+        material.setName("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十超");
+        when(materialRepository.findById(materialId)).thenReturn(Optional.of(material));
+        when(catalogRepository.save(any())).thenAnswer(inv -> {
+            CourseCatalogNodeEntity n = inv.getArgument(0);
+            n.setId(21L);
+            return n;
+        });
+        when(catalogRepository.countActiveByCourseIdAndNodeType(course.getId(), CourseCatalogNodeType.LESSON))
+                .thenReturn(1L);
+
+        BindMaterialsRequest body = new BindMaterialsRequest();
+        body.setParentId(0L);
+        body.setMaterialIds(List.of(materialId));
+
+        BindMaterialsResponse response = catalogService.bindMaterials(course.getId(), body);
+
+        assertEquals(1, response.getList().size());
+        assertEquals(1, response.getContentCount());
+        assertEquals(30, response.getList().get(0).getTitle().length());
+        assertEquals(CourseCatalogContentKind.DOCUMENT, response.getList().get(0).getContentKind());
+        assertEquals(materialId, response.getList().get(0).getContentId());
+        assertEquals(0, response.getList().get(0).getSortOrder());
+        verify(courseRepository).save(course);
+        assertEquals(1, course.getContentCount());
+    }
+
+    @Test
+    void bindMaterials_rejectsDuplicate() {
+        CourseEntity course = course();
+        String materialId = UuidIds.newId();
+        when(catalogRepository.countActiveByCourseIdAndNodeType(course.getId(), CourseCatalogNodeType.SUBCOURSE))
+                .thenReturn(0L);
+        when(catalogRepository.findActiveByCourseIdAndParentId(course.getId(), 0L)).thenReturn(List.of());
+        MaterialEntity material = new MaterialEntity();
+        material.setId(materialId);
+        material.setType("image");
+        material.setName("图");
+        when(materialRepository.findById(materialId)).thenReturn(Optional.of(material));
+        when(catalogRepository.existsActiveContent(course.getId(), CourseCatalogContentKind.IMAGE, materialId))
+                .thenReturn(true);
+
+        BindMaterialsRequest body = new BindMaterialsRequest();
+        body.setParentId(0L);
+        body.setMaterialIds(List.of(materialId));
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> catalogService.bindMaterials(course.getId(), body));
+        assertTrue(ex.getMessage().contains("不可重复"));
     }
 
     @Test

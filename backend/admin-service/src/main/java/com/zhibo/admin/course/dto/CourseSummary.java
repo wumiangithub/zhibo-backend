@@ -20,6 +20,8 @@ public class CourseSummary {
     private int entitledUserCount;
     private int totalUserCount;
     private int salesCount;
+    private String sellType;
+    private String validityLabel;
     private String updatedTime;
     private String createdTime;
     private boolean canList;

@@ -1,5 +1,6 @@
 package com.zhibo.admin.course;
 
+import com.zhibo.activity.SellPasswordCryptoService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.course.dto.CourseAuditRequest;
@@ -7,6 +8,7 @@ import com.zhibo.admin.course.dto.CourseAuditResultResponse;
 import com.zhibo.admin.course.dto.CourseIdResponse;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zhibo.admin.course.dto.CourseSalesUpdateRequest;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
@@ -62,6 +64,8 @@ class CourseServiceTest {
     private MaterialRepository materialRepository;
     @Mock
     private SysUserAccountRepository userRepository;
+    @Mock
+    private SellPasswordCryptoService sellPasswordCrypto;
 
     @InjectMocks
     private CourseService courseService;
@@ -81,11 +85,63 @@ class CourseServiceTest {
         assertEquals("pending", saved.getValue().getShelfStatus());
         assertEquals(Boolean.TRUE, saved.getValue().getAutoList());
         assertNull(saved.getValue().getListedTime());
+        assertEquals(Boolean.TRUE, saved.getValue().getSellAlone());
+        assertEquals("free", saved.getValue().getSellType());
+        assertEquals("长期有效", saved.getValue().getValidityLabel());
+        assertEquals("long", saved.getValue().getAccessValidityType());
+        assertNull(saved.getValue().getAccessValidityDays());
+        assertNull(saved.getValue().getSellPasswordCipher());
         ArgumentCaptor<CourseAuditEntity> audit = ArgumentCaptor.forClass(CourseAuditEntity.class);
         verify(auditRepository).save(audit.capture());
         assertEquals("submit", audit.getValue().getAction());
         assertNull(audit.getValue().getResult());
         assertNotNull(response.getId());
+    }
+
+    @Test
+    void updateSales_paidRejected() {
+        CourseSalesUpdateRequest paid = new CourseSalesUpdateRequest();
+        paid.setSellAlone(true);
+        paid.setSellType("paid");
+        paid.setAccessValidityType("long");
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> courseService.updateSales("course-1", paid));
+        assertEquals("sellType 无效", ex.getMessage());
+    }
+
+    @Test
+    void updateSales_encryptedDaysAfterList() {
+        CourseEntity entity = stored("pending", "pending", false);
+        when(courseRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(sellPasswordCrypto.encrypt("123456")).thenReturn("cipher");
+
+        CourseSalesUpdateRequest bad = new CourseSalesUpdateRequest();
+        bad.setSellAlone(true);
+        bad.setSellType("encrypted");
+        bad.setPassword("12ab56");
+        bad.setAccessValidityType("days");
+        bad.setAccessValidityDays(7);
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> courseService.updateSales(entity.getId(), bad));
+        assertEquals("密码须为恰好6位数字", ex.getMessage());
+
+        CourseSalesUpdateRequest ok = new CourseSalesUpdateRequest();
+        ok.setSellAlone(true);
+        ok.setSellType("encrypted");
+        ok.setPassword("123456");
+        ok.setAccessValidityType("days");
+        ok.setAccessValidityDays(7);
+        var response = courseService.updateSales(entity.getId(), ok);
+        assertEquals("cipher", entity.getSellPasswordCipher());
+        assertEquals("days", entity.getAccessValidityType());
+        assertEquals(7, entity.getAccessValidityDays());
+        assertEquals("7天有效", entity.getValidityLabel());
+        assertEquals("encrypted", response.getSellType());
+        assertEquals("7天有效", response.getValidityLabel());
+        verify(sellPasswordCrypto).encrypt("123456");
     }
 
     @Test
@@ -320,14 +376,16 @@ class CourseServiceTest {
     }
 
     @Test
-    void delete_requiresZeroContentAndSales() {
-        CourseEntity blocked = stored("pending", "pending", true);
-        blocked.setSalesCount(1);
-        assertThrows(IllegalArgumentException.class, () -> courseService.delete(blocked.getId()));
+    void delete_softDeletesRegardlessOfContentOrSales() {
+        CourseEntity withSales = stored("pending", "pending", true);
+        withSales.setSalesCount(1);
+        withSales.setContentCount(3);
+        courseService.delete(withSales.getId());
+        assertNotNull(withSales.getDeletedTime());
 
-        CourseEntity ok = stored("pending", "pending", false);
-        courseService.delete(ok.getId());
-        assertNotNull(ok.getDeletedTime());
+        CourseEntity empty = stored("pending", "pending", false);
+        courseService.delete(empty.getId());
+        assertNotNull(empty.getDeletedTime());
     }
 
     @Test

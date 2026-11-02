@@ -4,6 +4,8 @@ import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.course.dto.BindLivesRequest;
 import com.zhibo.admin.course.dto.BindLivesResponse;
+import com.zhibo.admin.course.dto.BindMaterialsRequest;
+import com.zhibo.admin.course.dto.BindMaterialsResponse;
 import com.zhibo.admin.course.dto.CatalogListResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CatalogUsedContentsResponse;
@@ -154,6 +156,61 @@ public class CourseCatalogService {
         }
         int contentCount = syncContentCount(course);
         BindLivesResponse response = new BindLivesResponse();
+        response.setList(created.stream().map(this::toView).toList());
+        response.setContentCount(contentCount);
+        return response;
+    }
+
+    @Transactional
+    public BindMaterialsResponse bindMaterials(String courseId, BindMaterialsRequest request) {
+        if (request == null || request.getParentId() == null) {
+            throw new IllegalArgumentException("parentId 不能为空");
+        }
+        if (request.getMaterialIds() == null || request.getMaterialIds().isEmpty()) {
+            throw new IllegalArgumentException("请选择素材");
+        }
+        CourseEntity course = requireCourse(courseId);
+        long parentId = request.getParentId();
+        assertCanAttachLessonOrChapter(course.getId(), parentId, true);
+
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        for (String raw : request.getMaterialIds()) {
+            String id = UuidIds.require(raw, "素材 id 无效", "素材 id 须为本站 UUID");
+            ids.add(id);
+        }
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("请选择素材");
+        }
+
+        List<CourseCatalogNodeEntity> created = new ArrayList<>();
+        List<CourseCatalogNodeEntity> siblings = catalogRepository.findActiveByCourseIdAndParentId(
+                course.getId(), parentId);
+        int sort = CatalogSiblingOrder.nextSortOrder(siblings);
+        boolean bump = sort > 0;
+        for (String materialId : ids) {
+            MaterialEntity material = materialRepository.findById(materialId)
+                    .filter(m -> m.getDeletedTime() == null)
+                    .orElseThrow(() -> new IllegalArgumentException("素材不存在"));
+            int contentKind = contentKindOfMaterialType(material.getType());
+            if (materialAlreadyUsed(course.getId(), materialId)) {
+                throw new IllegalArgumentException("该素材已关联到本课程，不可重复添加");
+            }
+            String title = trimTitle(material.getName(), "素材");
+            CourseCatalogNodeEntity node = new CourseCatalogNodeEntity();
+            node.setCourseId(course.getId());
+            node.setParentId(parentId);
+            node.setNodeType(CourseCatalogNodeType.LESSON);
+            node.setTitle(title);
+            node.setContentKind(contentKind);
+            node.setContentId(materialId);
+            node.setSortOrder(sort);
+            created.add(catalogRepository.save(node));
+            if (bump) {
+                sort++;
+            }
+        }
+        int contentCount = syncContentCount(course);
+        BindMaterialsResponse response = new BindMaterialsResponse();
         response.setList(created.stream().map(this::toView).toList());
         response.setContentCount(contentCount);
         return response;
@@ -816,6 +873,26 @@ public class CourseCatalogService {
             return title.substring(0, TITLE_LIMIT);
         }
         return title;
+    }
+
+    /** 素材中心 type → 小节 contentKind（2～5）。 */
+    private static int contentKindOfMaterialType(String type) {
+        String t = type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
+        return switch (t) {
+            case "image" -> CourseCatalogContentKind.IMAGE;
+            case "video" -> CourseCatalogContentKind.VIDEO;
+            case "document" -> CourseCatalogContentKind.DOCUMENT;
+            case "article" -> CourseCatalogContentKind.ARTICLE;
+            default -> throw new IllegalArgumentException("不支持的素材类型");
+        };
+    }
+
+    /** 同课下任一素材类 contentKind 已占用该 materialId。 */
+    private boolean materialAlreadyUsed(String courseId, String materialId) {
+        return catalogRepository.existsActiveContent(courseId, CourseCatalogContentKind.IMAGE, materialId)
+                || catalogRepository.existsActiveContent(courseId, CourseCatalogContentKind.VIDEO, materialId)
+                || catalogRepository.existsActiveContent(courseId, CourseCatalogContentKind.DOCUMENT, materialId)
+                || catalogRepository.existsActiveContent(courseId, CourseCatalogContentKind.ARTICLE, materialId);
     }
 
     private MaterialEntity requireCover(String materialId, String emptyMsg) {

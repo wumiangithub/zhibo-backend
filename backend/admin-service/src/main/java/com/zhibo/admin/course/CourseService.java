@@ -3,6 +3,7 @@ package com.zhibo.admin.course;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.activity.SellPasswordCryptoService;
 import com.zhibo.admin.course.dto.CourseAuditItem;
 import com.zhibo.admin.course.dto.CourseAuditListResponse;
 import com.zhibo.admin.course.dto.CourseAuditRequest;
@@ -13,6 +14,8 @@ import com.zhibo.admin.course.dto.CourseListResponse;
 import com.zhibo.admin.course.dto.CourseMaterialInput;
 import com.zhibo.admin.course.dto.CourseMaterialView;
 import com.zhibo.admin.course.dto.CoursePerson;
+import com.zhibo.admin.course.dto.CourseSalesUpdateRequest;
+import com.zhibo.admin.course.dto.CourseSalesUpdateResponse;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
 import com.zhibo.admin.course.dto.CourseShelfResponse;
 import com.zhibo.admin.course.dto.CourseSummary;
@@ -67,8 +70,11 @@ public class CourseService {
     static final int DETAIL_HTML_LIMIT = 200_000;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String VALIDITY_LONG = "长期有效";
     private static final Set<String> SHELF_VALUES = Set.of("pending", "on", "off", "banned");
     private static final Set<String> RISK_VALUES = Set.of("pending", "passed", "rejected");
+    private static final Set<String> SELL_VALUES = Set.of("free", "encrypted", "specified");
+    private static final Set<String> ACCESS_VALIDITY = Set.of("long", "days");
     private static final Map<String, String> SORT_FIELDS = Map.of(
             "entitledUserCount", "entitledUserCount",
             "totalUserCount", "totalUserCount",
@@ -81,6 +87,7 @@ public class CourseService {
     private final CourseAuditRepository auditRepository;
     private final MaterialRepository materialRepository;
     private final SysUserAccountRepository userRepository;
+    private final SellPasswordCryptoService sellPasswordCrypto;
 
     @Transactional
     public CourseIdResponse create(CreateCourseRequest request, long operatorId) {
@@ -112,6 +119,12 @@ public class CourseService {
         entity.setEntitledUserCount(0);
         entity.setTotalUserCount(0);
         entity.setSalesCount(0);
+        entity.setSellAlone(Boolean.TRUE);
+        entity.setSellType("free");
+        entity.setValidityLabel(VALIDITY_LONG);
+        entity.setAccessValidityType("long");
+        entity.setAccessValidityDays(null);
+        entity.setSellPasswordCipher(null);
         courseRepository.save(entity);
         replaceOwners(entity.getId(), ownerIds);
         replaceMaterials(entity.getId(), materials);
@@ -248,17 +261,83 @@ public class CourseService {
         detail.setIntroduction(entity.getIntroduction());
         detail.setDetailHtml(entity.getDetailHtml());
         detail.setCoverMaterialId(entity.getCoverMaterialId());
+        detail.setSellAlone(entity.getSellAlone() == null || entity.getSellAlone());
+        detail.setAccessValidityType(
+                entity.getAccessValidityType() == null || entity.getAccessValidityType().isBlank()
+                        ? "long"
+                        : entity.getAccessValidityType());
+        if ("days".equals(detail.getAccessValidityType())) {
+            detail.setAccessValidityDays(entity.getAccessValidityDays());
+        }
+        if ("encrypted".equals(entity.getSellType()) && entity.getSellPasswordCipher() != null) {
+            try {
+                detail.setPassword(sellPasswordCrypto.decrypt(entity.getSellPasswordCipher()));
+            } catch (RuntimeException ignored) {
+                // 密钥缺失或历史脏数据：不输出 password
+            }
+        }
         attachOwners(List.of(detail));
         detail.setMaterials(loadMaterials(entity.getId()));
         return detail;
     }
 
+    /** 课程售卖设置（D98）。只写本站；本轮不做学员门禁。 */
+    @Transactional
+    public CourseSalesUpdateResponse updateSales(String id, CourseSalesUpdateRequest request) {
+        if (request == null || request.getSellAlone() == null) {
+            throw new IllegalArgumentException("sellAlone 不能为空");
+        }
+        if (request.getSellType() == null || request.getSellType().isBlank()) {
+            throw new IllegalArgumentException("sellType 不能为空");
+        }
+        String sellType = request.getSellType().trim();
+        if (!SELL_VALUES.contains(sellType)) {
+            throw new IllegalArgumentException("sellType 无效");
+        }
+
+        CourseEntity entity = requireCourse(id);
+        entity.setSellAlone(request.getSellAlone());
+        entity.setSellType(sellType);
+
+        String cipher = null;
+        String accessType;
+        Integer accessDays = null;
+
+        if ("free".equals(sellType)) {
+            accessType = "long";
+        } else {
+            accessType = request.getAccessValidityType() == null
+                    ? "" : request.getAccessValidityType().trim();
+            if (!ACCESS_VALIDITY.contains(accessType)) {
+                throw new IllegalArgumentException("accessValidityType 无效");
+            }
+            if ("days".equals(accessType)) {
+                accessDays = request.getAccessValidityDays();
+                if (accessDays == null || accessDays < 1) {
+                    throw new IllegalArgumentException("accessValidityDays 须为正整数");
+                }
+            }
+        }
+
+        if ("encrypted".equals(sellType)) {
+            String password = request.getPassword() == null ? "" : request.getPassword().trim();
+            if (!password.matches("\\d{6}")) {
+                throw new IllegalArgumentException("密码须为恰好6位数字");
+            }
+            cipher = sellPasswordCrypto.encrypt(password);
+        }
+
+        entity.setSellPasswordCipher(cipher);
+        entity.setAccessValidityType(accessType);
+        entity.setAccessValidityDays(accessDays);
+        entity.setValidityLabel(buildValidityLabel(accessType, accessDays));
+        courseRepository.save(entity);
+        return new CourseSalesUpdateResponse(entity.getId(), entity.getSellType(), entity.getValidityLabel());
+    }
+
     @Transactional
     public CourseIdResponse delete(String id) {
         CourseEntity entity = requireCourse(id);
-        if (!canDelete(entity)) {
-            throw new IllegalArgumentException("仅内容数和总销量均为 0 的课程可以删除");
-        }
         entity.setDeletedTime(LocalDateTime.now());
         courseRepository.save(entity);
         return new CourseIdResponse(entity.getId());
@@ -781,11 +860,22 @@ public class CourseService {
         summary.setEntitledUserCount(entity.getEntitledUserCount());
         summary.setTotalUserCount(entity.getTotalUserCount());
         summary.setSalesCount(entity.getSalesCount());
+        summary.setSellType(entity.getSellType() == null || entity.getSellType().isBlank()
+                ? "free" : entity.getSellType());
+        summary.setValidityLabel(entity.getValidityLabel() == null || entity.getValidityLabel().isBlank()
+                ? VALIDITY_LONG : entity.getValidityLabel());
         summary.setUpdatedTime(formatTime(entity.getUpdatedTime()));
         summary.setCreatedTime(formatTime(entity.getCreatedTime()));
         summary.setCanList(canList(entity));
         summary.setCanUnlist("on".equals(entity.getShelfStatus()));
         summary.setCanDelete(canDelete(entity));
+    }
+
+    private static String buildValidityLabel(String accessType, Integer days) {
+        if ("days".equals(accessType) && days != null && days > 0) {
+            return days + "天有效";
+        }
+        return VALIDITY_LONG;
     }
 
     static boolean canList(CourseEntity entity) {
@@ -794,7 +884,7 @@ public class CourseService {
     }
 
     static boolean canDelete(CourseEntity entity) {
-        return entity.getContentCount() == 0 && entity.getSalesCount() == 0;
+        return entity != null;
     }
 
     private CoursePerson toPerson(SysUserAccountEntity user) {

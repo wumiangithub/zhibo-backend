@@ -14,4 +14,10 @@ public class CourseDetailResponse extends CourseSummary {
     private String detailHtml;
     private String coverMaterialId;
     private List<CourseMaterialView> materials = new ArrayList<>();
+
+    private Boolean sellAlone;
+    private String accessValidityType;
+    private Integer accessValidityDays;
+    /** 仅 encrypted 时回显明文。 */
+    private String password;
 }

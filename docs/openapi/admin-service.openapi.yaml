@@ -6400,11 +6400,11 @@ components:
           type: string
           enum:
             - employee
-          description: employee 员工
+          description: employee 员工；有所属邀请人时固定此值（本站不落观众邀请，故列表不会出现 audience）
           x-apifox-enum:
             - value: employee
-              name: 员工
-              description: 员工
+              name: 员工；有所属邀请人时固定此值
+              description: 员工；有所属邀请人时固定此值
         inviteTime:
           type: string
           description: 邀请时间；库：DATETIME(3)

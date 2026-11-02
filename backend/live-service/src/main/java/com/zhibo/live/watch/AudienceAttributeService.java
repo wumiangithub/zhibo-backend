@@ -14,25 +14,32 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 仅员工邀请归因；不记录观众邀请（D77）。先导入后员工邀请可补填。 */
+/**
+ * 观看分享链邀请归因（D77 / D97）。
+ * 被邀请观众 id 由 Controller 从观众 JWT 传入；{@code inviterKind=employee} 写本场员工邀请人；
+ * {@code audience} 观众互邀本站不落库（分支保留）。
+ */
 @Service
 @RequiredArgsConstructor
 public class AudienceAttributeService {
+
+    static final String KIND_EMPLOYEE = "employee";
+    static final String KIND_AUDIENCE = "audience";
 
     private final ActivityRepository activityRepository;
     private final ActivityAudienceRepository audienceRepository;
     private final ViewerRepository viewerRepository;
 
     @Transactional
-    public AttributeAudienceResponse attribute(String activityId, AttributeAudienceRequest request) {
+    public AttributeAudienceResponse attribute(
+            String activityId, long viewerId, AttributeAudienceRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
-        ActivityEntity activity = requireActivity(activityId);
-        Long viewerId = request.getViewerId();
-        if (viewerId == null || viewerId <= 0) {
+        if (viewerId <= 0) {
             throw new IllegalArgumentException("viewerId 无效");
         }
+        ActivityEntity activity = requireActivity(activityId);
         if (!viewerRepository.existsById(viewerId)) {
             throw new IllegalArgumentException("观众不存在");
         }
@@ -40,19 +47,21 @@ public class AudienceAttributeService {
         if (inviterId == null || inviterId <= 0) {
             throw new IllegalArgumentException("inviterId 无效");
         }
-        String kind = request.getInviterKind() == null
-                ? "employee"
-                : request.getInviterKind().trim().toLowerCase(Locale.ROOT);
-        if (kind.isEmpty()) {
-            kind = "employee";
-        }
-        if ("audience".equals(kind)) {
+
+        String kind = normalizeKind(request.getInviterKind());
+        if (KIND_AUDIENCE.equals(kind)) {
+            // 产品：不记录观众邀请；栏空。分支必须保留，勿删成「只认 employee」。
             throw new IllegalArgumentException("不记录观众邀请");
         }
-        if (!"employee".equals(kind)) {
-            throw new IllegalArgumentException("inviterKind 须为 employee");
+        if (!KIND_EMPLOYEE.equals(kind)) {
+            throw new IllegalArgumentException("inviterKind 须为 employee 或 audience");
         }
+        return attributeEmployee(activity, viewerId, inviterId);
+    }
 
+    /** 员工邀请：空则填 employee_inviter_*（先导入后邀请可补填）。 */
+    private AttributeAudienceResponse attributeEmployee(
+            ActivityEntity activity, long viewerId, Long inviterId) {
         LocalDateTime now = LocalDateTime.now();
         ActivityAudienceEntity row = audienceRepository
                 .findByActivityIdAndViewerId(activity.getId(), viewerId)
@@ -64,7 +73,6 @@ public class AudienceAttributeService {
                     return created;
                 });
 
-        // 导入只写 importer_*；邀请字段空时补填员工邀请（先导入后邀请）
         if (row.getEmployeeInviterId() == null) {
             row.setEmployeeInviterId(inviterId);
             row.setEmployeeInviteTime(now);
@@ -72,6 +80,14 @@ public class AudienceAttributeService {
 
         audienceRepository.save(row);
         return new AttributeAudienceResponse(row.getId(), row.getViewerId());
+    }
+
+    /** 缺省 / 空串 → employee。 */
+    static String normalizeKind(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return KIND_EMPLOYEE;
+        }
+        return raw.trim().toLowerCase(Locale.ROOT);
     }
 
     private ActivityEntity requireActivity(String activityId) {

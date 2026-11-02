@@ -437,7 +437,7 @@ const FIELD_DESC_BY_NAME = {
   viewerId: '观众 id（viewer 表主键）',
   entitlementStatus: '权益状态：0 无 / 1 有',
   inviterDisplayName: '邀请人展示名',
-  inviterKind: '邀请人类型',
+  inviterKind: '邀请人类型：employee 员工 / audience 观众',
   inviteTime: '邀请时间',
   tagIds: '标签 id 列表',
   tagLabels: '标签展示名列表',
@@ -2662,7 +2662,8 @@ function buildAdmin() {
         inviterKind: {
           type: 'string',
           enum: ['employee'],
-          description: 'employee 员工',
+          description:
+            'employee 员工；有所属邀请人时固定此值（本站不落观众邀请，故列表不会出现 audience）',
         },
         inviteTime: { type: 'string' },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
@@ -5202,7 +5203,7 @@ function buildLive() {
     WatchSdkData: {
       type: 'object',
       description:
-        '观看 SDK 签名载荷（D92/D93/D94/D95）：仅 id / provider / viewerId / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*',
+        '观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / viewerId / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 viewerId 来自观众 JWT',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
@@ -5514,14 +5515,20 @@ function buildLive() {
     },
     WatchAudienceAttributeRequest: {
       type: 'object',
-      required: ['viewerId', 'inviterId'],
+      required: ['inviterId'],
+      description:
+        '邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 viewerId。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）',
       properties: {
-        viewerId: { type: 'integer', format: 'int64' },
-        inviterId: { type: 'integer', format: 'int64', description: '员工 rs_mainkey_id' },
+        inviterId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 viewer.id（当前不落库）；库：BIGINT',
+        },
         inviterKind: {
           type: 'string',
-          enum: ['employee'],
-          description: 'employee 员工',
+          enum: ['employee', 'audience'],
+          description: 'employee 员工邀请 / audience 观众邀请',
         },
       },
     },
@@ -5628,17 +5635,10 @@ function buildLive() {
       description: '本站活动 UUID（Query；相对 D62 的明确例外，见 D92）',
     },
     {
-      name: 'viewerId',
-      in: 'query',
-      required: false,
-      schema: { type: 'integer', format: 'int64' },
-      description: '观众数字 id；优先 Query，未传可从观众 JWT 解析；都无 → 400',
-    },
-    {
       name: 'nickname',
       in: 'query',
       schema: { type: 'string', maxLength: 50 },
-      description: '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL',
+      description: '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；viewerId 只从 Authorization 解析（D96）',
     },
   ]
   const activityAccessHeader = {
@@ -5916,12 +5916,13 @@ function buildLive() {
         summary: '观看 SDK 签名与初始化载荷',
         description: [
           '旧路径 GET /api/v1/watch/sdk/{id} 已删除。',
-          'Query 必填 id；viewerId 优先 Query，可从观众 JWT 解析；都无 → 400「请先登录」。',
+          'Query 仅 id + 可选 nickname；viewerId 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。',
           '仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
           '不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。',
           '签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。',
         ].join('\n'),
         operationId: 'getWatchSdkSign',
+        security: viewerBearer,
         parameters: [...sdkSignParams, activityAccessHeader],
         responses: ok200('#/components/schemas/ApiResponseWatchSdk'),
       },
@@ -6049,8 +6050,15 @@ function buildLive() {
       post: {
         tags: ['用户运营'],
         summary: '邀请归因',
+        description: [
+          '须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 viewerId；无票 → 401。',
+          '区分邀请人类型 inviterKind：employee 员工 / audience 观众。',
+          'employee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。',
+          'audience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。',
+          '缺省 inviterKind=employee。',
+        ].join('\n'),
         operationId: 'watchAudienceAttribute',
-        security: [],
+        security: viewerBearer,
         parameters: [watchId],
         requestBody: {
           required: true,

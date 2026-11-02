@@ -62,6 +62,30 @@ public class CourseEntity {
     @Column(name = "sales_count", nullable = false)
     private int salesCount;
 
+    /** 是否单独售卖。 */
+    @Column(name = "sell_alone", nullable = false)
+    private Boolean sellAlone = Boolean.TRUE;
+
+    /** free / encrypted / specified。 */
+    @Column(name = "sell_type", nullable = false, length = 16)
+    private String sellType = "free";
+
+    /** 列表有效期文案。 */
+    @Column(name = "validity_label", nullable = false, length = 32)
+    private String validityLabel = "长期有效";
+
+    /** 加密售卖密码 AES 密文。 */
+    @Column(name = "sell_password_cipher", length = 512)
+    private String sellPasswordCipher;
+
+    /** long / days（days=上架后 N 天）。 */
+    @Column(name = "access_validity_type", nullable = false, length = 16)
+    private String accessValidityType = "long";
+
+    /** 上架后 N 天。 */
+    @Column(name = "access_validity_days")
+    private Integer accessValidityDays;
+
     @Column(name = "listed_time")
     private LocalDateTime listedTime;
 
