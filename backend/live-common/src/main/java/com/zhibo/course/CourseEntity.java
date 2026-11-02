@@ -78,13 +78,17 @@ public class CourseEntity {
     @Column(name = "sell_password_cipher", length = 512)
     private String sellPasswordCipher;
 
-    /** long / days（days=上架后 N 天）。 */
+    /** long / days（权益生效后 N 天）/ fixed（固定时间到期）。 */
     @Column(name = "access_validity_type", nullable = false, length = 16)
     private String accessValidityType = "long";
 
-    /** 上架后 N 天。 */
+    /** 权益生效后 N 天。 */
     @Column(name = "access_validity_days")
     private Integer accessValidityDays;
+
+    /** 固定到期时刻；type=fixed 时有值。 */
+    @Column(name = "access_validity_fixed_time")
+    private LocalDateTime accessValidityFixedTime;
 
     @Column(name = "listed_time")
     private LocalDateTime listedTime;

@@ -12,7 +12,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-/** 课程学员行（分享链 enroll）。 */
+/** 课程学员行（分享链 enroll / 导入 / 购买）。 */
 @Entity
 @Table(name = "course_user")
 @Getter
@@ -29,9 +29,24 @@ public class CourseUserEntity {
     @Column(name = "viewer_id", nullable = false)
     private Long viewerId;
 
-    /** 1 有效 / 0 无权益。 */
+    /** 1 有权 / 0 已取消。 */
     @Column(name = "entitlement_status", nullable = false)
     private int entitlementStatus = 1;
+
+    /** 权益到期；空=未设。售卖改回长期不清除。 */
+    @Column(name = "entitlement_expire_time")
+    private LocalDateTime entitlementExpireTime;
+
+    /** purchase / import。 */
+    @Column(name = "acquire_way", nullable = false, length = 16)
+    private String acquireWay = "purchase";
+
+    /** 添加/导入操作员工。 */
+    @Column(name = "importer_id")
+    private Long importerId;
+
+    @Column(name = "import_time")
+    private LocalDateTime importTime;
 
     @Column(name = "employee_inviter_id")
     private Long employeeInviterId;

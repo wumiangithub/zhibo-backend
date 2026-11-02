@@ -2,6 +2,8 @@ package com.zhibo.live.watch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -68,6 +70,33 @@ class CourseEnrollServiceTest {
         ArgumentCaptor<CourseUserEntity> cap = ArgumentCaptor.forClass(CourseUserEntity.class);
         verify(courseUserRepository).save(cap.capture());
         assertEquals(10001L, cap.getValue().getEmployeeInviterId());
+        assertEquals("purchase", cap.getValue().getAcquireWay());
+        assertNull(cap.getValue().getEntitlementExpireTime());
+    }
+
+    @Test
+    void enroll_daysSetsExpireFromNow() {
+        CourseEntity course = new CourseEntity();
+        course.setId(CID);
+        course.setTitle("演示课");
+        course.setTotalUserCount(0);
+        course.setAccessValidityType("days");
+        course.setAccessValidityDays(7);
+        when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
+        when(viewerRepository.existsById(12L)).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndViewerId(CID, 12L)).thenReturn(Optional.empty());
+        when(courseUserRepository.save(any())).thenAnswer(inv -> {
+            CourseUserEntity row = inv.getArgument(0);
+            row.setId(7L);
+            return row;
+        });
+
+        service.enroll(CID, 12L, new EnrollCourseRequest());
+
+        ArgumentCaptor<CourseUserEntity> cap = ArgumentCaptor.forClass(CourseUserEntity.class);
+        verify(courseUserRepository).save(cap.capture());
+        assertEquals("purchase", cap.getValue().getAcquireWay());
+        assertNotNull(cap.getValue().getEntitlementExpireTime());
     }
 
     @Test

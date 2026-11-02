@@ -21,6 +21,8 @@ import com.zhibo.course.CourseOwnerEntity;
 import com.zhibo.course.CourseOwnerId;
 import com.zhibo.course.CourseOwnerRepository;
 import com.zhibo.course.CourseRepository;
+import com.zhibo.course.CourseUserEntity;
+import com.zhibo.course.CourseUserRepository;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
 import org.junit.jupiter.api.Test;
@@ -66,6 +68,8 @@ class CourseServiceTest {
     private SysUserAccountRepository userRepository;
     @Mock
     private SellPasswordCryptoService sellPasswordCrypto;
+    @Mock
+    private CourseUserRepository courseUserRepository;
 
     @InjectMocks
     private CourseService courseService;
@@ -116,6 +120,8 @@ class CourseServiceTest {
         when(courseRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
         when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(sellPasswordCrypto.encrypt("123456")).thenReturn("cipher");
+        when(courseUserRepository.findByCourseIdAndEntitlementExpireTimeIsNull(entity.getId()))
+                .thenReturn(List.of());
 
         CourseSalesUpdateRequest bad = new CourseSalesUpdateRequest();
         bad.setSellAlone(true);
@@ -142,6 +148,80 @@ class CourseServiceTest {
         assertEquals("encrypted", response.getSellType());
         assertEquals("7天有效", response.getValidityLabel());
         verify(sellPasswordCrypto).encrypt("123456");
+    }
+
+    @Test
+    void updateSales_longToDays_backfillsEmptyExpireOnly() {
+        CourseEntity entity = stored("pending", "pending", false);
+        entity.setAccessValidityType("long");
+        when(courseRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CourseUserEntity emptyExpire = new CourseUserEntity();
+        emptyExpire.setId(1L);
+        emptyExpire.setCourseId(entity.getId());
+        emptyExpire.setCreatedTime(LocalDateTime.of(2026, 1, 1, 10, 0, 0));
+        when(courseUserRepository.findByCourseIdAndEntitlementExpireTimeIsNull(entity.getId()))
+                .thenReturn(List.of(emptyExpire));
+
+        CourseSalesUpdateRequest req = new CourseSalesUpdateRequest();
+        req.setSellAlone(true);
+        req.setSellType("specified");
+        req.setAccessValidityType("days");
+        req.setAccessValidityDays(7);
+        courseService.updateSales(entity.getId(), req);
+
+        assertEquals(LocalDateTime.of(2026, 1, 8, 10, 0, 0), emptyExpire.getEntitlementExpireTime());
+        verify(courseUserRepository).saveAll(any());
+    }
+
+    @Test
+    void updateSales_daysToDays_doesNotBackfill() {
+        CourseEntity entity = stored("pending", "pending", false);
+        entity.setAccessValidityType("days");
+        entity.setAccessValidityDays(7);
+        when(courseRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CourseSalesUpdateRequest req = new CourseSalesUpdateRequest();
+        req.setSellAlone(true);
+        req.setSellType("specified");
+        req.setAccessValidityType("days");
+        req.setAccessValidityDays(14);
+        courseService.updateSales(entity.getId(), req);
+
+        assertEquals(14, entity.getAccessValidityDays());
+        verify(courseUserRepository, org.mockito.Mockito.never())
+                .findByCourseIdAndEntitlementExpireTimeIsNull(any());
+    }
+
+    @Test
+    void updateSales_fixed_backfillsEmptyExpireOnly() {
+        CourseEntity entity = stored("pending", "pending", false);
+        entity.setAccessValidityType("long");
+        when(courseRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        CourseUserEntity emptyExpire = new CourseUserEntity();
+        emptyExpire.setId(1L);
+        emptyExpire.setCourseId(entity.getId());
+        emptyExpire.setCreatedTime(LocalDateTime.of(2026, 1, 1, 10, 0, 0));
+        when(courseUserRepository.findByCourseIdAndEntitlementExpireTimeIsNull(entity.getId()))
+                .thenReturn(List.of(emptyExpire));
+
+        CourseSalesUpdateRequest req = new CourseSalesUpdateRequest();
+        req.setSellAlone(true);
+        req.setSellType("specified");
+        req.setAccessValidityType("fixed");
+        req.setAccessValidityFixedTime("2026-11-14 00:00:00");
+        var response = courseService.updateSales(entity.getId(), req);
+
+        assertEquals("fixed", entity.getAccessValidityType());
+        assertEquals(LocalDateTime.of(2026, 11, 14, 0, 0, 0), entity.getAccessValidityFixedTime());
+        assertNull(entity.getAccessValidityDays());
+        assertEquals("2026-11-14 00:00:00到期", response.getValidityLabel());
+        assertEquals(LocalDateTime.of(2026, 11, 14, 0, 0, 0), emptyExpire.getEntitlementExpireTime());
+        verify(courseUserRepository).saveAll(any());
     }
 
     @Test

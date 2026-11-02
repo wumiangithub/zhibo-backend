@@ -35,6 +35,8 @@ import com.zhibo.course.CourseOwnerEntity;
 import com.zhibo.course.CourseOwnerId;
 import com.zhibo.course.CourseOwnerRepository;
 import com.zhibo.course.CourseRepository;
+import com.zhibo.course.CourseUserEntity;
+import com.zhibo.course.CourseUserRepository;
 import com.zhibo.material.MaterialAudit;
 import com.zhibo.material.MaterialEntity;
 import com.zhibo.material.MaterialRepository;
@@ -74,7 +76,7 @@ public class CourseService {
     private static final Set<String> SHELF_VALUES = Set.of("pending", "on", "off", "banned");
     private static final Set<String> RISK_VALUES = Set.of("pending", "passed", "rejected");
     private static final Set<String> SELL_VALUES = Set.of("free", "encrypted", "specified");
-    private static final Set<String> ACCESS_VALIDITY = Set.of("long", "days");
+    private static final Set<String> ACCESS_VALIDITY = Set.of("long", "days", "fixed");
     private static final Map<String, String> SORT_FIELDS = Map.of(
             "entitledUserCount", "entitledUserCount",
             "totalUserCount", "totalUserCount",
@@ -88,6 +90,7 @@ public class CourseService {
     private final MaterialRepository materialRepository;
     private final SysUserAccountRepository userRepository;
     private final SellPasswordCryptoService sellPasswordCrypto;
+    private final CourseUserRepository courseUserRepository;
 
     @Transactional
     public CourseIdResponse create(CreateCourseRequest request, long operatorId) {
@@ -269,6 +272,10 @@ public class CourseService {
         if ("days".equals(detail.getAccessValidityType())) {
             detail.setAccessValidityDays(entity.getAccessValidityDays());
         }
+        if ("fixed".equals(detail.getAccessValidityType())
+                && entity.getAccessValidityFixedTime() != null) {
+            detail.setAccessValidityFixedTime(formatTime(entity.getAccessValidityFixedTime()));
+        }
         if ("encrypted".equals(entity.getSellType()) && entity.getSellPasswordCipher() != null) {
             try {
                 detail.setPassword(sellPasswordCrypto.decrypt(entity.getSellPasswordCipher()));
@@ -296,12 +303,15 @@ public class CourseService {
         }
 
         CourseEntity entity = requireCourse(id);
+        String previousAccessType =
+                entity.getAccessValidityType() == null ? "long" : entity.getAccessValidityType();
         entity.setSellAlone(request.getSellAlone());
         entity.setSellType(sellType);
 
         String cipher = null;
         String accessType;
         Integer accessDays = null;
+        LocalDateTime accessFixed = null;
 
         if ("free".equals(sellType)) {
             accessType = "long";
@@ -316,6 +326,8 @@ public class CourseService {
                 if (accessDays == null || accessDays < 1) {
                     throw new IllegalArgumentException("accessValidityDays 须为正整数");
                 }
+            } else if ("fixed".equals(accessType)) {
+                accessFixed = parseFixedTime(request.getAccessValidityFixedTime());
             }
         }
 
@@ -330,9 +342,56 @@ public class CourseService {
         entity.setSellPasswordCipher(cipher);
         entity.setAccessValidityType(accessType);
         entity.setAccessValidityDays(accessDays);
-        entity.setValidityLabel(buildValidityLabel(accessType, accessDays));
+        entity.setAccessValidityFixedTime(accessFixed);
+        entity.setValidityLabel(buildValidityLabel(accessType, accessDays, accessFixed));
         courseRepository.save(entity);
+
+        // D100：长期 → N 天时，回填 expire 仍空的学员（各自 created_time + N）
+        if (!"days".equals(previousAccessType) && "days".equals(accessType) && accessDays != null) {
+            backfillEmptyExpireByDays(entity.getId(), accessDays);
+        }
+        // 固定时间到期：仅写入 expire 仍空的学员（已有到期不动）
+        if ("fixed".equals(accessType) && accessFixed != null) {
+            backfillEmptyExpireFixed(entity.getId(), accessFixed);
+        }
+
         return new CourseSalesUpdateResponse(entity.getId(), entity.getSellType(), entity.getValidityLabel());
+    }
+
+    private void backfillEmptyExpireByDays(String courseId, int days) {
+        List<CourseUserEntity> rows =
+                courseUserRepository.findByCourseIdAndEntitlementExpireTimeIsNull(courseId);
+        if (rows.isEmpty()) {
+            return;
+        }
+        for (CourseUserEntity row : rows) {
+            LocalDateTime base = row.getCreatedTime() == null ? LocalDateTime.now() : row.getCreatedTime();
+            row.setEntitlementExpireTime(base.plusDays(days));
+        }
+        courseUserRepository.saveAll(rows);
+    }
+
+    private void backfillEmptyExpireFixed(String courseId, LocalDateTime fixedTime) {
+        List<CourseUserEntity> rows =
+                courseUserRepository.findByCourseIdAndEntitlementExpireTimeIsNull(courseId);
+        if (rows.isEmpty()) {
+            return;
+        }
+        for (CourseUserEntity row : rows) {
+            row.setEntitlementExpireTime(fixedTime);
+        }
+        courseUserRepository.saveAll(rows);
+    }
+
+    private static LocalDateTime parseFixedTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("请选择固定到期时间");
+        }
+        try {
+            return LocalDateTime.parse(raw.trim(), TIME);
+        } catch (RuntimeException ex) {
+            throw new IllegalArgumentException("固定到期时间格式无效");
+        }
     }
 
     @Transactional
@@ -871,9 +930,13 @@ public class CourseService {
         summary.setCanDelete(canDelete(entity));
     }
 
-    private static String buildValidityLabel(String accessType, Integer days) {
+    private static String buildValidityLabel(
+            String accessType, Integer days, LocalDateTime fixedTime) {
         if ("days".equals(accessType) && days != null && days > 0) {
             return days + "天有效";
+        }
+        if ("fixed".equals(accessType) && fixedTime != null) {
+            return TIME.format(fixedTime) + "到期";
         }
         return VALIDITY_LONG;
     }

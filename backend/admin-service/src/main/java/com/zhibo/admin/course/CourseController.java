@@ -19,6 +19,15 @@ import com.zhibo.admin.course.dto.CourseSalesUpdateRequest;
 import com.zhibo.admin.course.dto.CourseSalesUpdateResponse;
 import com.zhibo.admin.course.dto.CourseShelfRequest;
 import com.zhibo.admin.course.dto.CourseShelfResponse;
+import com.zhibo.admin.course.dto.CourseUserEntitlementRequest;
+import com.zhibo.admin.course.dto.CourseUserEntitlementResponse;
+import com.zhibo.admin.course.dto.CourseUserExpireRequest;
+import com.zhibo.admin.course.dto.CourseUserExpireResponse;
+import com.zhibo.admin.course.dto.CourseUserImportHistoryListResponse;
+import com.zhibo.admin.course.dto.CourseUserImportResponse;
+import com.zhibo.admin.course.dto.CourseUserListResponse;
+import com.zhibo.admin.course.dto.CreateCourseUserRequest;
+import com.zhibo.admin.course.dto.CreateCourseUserResponse;
 import com.zhibo.admin.course.dto.CreateChapterRequest;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
 import com.zhibo.admin.course.dto.CatalogNodeIdResponse;
@@ -45,6 +54,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 /** 课程管理。路径命名 D62：动作在前、单 id 末尾。 */
 @RestController
@@ -54,6 +67,7 @@ public class CourseController {
 
     private final CourseService courseService;
     private final CourseCatalogService courseCatalogService;
+    private final CourseUserService courseUserService;
 
     @PostMapping("/create")
     public ApiResponse<CourseIdResponse> create(
@@ -96,9 +110,89 @@ public class CourseController {
         return ApiResponse.ok(courseService.updateSales(id, request));
     }
 
+    @GetMapping("/users/list/{courseId}")
+    public ApiResponse<CourseUserListResponse> listUsers(
+            @PathVariable String courseId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String entitlementState) {
+        return ApiResponse.ok(courseUserService.list(
+                courseId, page, pageSize, keywordType, keyword, entitlementState));
+    }
+
+    @PutMapping("/users/entitlement/{rowId}")
+    public ApiResponse<CourseUserEntitlementResponse> updateUserEntitlement(
+            @PathVariable long rowId,
+            @Valid @RequestBody CourseUserEntitlementRequest request) {
+        return ApiResponse.ok(
+                courseUserService.updateEntitlement(rowId, request.getEntitlementStatus()));
+    }
+
+    @PutMapping("/users/expire/{rowId}")
+    public ApiResponse<CourseUserExpireResponse> updateUserExpire(
+            @PathVariable long rowId,
+            @RequestBody CourseUserExpireRequest request) {
+        return ApiResponse.ok(courseUserService.updateExpire(rowId, request));
+    }
+
+    @PostMapping("/users/create/{courseId}")
+    public ApiResponse<CreateCourseUserResponse> createUser(
+            @PathVariable String courseId,
+            @RequestBody CreateCourseUserRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(
+                courseUserService.create(courseId, request, currentUserId(httpRequest)));
+    }
+
+    @PostMapping("/users/import/{courseId}")
+    public ApiResponse<CourseUserImportResponse> importUsers(
+            @PathVariable String courseId,
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(
+                courseUserService.importCsv(courseId, file, currentUserId(httpRequest)));
+    }
+
+    @GetMapping("/users/import-template")
+    public ResponseEntity<byte[]> importTemplate() {
+        return csvAttachment("course-user-import.csv", courseUserService.importTemplateCsv());
+    }
+
+    @GetMapping("/users/imports/list/{courseId}")
+    public ApiResponse<CourseUserImportHistoryListResponse> listUserImports(
+            @PathVariable String courseId) {
+        return ApiResponse.ok(courseUserService.listImportHistory(courseId));
+    }
+
+    @GetMapping("/users/imports/failures/{importId}")
+    public ResponseEntity<byte[]> importFailures(@PathVariable long importId) {
+        return csvAttachment(
+                "course-user-import-failures.csv", courseUserService.importFailuresCsv(importId));
+    }
+
+    @GetMapping("/users/export/{courseId}")
+    public ResponseEntity<byte[]> exportUsers(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String entitlementState) {
+        return csvAttachment(
+                "course-user-export.csv",
+                courseUserService.exportCsv(courseId, keywordType, keyword, entitlementState));
+    }
+
     @DeleteMapping("/delete/{id}")
     public ApiResponse<CourseIdResponse> delete(@PathVariable String id) {
         return ApiResponse.ok(courseService.delete(id));
+    }
+
+    private static ResponseEntity<byte[]> csvAttachment(String filename, byte[] body) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+                .body(body);
     }
 
     @PostMapping("/shelf/{id}")

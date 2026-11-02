@@ -1,6 +1,7 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.common.UuidIds;
+import com.zhibo.course.CourseEntitlementSupport;
 import com.zhibo.course.CourseEntity;
 import com.zhibo.course.CourseRepository;
 import com.zhibo.course.CourseUserEntity;
@@ -39,17 +40,22 @@ public class CourseEnrollService {
                 .findByCourseIdAndViewerId(course.getId(), viewerId)
                 .orElse(null);
         if (row == null) {
+            LocalDateTime now = LocalDateTime.now();
             row = new CourseUserEntity();
             row.setCourseId(course.getId());
             row.setViewerId(viewerId);
             row.setEntitlementStatus(1);
+            row.setAcquireWay("purchase");
+            row.setEntitlementExpireTime(CourseEntitlementSupport.expireAtJoin(course, now));
             created = true;
         }
 
         Long inviterId = request == null ? null : request.getInviterId();
         if (inviterId != null && inviterId > 0 && row.getEmployeeInviterId() == null) {
             row.setEmployeeInviterId(inviterId);
-            row.setEmployeeInviteTime(LocalDateTime.now());
+            // 邀请加入时间口径 = created_time（新建时与入表同刻；补邀请人时用已有 created_time）
+            LocalDateTime inviteAt = row.getCreatedTime() != null ? row.getCreatedTime() : LocalDateTime.now();
+            row.setEmployeeInviteTime(inviteAt);
         }
 
         courseUserRepository.save(row);

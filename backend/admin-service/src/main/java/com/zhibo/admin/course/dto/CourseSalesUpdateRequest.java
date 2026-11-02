@@ -17,9 +17,12 @@ public class CourseSalesUpdateRequest {
     /** encrypted 时必填；恰好 6 位数字明文 */
     private String password;
 
-    /** free 时服务端强制 long；其余必填 long / days */
+    /** free 时服务端强制 long；其余必填 long / days / fixed */
     private String accessValidityType;
 
     /** type=days 时必填，≥1 */
     private Integer accessValidityDays;
+
+    /** type=fixed 时必填，yyyy-MM-dd HH:mm:ss */
+    private String accessValidityFixedTime;
 }

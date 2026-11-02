@@ -645,7 +645,7 @@ public class ViewerAdminService {
     }
 
     /** 与 live-service ViewerPhoneMask 同规则。 */
-    static String maskPhone(String phone) {
+    public static String maskPhone(String phone) {
         if (phone == null) {
             return null;
         }

@@ -18,6 +18,8 @@ public class CourseDetailResponse extends CourseSummary {
     private Boolean sellAlone;
     private String accessValidityType;
     private Integer accessValidityDays;
+    /** type=fixed 时回显，yyyy-MM-dd HH:mm:ss */
+    private String accessValidityFixedTime;
     /** 仅 encrypted 时回显明文。 */
     private String password;
 }
