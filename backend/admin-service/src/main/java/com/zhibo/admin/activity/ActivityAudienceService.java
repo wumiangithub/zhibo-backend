@@ -19,6 +19,9 @@ import com.zhibo.admin.activity.dto.AudienceListItem;
 import com.zhibo.admin.activity.dto.AudienceListResponse;
 import com.zhibo.admin.activity.dto.CreateAudienceRequest;
 import com.zhibo.admin.activity.dto.CreateAudienceResponse;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsEstimateResponse;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsRequest;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsResponse;
 import com.zhibo.admin.activity.dto.UpdateEntitlementResponse;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
@@ -67,6 +70,7 @@ public class ActivityAudienceService {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int ERRORS_CAP = 50;
+    private static final int TAG_IMPORT_MAX = 5;
     private static final Set<String> KEYWORD_TYPES = Set.of("nickname", "id", "phone");
     private static final Set<String> TAG_MATCH_MODES = Set.of("any", "all", "none");
     private static final Set<String> DURATION_OPS = Set.of("gte", "lte");
@@ -478,6 +482,100 @@ public class ActivityAudienceService {
 
         persistImportHistory(uuid, operatorId, now, result, allFailures);
         return result;
+    }
+
+    /**
+     * 标签导入预计人数：所选标签「满足其一」去重后的观众数（不做写入）。
+     */
+    @Transactional(readOnly = true)
+    public ImportAudienceByTagsEstimateResponse estimateByTags(
+            String activityId, ImportAudienceByTagsRequest request) {
+        List<Long> tagIds = normalizeImportTagIds(request);
+        requireActivity(activityId);
+        requireTagsExist(tagIds);
+        long total = viewerTagMemberRepository.countDistinctViewersByTagIdIn(tagIds);
+        return new ImportAudienceByTagsEstimateResponse((int) Math.min(total, Integer.MAX_VALUE));
+    }
+
+    /**
+     * 标签导入：所选标签「满足其一」的观众 upsert 本场名单。
+     * 不写 CSV 导入历史；已有行不改权益。
+     */
+    @Transactional
+    public ImportAudienceByTagsResponse importByTags(
+            String activityId, ImportAudienceByTagsRequest request, long operatorId) {
+        List<Long> tagIds = normalizeImportTagIds(request);
+        String uuid = requireActivity(activityId).getId();
+        requireActiveEmployee(operatorId);
+        requireTagsExist(tagIds);
+
+        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByTagIdIn(tagIds);
+        LinkedHashMap<Long, Boolean> viewerUniq = new LinkedHashMap<>();
+        for (ViewerTagMemberEntity m : members) {
+            if (m.getViewerId() != null && m.getViewerId() > 0) {
+                viewerUniq.putIfAbsent(m.getViewerId(), Boolean.TRUE);
+            }
+        }
+        List<Long> viewerIds = List.copyOf(viewerUniq.keySet());
+
+        ImportAudienceByTagsResponse result = new ImportAudienceByTagsResponse();
+        result.setTotal(viewerIds.size());
+        if (viewerIds.isEmpty()) {
+            return result;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (Long viewerId : viewerIds) {
+            Optional<ActivityAudienceEntity> existing =
+                    audienceRepository.findByActivityIdAndViewerId(uuid, viewerId);
+            if (existing.isPresent()) {
+                ActivityAudienceEntity row = existing.get();
+                if (row.getImporterId() == null) {
+                    row.setImporterId(operatorId);
+                    row.setImportTime(now);
+                    audienceRepository.save(row);
+                    result.setUpdated(result.getUpdated() + 1);
+                } else {
+                    result.setSkipped(result.getSkipped() + 1);
+                }
+                continue;
+            }
+            ActivityAudienceEntity row = new ActivityAudienceEntity();
+            row.setActivityId(uuid);
+            row.setViewerId(viewerId);
+            row.setEntitlementStatus(1);
+            row.setImporterId(operatorId);
+            row.setImportTime(now);
+            audienceRepository.save(row);
+            result.setCreated(result.getCreated() + 1);
+        }
+        return result;
+    }
+
+    private static List<Long> normalizeImportTagIds(ImportAudienceByTagsRequest request) {
+        List<Long> raw = request == null || request.getTagIds() == null ? List.of() : request.getTagIds();
+        LinkedHashMap<Long, Boolean> uniq = new LinkedHashMap<>();
+        for (Long id : raw) {
+            if (id != null && id > 0) {
+                uniq.putIfAbsent(id, Boolean.TRUE);
+            }
+        }
+        List<Long> tagIds = List.copyOf(uniq.keySet());
+        if (tagIds.isEmpty()) {
+            throw new IllegalArgumentException("请选择标签");
+        }
+        if (tagIds.size() > TAG_IMPORT_MAX) {
+            throw new IllegalArgumentException("最多选择 5 个标签");
+        }
+        return tagIds;
+    }
+
+    private void requireTagsExist(List<Long> tagIds) {
+        for (Long tagId : tagIds) {
+            viewerTagRepository
+                    .findByIdAndDeletedTimeIsNull(tagId)
+                    .orElseThrow(() -> new IllegalArgumentException("标签不存在或已删除"));
+        }
     }
 
     public byte[] importTemplateCsv() {

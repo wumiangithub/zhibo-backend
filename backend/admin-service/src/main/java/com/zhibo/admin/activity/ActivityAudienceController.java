@@ -6,6 +6,9 @@ import com.zhibo.admin.activity.dto.AudienceImportResponse;
 import com.zhibo.admin.activity.dto.AudienceListResponse;
 import com.zhibo.admin.activity.dto.CreateAudienceRequest;
 import com.zhibo.admin.activity.dto.CreateAudienceResponse;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsEstimateResponse;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsRequest;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsResponse;
 import com.zhibo.admin.activity.dto.UpdateEntitlementRequest;
 import com.zhibo.admin.activity.dto.UpdateEntitlementResponse;
 import com.zhibo.admin.auth.AuthException;
@@ -107,6 +110,20 @@ public class ActivityAudienceController {
             @RequestParam("file") MultipartFile file,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(audienceService.importCsv(id, file, currentUserId(httpRequest)));
+    }
+
+    @PostMapping("/import-by-tags/estimate/{id}")
+    public ApiResponse<ImportAudienceByTagsEstimateResponse> estimateByTags(
+            @PathVariable String id, @RequestBody ImportAudienceByTagsRequest request) {
+        return ApiResponse.ok(audienceService.estimateByTags(id, request));
+    }
+
+    @PostMapping("/import-by-tags/{id}")
+    public ApiResponse<ImportAudienceByTagsResponse> importByTags(
+            @PathVariable String id,
+            @RequestBody ImportAudienceByTagsRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(audienceService.importByTags(id, request, currentUserId(httpRequest)));
     }
 
     @GetMapping("/import-template")

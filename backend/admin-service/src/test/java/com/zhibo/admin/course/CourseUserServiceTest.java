@@ -16,6 +16,7 @@ import com.zhibo.viewer.ViewerRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -104,5 +105,29 @@ class CourseUserServiceTest {
         assertEquals("valid", res.getList().get(0).getEntitlementState());
         assertEquals("长期", res.getList().get(0).getExpireDisplay());
         assertEquals("导入", res.getList().get(0).getAcquireWayLabel());
+    }
+
+    @Test
+    void parseOptionalExpireTime_dateOnlyBecomesStartOfDay() {
+        assertEquals(
+                LocalDateTime.of(2026, 12, 31, 0, 0, 0),
+                CourseUserService.parseOptionalExpireTime("2026-12-31"));
+        assertEquals(
+                LocalDateTime.of(2026, 12, 31, 23, 59, 59),
+                CourseUserService.parseOptionalExpireTime("2026-12-31 23:59:59"));
+        Assertions.assertNull(CourseUserService.parseOptionalExpireTime(null));
+        Assertions.assertNull(CourseUserService.parseOptionalExpireTime("  "));
+    }
+
+    @Test
+    void resolveJoinExpire_prefersCustom() {
+        CourseEntity course = new CourseEntity();
+        course.setAccessValidityType("days");
+        course.setAccessValidityDays(7);
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 12, 0);
+        LocalDateTime custom = LocalDateTime.of(2026, 6, 1, 0, 0);
+        assertEquals(custom, CourseUserService.resolveJoinExpire(course, now, custom));
+        assertEquals(
+                now.plusDays(7), CourseUserService.resolveJoinExpire(course, now, null));
     }
 }

@@ -28,6 +28,9 @@ import com.zhibo.admin.course.dto.CourseUserImportResponse;
 import com.zhibo.admin.course.dto.CourseUserListResponse;
 import com.zhibo.admin.course.dto.CreateCourseUserRequest;
 import com.zhibo.admin.course.dto.CreateCourseUserResponse;
+import com.zhibo.admin.course.dto.ImportCourseUsersByTagsEstimateResponse;
+import com.zhibo.admin.course.dto.ImportCourseUsersByTagsRequest;
+import com.zhibo.admin.course.dto.ImportCourseUsersByTagsResponse;
 import com.zhibo.admin.course.dto.CreateChapterRequest;
 import com.zhibo.admin.course.dto.CreateCourseRequest;
 import com.zhibo.admin.course.dto.CatalogNodeIdResponse;
@@ -150,9 +153,25 @@ public class CourseController {
     public ApiResponse<CourseUserImportResponse> importUsers(
             @PathVariable String courseId,
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "expireTime", required = false) String expireTime,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(
-                courseUserService.importCsv(courseId, file, currentUserId(httpRequest)));
+                courseUserService.importCsv(courseId, file, expireTime, currentUserId(httpRequest)));
+    }
+
+    @PostMapping("/users/import-by-tags/estimate/{courseId}")
+    public ApiResponse<ImportCourseUsersByTagsEstimateResponse> estimateUsersByTags(
+            @PathVariable String courseId, @RequestBody ImportCourseUsersByTagsRequest request) {
+        return ApiResponse.ok(courseUserService.estimateByTags(courseId, request));
+    }
+
+    @PostMapping("/users/import-by-tags/{courseId}")
+    public ApiResponse<ImportCourseUsersByTagsResponse> importUsersByTags(
+            @PathVariable String courseId,
+            @RequestBody ImportCourseUsersByTagsRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(
+                courseUserService.importByTags(courseId, request, currentUserId(httpRequest)));
     }
 
     @GetMapping("/users/import-template")

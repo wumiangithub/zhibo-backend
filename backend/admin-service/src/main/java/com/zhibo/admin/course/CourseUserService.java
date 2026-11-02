@@ -14,6 +14,9 @@ import com.zhibo.admin.course.dto.CourseUserListItem;
 import com.zhibo.admin.course.dto.CourseUserListResponse;
 import com.zhibo.admin.course.dto.CreateCourseUserRequest;
 import com.zhibo.admin.course.dto.CreateCourseUserResponse;
+import com.zhibo.admin.course.dto.ImportCourseUsersByTagsEstimateResponse;
+import com.zhibo.admin.course.dto.ImportCourseUsersByTagsRequest;
+import com.zhibo.admin.course.dto.ImportCourseUsersByTagsResponse;
 import com.zhibo.admin.viewer.ViewerAdminService;
 import com.zhibo.common.UuidIds;
 import com.zhibo.course.CourseEntitlementSupport;
@@ -32,6 +35,7 @@ import com.zhibo.viewer.ViewerTagRepository;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -55,9 +59,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class CourseUserService {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final Set<String> STATE_FILTERS = Set.of("valid", "expired", "invalid");
     private static final Set<String> KEYWORD_TYPES = Set.of("nickname", "id", "phone");
     private static final int ERRORS_CAP = 50;
+    private static final int TAG_IMPORT_MAX = 5;
     private static final byte[] UTF8_BOM = new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
     private static final TypeReference<List<CourseUserImportResponse.ErrorItem>> FAIL_DETAILS_TYPE =
             new TypeReference<>() {};
@@ -261,6 +267,7 @@ public class CourseUserService {
         CourseEntity course = requireCourse(courseId);
         requireActiveEmployee(operatorId);
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime customExpire = parseOptionalExpireTime(request.getExpireTime());
 
         Optional<CourseUserEntity> existing =
                 courseUserRepository.findByCourseIdAndViewerId(course.getId(), viewer.getId());
@@ -272,6 +279,7 @@ public class CourseUserService {
                 row.setImportTime(row.getCreatedTime() != null ? row.getCreatedTime() : now);
                 courseUserRepository.save(row);
             }
+            // 已有行不改 expire
             return new CreateCourseUserResponse(row.getId(), row.getViewerId(), false);
         }
 
@@ -283,7 +291,7 @@ public class CourseUserService {
         row.setImporterId(operatorId);
         // 与 created_time 同刻写入；展示统一用 created_time
         row.setImportTime(now);
-        row.setEntitlementExpireTime(CourseEntitlementSupport.expireAtJoin(course, now));
+        row.setEntitlementExpireTime(resolveJoinExpire(course, now, customExpire));
         courseUserRepository.save(row);
 
         course.setTotalUserCount(Math.max(0, course.getTotalUserCount()) + 1);
@@ -293,7 +301,8 @@ public class CourseUserService {
     }
 
     @Transactional
-    public CourseUserImportResponse importCsv(String courseId, MultipartFile file, long operatorId) {
+    public CourseUserImportResponse importCsv(
+            String courseId, MultipartFile file, String expireTime, long operatorId) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("请上传文件");
         }
@@ -303,6 +312,7 @@ public class CourseUserService {
         }
         CourseEntity course = requireCourse(courseId);
         requireActiveEmployee(operatorId);
+        LocalDateTime customExpire = parseOptionalExpireTime(expireTime);
 
         List<PhoneRow> phones = parsePhoneCsv(file);
         CourseUserImportResponse result = new CourseUserImportResponse();
@@ -336,6 +346,7 @@ public class CourseUserService {
                     } else {
                         result.setSkipped(result.getSkipped() + 1);
                     }
+                    // 已有行不改 expire
                     continue;
                 }
                 CourseUserEntity row = new CourseUserEntity();
@@ -345,7 +356,7 @@ public class CourseUserService {
                 row.setAcquireWay("import");
                 row.setImporterId(operatorId);
                 row.setImportTime(now);
-                row.setEntitlementExpireTime(CourseEntitlementSupport.expireAtJoin(course, now));
+                row.setEntitlementExpireTime(resolveJoinExpire(course, now, customExpire));
                 courseUserRepository.save(row);
                 result.setCreated(result.getCreated() + 1);
                 createdCount++;
@@ -359,6 +370,139 @@ public class CourseUserService {
 
         persistImportHistory(course.getId(), operatorId, now, result, allFailures);
         return result;
+    }
+
+    /**
+     * 标签导入预计人数：所选标签「满足其一」去重后的观众数（不做写入）。
+     */
+    @Transactional(readOnly = true)
+    public ImportCourseUsersByTagsEstimateResponse estimateByTags(
+            String courseId, ImportCourseUsersByTagsRequest request) {
+        List<Long> tagIds = normalizeImportTagIds(request);
+        requireCourse(courseId);
+        requireTagsExist(tagIds);
+        long total = viewerTagMemberRepository.countDistinctViewersByTagIdIn(tagIds);
+        return new ImportCourseUsersByTagsEstimateResponse((int) Math.min(total, Integer.MAX_VALUE));
+    }
+
+    /**
+     * 标签导入：所选标签「满足其一」的观众 upsert 本课学员。
+     * 不写 CSV 导入历史；已有行不改权益。
+     */
+    @Transactional
+    public ImportCourseUsersByTagsResponse importByTags(
+            String courseId, ImportCourseUsersByTagsRequest request, long operatorId) {
+        List<Long> tagIds = normalizeImportTagIds(request);
+        CourseEntity course = requireCourse(courseId);
+        requireActiveEmployee(operatorId);
+        requireTagsExist(tagIds);
+        LocalDateTime customExpire =
+                parseOptionalExpireTime(request == null ? null : request.getExpireTime());
+
+        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByTagIdIn(tagIds);
+        LinkedHashMap<Long, Boolean> viewerUniq = new LinkedHashMap<>();
+        for (ViewerTagMemberEntity m : members) {
+            if (m.getViewerId() != null && m.getViewerId() > 0) {
+                viewerUniq.putIfAbsent(m.getViewerId(), Boolean.TRUE);
+            }
+        }
+        List<Long> viewerIds = List.copyOf(viewerUniq.keySet());
+
+        ImportCourseUsersByTagsResponse result = new ImportCourseUsersByTagsResponse();
+        result.setTotal(viewerIds.size());
+        if (viewerIds.isEmpty()) {
+            return result;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int createdCount = 0;
+        for (Long viewerId : viewerIds) {
+            Optional<CourseUserEntity> existing =
+                    courseUserRepository.findByCourseIdAndViewerId(course.getId(), viewerId);
+            if (existing.isPresent()) {
+                CourseUserEntity row = existing.get();
+                if (row.getImporterId() == null) {
+                    row.setImporterId(operatorId);
+                    row.setImportTime(row.getCreatedTime() != null ? row.getCreatedTime() : now);
+                    courseUserRepository.save(row);
+                    result.setUpdated(result.getUpdated() + 1);
+                } else {
+                    result.setSkipped(result.getSkipped() + 1);
+                }
+                // 已有行不改 expire
+                continue;
+            }
+            CourseUserEntity row = new CourseUserEntity();
+            row.setCourseId(course.getId());
+            row.setViewerId(viewerId);
+            row.setEntitlementStatus(1);
+            row.setAcquireWay("import");
+            row.setImporterId(operatorId);
+            row.setImportTime(now);
+            row.setEntitlementExpireTime(resolveJoinExpire(course, now, customExpire));
+            courseUserRepository.save(row);
+            result.setCreated(result.getCreated() + 1);
+            createdCount++;
+        }
+        if (createdCount > 0) {
+            course.setTotalUserCount(Math.max(0, course.getTotalUserCount()) + createdCount);
+            courseRepository.save(course);
+        }
+        return result;
+    }
+
+    private static List<Long> normalizeImportTagIds(ImportCourseUsersByTagsRequest request) {
+        List<Long> raw = request == null || request.getTagIds() == null ? List.of() : request.getTagIds();
+        LinkedHashMap<Long, Boolean> uniq = new LinkedHashMap<>();
+        for (Long id : raw) {
+            if (id != null && id > 0) {
+                uniq.putIfAbsent(id, Boolean.TRUE);
+            }
+        }
+        List<Long> tagIds = List.copyOf(uniq.keySet());
+        if (tagIds.isEmpty()) {
+            throw new IllegalArgumentException("请选择标签");
+        }
+        if (tagIds.size() > TAG_IMPORT_MAX) {
+            throw new IllegalArgumentException("最多选择 5 个标签");
+        }
+        return tagIds;
+    }
+
+    private void requireTagsExist(List<Long> tagIds) {
+        for (Long tagId : tagIds) {
+            viewerTagRepository
+                    .findByIdAndDeletedTimeIsNull(tagId)
+                    .orElseThrow(() -> new IllegalArgumentException("标签不存在或已删除"));
+        }
+    }
+
+    /**
+     * 选填自定义到期：空 → null；{@code yyyy-MM-dd} → 当日 00:00:00；
+     * {@code yyyy-MM-dd HH:mm:ss} → 原样解析。非法 → 400。
+     */
+    static LocalDateTime parseOptionalExpireTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.trim();
+        try {
+            if (s.length() == 10) {
+                return LocalDate.parse(s, DATE).atStartOfDay();
+            }
+            return LocalDateTime.parse(s, TIME);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("到期时间格式须为 yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss");
+        }
+    }
+
+    /** 新建学员行到期：有自定义用自定义，否则按课程售卖 {@link CourseEntitlementSupport#expireAtJoin}。 */
+    static LocalDateTime resolveJoinExpire(
+            CourseEntity course, LocalDateTime now, LocalDateTime customExpire) {
+        if (customExpire != null) {
+            return customExpire;
+        }
+        return CourseEntitlementSupport.expireAtJoin(course, now);
     }
 
     public byte[] importTemplateCsv() {

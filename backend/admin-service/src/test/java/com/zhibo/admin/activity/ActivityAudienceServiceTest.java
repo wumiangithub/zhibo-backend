@@ -21,6 +21,7 @@ import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.CreateAudienceRequest;
+import com.zhibo.admin.activity.dto.ImportAudienceByTagsRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.viewer.ViewerEntity;
@@ -463,6 +464,78 @@ class ActivityAudienceServiceTest {
         assertTrue(csv.contains("13800138000"));
         assertTrue(csv.contains("有效"));
         assertTrue(csv.contains("王富贵"));
+    }
+
+    @Test
+    void importByTags_createsUpdatedAndSkipped() {
+        stubOperator(99L, "导入员");
+
+        ViewerTagEntity tag = new ViewerTagEntity();
+        tag.setId(7L);
+        tag.setName("高意向");
+        when(viewerTagRepository.findByIdAndDeletedTimeIsNull(7L)).thenReturn(Optional.of(tag));
+
+        ViewerTagMemberEntity m1 = new ViewerTagMemberEntity();
+        m1.setViewerId(10L);
+        m1.setTagId(7L);
+        ViewerTagMemberEntity m2 = new ViewerTagMemberEntity();
+        m2.setViewerId(11L);
+        m2.setTagId(7L);
+        ViewerTagMemberEntity m3 = new ViewerTagMemberEntity();
+        m3.setViewerId(12L);
+        m3.setTagId(7L);
+        // duplicate viewer under same tag set → still one
+        ViewerTagMemberEntity m1Dup = new ViewerTagMemberEntity();
+        m1Dup.setViewerId(10L);
+        m1Dup.setTagId(7L);
+        when(viewerTagMemberRepository.findByTagIdIn(List.of(7L))).thenReturn(List.of(m1, m2, m3, m1Dup));
+
+        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 11L))
+                .thenReturn(Optional.of(audienceRow(201L, 11L, null)));
+        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 12L))
+                .thenReturn(Optional.of(audienceRow(202L, 12L, 88L)));
+        when(audienceRepository.save(any(ActivityAudienceEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ImportAudienceByTagsRequest req = new ImportAudienceByTagsRequest();
+        req.setTagIds(List.of(7L));
+        var resp = service.importByTags(ACTIVITY_ID, req, 99L);
+        assertEquals(3, resp.getTotal());
+        assertEquals(1, resp.getCreated());
+        assertEquals(1, resp.getUpdated());
+        assertEquals(1, resp.getSkipped());
+    }
+
+    @Test
+    void estimateByTags_returnsDistinctViewerCount() {
+        ViewerTagEntity tag1 = new ViewerTagEntity();
+        tag1.setId(7L);
+        tag1.setName("A");
+        ViewerTagEntity tag2 = new ViewerTagEntity();
+        tag2.setId(8L);
+        tag2.setName("B");
+        when(viewerTagRepository.findByIdAndDeletedTimeIsNull(7L)).thenReturn(Optional.of(tag1));
+        when(viewerTagRepository.findByIdAndDeletedTimeIsNull(8L)).thenReturn(Optional.of(tag2));
+        when(viewerTagMemberRepository.countDistinctViewersByTagIdIn(List.of(7L, 8L))).thenReturn(2L);
+
+        ImportAudienceByTagsRequest req = new ImportAudienceByTagsRequest();
+        req.setTagIds(List.of(7L, 8L));
+        var resp = service.estimateByTags(ACTIVITY_ID, req);
+        assertEquals(2, resp.getTotal());
+    }
+
+    @Test
+    void importByTags_emptyTagIds_rejects() {
+        ImportAudienceByTagsRequest req = new ImportAudienceByTagsRequest();
+        req.setTagIds(List.of());
+        assertThrows(IllegalArgumentException.class, () -> service.importByTags(ACTIVITY_ID, req, 99L));
+    }
+
+    @Test
+    void importByTags_moreThanFive_rejects() {
+        ImportAudienceByTagsRequest req = new ImportAudienceByTagsRequest();
+        req.setTagIds(List.of(1L, 2L, 3L, 4L, 5L, 6L));
+        assertThrows(IllegalArgumentException.class, () -> service.importByTags(ACTIVITY_ID, req, 99L));
     }
 
     private void stubOperator(long id, String name) {

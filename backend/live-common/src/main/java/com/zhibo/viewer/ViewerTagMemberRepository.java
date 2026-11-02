@@ -16,6 +16,13 @@ public interface ViewerTagMemberRepository extends JpaRepository<ViewerTagMember
 
     List<ViewerTagMemberEntity> findByViewerIdIn(Collection<Long> viewerIds);
 
+    List<ViewerTagMemberEntity> findByTagIdIn(Collection<Long> tagIds);
+
+    @Query(
+            "select count(distinct m.viewerId) from ViewerTagMemberEntity m"
+                    + " where m.tagId in :tagIds and m.viewerId is not null and m.viewerId > 0")
+    long countDistinctViewersByTagIdIn(@Param("tagIds") Collection<Long> tagIds);
+
     @Query(
             "select m.tagId as tagId, count(m) as cnt from ViewerTagMemberEntity m"
                     + " where m.tagId in :tagIds group by m.tagId")
