@@ -14,7 +14,7 @@ public class CourseUserListItem {
     private java.util.List<Long> tagIds = new java.util.ArrayList<>();
     /** 与 tagIds 对齐的标签名 */
     private java.util.List<String> tagLabels = new java.util.ArrayList<>();
-    /** 本轮恒 0。 */
+    /** 已完成小节数 / 当前总小节数，百分数一位小数（D101）。 */
     private double chapterCompletionRate;
     private int entitlementStatus;
     /** valid / expired / invalid */

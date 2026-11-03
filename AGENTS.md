@@ -65,13 +65,13 @@ Cursor 做派给「后端」的待办；Grok bot 做派给「后端（Grok）」
 
 ## OpenAPI（D58 / D61 / D65，强制）
 
-维护 `docs/openapi/*.yaml`（生成脚本 `docs/openapi/generate-openapi.mjs`，及同步到 shared 的对外片段）时：
+维护生成脚本 `docs/openapi/generate-openapi.mjs`（及点名导出后的 `docs/openapi/*.yaml`、同步到 shared 的对外片段）时：
 
 - **每一个**路径参数 / Query / 请求与响应 schema 属性都必须有**中文** `description`（D58）。
 - 枚举必须写 `enum` 列表，并在 `description`（或独立枚举 schema）里用中文列清每个取值（如 `0 待审核 / 1 已通过 / 2 已驳回`）。禁止只列 code 不写中文。
 - **落库类型与长度（D61）**：能表达的约束写进 `maxLength`/`format`/`minimum` 等；`description` 建议附带 `库：VARCHAR(64)` / `BIGINT` / `DECIMAL(10,2)` 等，与 Flyway 一致。导出件供 Apifox，也是正式后端按文档反向实现的输入之一。
 - 与 `../zhibo-shared/docs/API约定.md`「通则 · OpenAPI」及决策 D58/D61/D65 一致。
-- **D65**：改接口时只改契约与代码；**禁止**顺手改 `generate-openapi.mjs`，也禁止改已导出 yaml/json。**仅用户明确要求「重新生成 / 导出 OpenAPI」时**：先删旧产物，再按当前契约与代码全量生成。
+- **D65**：改接口时同步改契约、代码与 `generate-openapi.mjs`；**禁止**顺手跑导出或手改已导出 yaml/json。**仅用户明确要求「重新生成 / 导出 OpenAPI」时**：先删旧产物，再跑脚本全量生成。
 
 ## 本地进程（强制）
 

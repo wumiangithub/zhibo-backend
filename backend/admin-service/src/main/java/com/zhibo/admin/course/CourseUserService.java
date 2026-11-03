@@ -19,8 +19,12 @@ import com.zhibo.admin.course.dto.ImportCourseUsersByTagsRequest;
 import com.zhibo.admin.course.dto.ImportCourseUsersByTagsResponse;
 import com.zhibo.admin.viewer.ViewerAdminService;
 import com.zhibo.common.UuidIds;
+import com.zhibo.course.CourseCatalogNodeType;
+import com.zhibo.course.CourseCatalogNodeRepository;
 import com.zhibo.course.CourseEntitlementSupport;
 import com.zhibo.course.CourseEntity;
+import com.zhibo.course.CourseLessonParticipateStatus;
+import com.zhibo.course.CourseLessonProgressRepository;
 import com.zhibo.course.CourseRepository;
 import com.zhibo.course.CourseUserEntity;
 import com.zhibo.course.CourseUserImportEntity;
@@ -71,6 +75,8 @@ public class CourseUserService {
     private final CourseRepository courseRepository;
     private final CourseUserRepository courseUserRepository;
     private final CourseUserImportRepository courseUserImportRepository;
+    private final CourseCatalogNodeRepository catalogNodeRepository;
+    private final CourseLessonProgressRepository progressRepository;
     private final ViewerRepository viewerRepository;
     private final ViewerTagMemberRepository viewerTagMemberRepository;
     private final ViewerTagRepository viewerTagRepository;
@@ -97,19 +103,24 @@ public class CourseUserService {
         Map<Long, ViewerEntity> viewers = loadViewers(pageRows);
         Map<Long, String> employeeNames = loadEmployeeNames(pageRows);
         Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(pageRows);
+        long totalLessons = catalogNodeRepository.countActiveByCourseIdAndNodeType(
+                prepared.courseId(), CourseCatalogNodeType.LESSON);
+        Map<Long, Long> completedByViewer = loadCompletedLessonCounts(prepared.courseId(), pageRows);
         CourseUserListResponse response = new CourseUserListResponse();
         response.setPage(p);
         response.setPageSize(size);
         response.setTotal(total);
         response.setAccessValidityType(prepared.accessType());
         for (CourseUserEntity row : pageRows) {
+            long completed = completedByViewer.getOrDefault(row.getViewerId(), 0L);
             response.getList().add(toItem(
                     row,
                     viewers.get(row.getViewerId()),
                     employeeNames,
                     tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
                     prepared.accessType(),
-                    prepared.now()));
+                    prepared.now(),
+                    completionRate(completed, totalLessons)));
         }
         return response;
     }
@@ -123,17 +134,22 @@ public class CourseUserService {
         Map<Long, ViewerEntity> viewers = loadViewers(rows);
         Map<Long, String> employeeNames = loadEmployeeNames(rows);
         Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(rows);
+        long totalLessons = catalogNodeRepository.countActiveByCourseIdAndNodeType(
+                prepared.courseId(), CourseCatalogNodeType.LESSON);
+        Map<Long, Long> completedByViewer = loadCompletedLessonCounts(prepared.courseId(), rows);
 
         StringBuilder sb = new StringBuilder();
         sb.append("学员,用户ID,手机号,标签,小节完成率,权益状态,所属邀请人,导入人,权益获取方式,权益首次获取时间,权益到期时间\n");
         for (CourseUserEntity row : rows) {
+            long completed = completedByViewer.getOrDefault(row.getViewerId(), 0L);
             CourseUserListItem item = toItem(
                     row,
                     viewers.get(row.getViewerId()),
                     employeeNames,
                     tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
                     prepared.accessType(),
-                    prepared.now());
+                    prepared.now(),
+                    completionRate(completed, totalLessons));
             ViewerEntity viewer = viewers.get(row.getViewerId());
             String phone = viewer != null && viewer.getPhone() != null ? viewer.getPhone() : "";
             sb.append(csvCell(item.getNickname()))
@@ -175,7 +191,7 @@ public class CourseUserService {
         if (!kw.isEmpty()) {
             Set<Long> viewerIds = resolveKeywordViewerIds(type, kw);
             if (viewerIds.isEmpty()) {
-                return new PreparedList(List.of(), accessType, now);
+                return new PreparedList(List.of(), accessType, now, course.getId());
             }
             rows = courseUserRepository.findByCourseIdAndViewerIdInOrderByCreatedTimeDescIdDesc(
                     course.getId(), viewerIds);
@@ -195,7 +211,7 @@ public class CourseUserService {
             }
             filtered.add(row);
         }
-        return new PreparedList(filtered, accessType, now);
+        return new PreparedList(filtered, accessType, now, course.getId());
     }
 
     @Transactional
@@ -572,7 +588,8 @@ public class CourseUserService {
             Map<Long, String> employeeNames,
             List<TagRef> tags,
             String accessType,
-            LocalDateTime now) {
+            LocalDateTime now,
+            double chapterCompletionRate) {
         String state = CourseEntitlementSupport.resolveState(
                 row.getEntitlementStatus(), accessType, row.getEntitlementExpireTime(), now);
         String formattedExpire =
@@ -593,7 +610,7 @@ public class CourseUserService {
             item.getTagIds().add(ref.tagId());
             item.getTagLabels().add(ref.name());
         }
-        item.setChapterCompletionRate(0);
+        item.setChapterCompletionRate(chapterCompletionRate);
         item.setEntitlementStatus(row.getEntitlementStatus());
         item.setEntitlementState(state);
         item.setEntitlementStateLabel(CourseEntitlementSupport.stateLabel(state));
@@ -873,7 +890,29 @@ public class CourseUserService {
 
     private record PhoneRow(int row, String phone) {}
 
-    private record PreparedList(List<CourseUserEntity> rows, String accessType, LocalDateTime now) {}
+    private Map<Long, Long> loadCompletedLessonCounts(String courseId, List<CourseUserEntity> rows) {
+        Map<Long, Long> out = new HashMap<>();
+        if (rows == null || rows.isEmpty()) {
+            return out;
+        }
+        for (var p : progressRepository.findByCourseId(courseId)) {
+            if (p.getParticipateStatus() != CourseLessonParticipateStatus.COMPLETED) {
+                continue;
+            }
+            out.merge(p.getViewerId(), 1L, Long::sum);
+        }
+        return out;
+    }
+
+    private static double completionRate(long completed, long totalLessons) {
+        if (totalLessons <= 0 || completed <= 0) {
+            return 0D;
+        }
+        return Math.round(completed * 1000.0 / totalLessons) / 10.0;
+    }
+
+    private record PreparedList(
+            List<CourseUserEntity> rows, String accessType, LocalDateTime now, String courseId) {}
 
     private record TagRef(long tagId, String name) {}
 }

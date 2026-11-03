@@ -22,6 +22,7 @@ import com.zhibo.admin.course.dto.ReorderSubcoursesRequest;
 import com.zhibo.admin.course.dto.UpdateChapterRequest;
 import com.zhibo.admin.course.dto.UpdateSubcourseRequest;
 import com.zhibo.common.UuidIds;
+import com.zhibo.course.CatalogSiblingOrder;
 import com.zhibo.course.CourseCatalogContentKind;
 import com.zhibo.course.CourseCatalogNodeEntity;
 import com.zhibo.course.CourseCatalogNodeRepository;

@@ -2,9 +2,8 @@
  * 按 zhibo-shared/docs/API约定.md 生成 OpenAPI 3.0.3
  * 用法：node generate-openapi.mjs
  *
- * D65：平时禁止改本脚本、禁止跑导出。仅用户明确要求「重新生成 / 导出 OpenAPI」时：
- * 先删除旧 *.openapi.yaml / *.openapi.json，再按当时 API约定 + 代码全量重写本脚本并导出；
- * 不要在旧 yaml 上打补丁，也不要日常攒着改本文件。
+ * D65：改接口时须同步改本脚本（与 API约定 + 代码一致）；平时禁止跑导出、禁止手改 *.openapi.yaml/json。
+ * 仅用户明确要求「重新生成 / 导出 OpenAPI」时：先删旧产物再跑本脚本；不要在旧 yaml 上打补丁。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -3414,6 +3413,411 @@ function buildAdmin() {
       properties: { pageUrl: { type: 'string', format: 'uri' } },
     },
 
+    ActivityUserDataSummary: {
+      type: 'object',
+      required: ['visitorCount', 'viewCount', 'avgStayDurationSec'],
+      properties: {
+        visitorCount: {
+          type: 'integer',
+          description: '访客数；等于 rows 中 type=live 的观看人数',
+        },
+        viewCount: {
+          type: 'integer',
+          description: '浏览量；等于 rows 中 type=live 的观看人次',
+        },
+        avgStayDurationSec: {
+          type: 'integer',
+          description: '人均停留时长（整秒）；等于 live 行人均观看时长',
+        },
+      },
+    },
+    ActivityUserDataRow: {
+      type: 'object',
+      required: ['type', 'viewerCount', 'viewCount', 'avgWatchDurationSec'],
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['live_replay', 'live', 'replay'],
+          description: 'live_replay 直播+回放 / live 直播 / replay 回放',
+        },
+        viewerCount: { type: 'integer', description: '观看人数' },
+        viewCount: { type: 'integer', description: '观看人次' },
+        avgWatchDurationSec: {
+          type: 'integer',
+          description: '人均观看时长（整秒）',
+        },
+      },
+    },
+    ActivityUserDataTrendDefault: {
+      type: 'object',
+      required: ['startTime', 'endTime'],
+      properties: {
+        startTime: {
+          type: 'string',
+          description: '趋势图默认起点，yyyy-MM-dd HH:mm:ss',
+        },
+        endTime: {
+          type: 'string',
+          description: '趋势图默认终点，yyyy-MM-dd HH:mm:ss',
+        },
+      },
+    },
+    ActivityUserData: {
+      type: 'object',
+      required: ['id', 'summary', 'rows', 'trendDefault'],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '本站活动 UUID',
+        },
+        summary: {
+          $ref: '#/components/schemas/ActivityUserDataSummary',
+          description: '顶部汇总；恒等于 rows 中 type=live',
+        },
+        rows: {
+          type: 'array',
+          minItems: 3,
+          maxItems: 3,
+          description: '固定三行，顺序 live_replay → live → replay',
+          items: { $ref: '#/components/schemas/ActivityUserDataRow' },
+        },
+        trendDefault: {
+          $ref: '#/components/schemas/ActivityUserDataTrendDefault',
+          description: '在线趋势图默认起止时间',
+        },
+      },
+    },
+
+    CatalogNodeType: {
+      type: 'integer',
+      enum: [1, 2, 3],
+      description: '1 章节 / 2 子课程 / 3 小节；库：INT',
+    },
+    CatalogContentKind: {
+      type: 'integer',
+      enum: [1, 2, 3, 4, 5],
+      description: '1 直播 / 2 图片 / 3 视频 / 4 文档 / 5 文章；库：INT',
+    },
+    CatalogReorderMode: {
+      type: 'string',
+      enum: ['chapters', 'lessons'],
+      description: 'chapters 章排序 / lessons 小节排序',
+    },
+    CourseCatalogNode: {
+      type: 'object',
+      required: ['id', 'courseId', 'parentId', 'nodeType', 'title', 'sortOrder'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '目录节点 id；库：BIGINT',
+        },
+        courseId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '所属课程 UUID',
+        },
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '父节点 id；根为 0；库：BIGINT',
+        },
+        nodeType: { $ref: '#/components/schemas/CatalogNodeType' },
+        title: {
+          type: 'string',
+          maxLength: 30,
+          description: '节点标题；库：VARCHAR(30)',
+        },
+        coverMaterialId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '子课程封面素材 UUID；无则省略',
+        },
+        coverUrl: { type: 'string', description: '子课程封面 URL；无则省略' },
+        contentKind: {
+          $ref: '#/components/schemas/CatalogContentKind',
+          description: '仅小节；内容类型',
+        },
+        contentId: {
+          type: 'string',
+          description: '小节内容 id（直播活动 UUID 或素材 UUID）；仅小节',
+        },
+        sortOrder: {
+          type: 'integer',
+          description: '同父排序；0 表示未自定义；库：INT',
+        },
+        chapterCount: {
+          type: 'integer',
+          description: '子课程下章节数；仅子课程返回',
+        },
+        lessonCount: {
+          type: 'integer',
+          description: '子课程下小节数；仅子课程返回',
+        },
+        createdTime: {
+          type: 'string',
+          description: '创建时间，yyyy-MM-dd HH:mm:ss',
+        },
+      },
+    },
+    CourseCatalogListData: {
+      type: 'object',
+      required: ['list'],
+      properties: {
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/CourseCatalogNode' },
+          description: '扁平目录节点列表（按展示序）',
+        },
+        contentCount: {
+          type: 'integer',
+          description: '课程内容数（小节数）；部分写接口回写',
+        },
+      },
+    },
+    CourseCatalogUsedContentsData: {
+      type: 'object',
+      required: ['lives', 'materials'],
+      properties: {
+        lives: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/BusinessUuid' },
+          description: '本课已占用的直播活动 UUID',
+        },
+        materials: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/BusinessUuid' },
+          description: '本课已占用的素材 UUID',
+        },
+      },
+    },
+    CourseCatalogBindLivesRequest: {
+      type: 'object',
+      required: ['parentId', 'activityIds'],
+      properties: {
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '父节点 id；有子课后不可为 0',
+        },
+        activityIds: {
+          type: 'array',
+          minItems: 1,
+          items: { $ref: '#/components/schemas/BusinessUuid' },
+          description: '要绑定的直播活动 UUID 列表',
+        },
+      },
+    },
+    CourseCatalogBindMaterialsRequest: {
+      type: 'object',
+      required: ['parentId', 'materialIds'],
+      properties: {
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '父节点 id；有子课后不可为 0',
+        },
+        materialIds: {
+          type: 'array',
+          minItems: 1,
+          items: { $ref: '#/components/schemas/BusinessUuid' },
+          description: '要绑定的素材 UUID 列表',
+        },
+      },
+    },
+    CourseCatalogChapterCreateRequest: {
+      type: 'object',
+      required: ['parentId', 'title'],
+      properties: {
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '父节点 id；有子课后须为子课程 id',
+        },
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 30,
+          description: '章节标题，1～30 字',
+        },
+      },
+    },
+    CourseCatalogChapterUpdateRequest: {
+      type: 'object',
+      required: ['id', 'title'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '本课章节节点 id',
+        },
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 30,
+          description: '章节标题，1～30 字',
+        },
+      },
+    },
+    CourseCatalogChapterDeleteRequest: {
+      type: 'object',
+      required: ['id', 'keepContents'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '要软删的章节节点 id',
+        },
+        keepContents: {
+          type: 'boolean',
+          description:
+            'true 保留其下小节（可迁到 targetChapterId）；false 级联软删小节并重算 contentCount',
+        },
+        targetChapterId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '可选；keepContents=true 时把直属小节迁到该章节后再软删本节点',
+        },
+      },
+    },
+    CourseCatalogSubcourseCreateRequest: {
+      type: 'object',
+      required: ['title', 'coverMaterialId'],
+      properties: {
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 30,
+          description: '子课程名称，1～30 字',
+        },
+        coverMaterialId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '封面素材 UUID',
+        },
+        moveRootContents: {
+          type: 'boolean',
+          description:
+            '首子课且根下已有章节/小节时须 true，把根内容迁入新子课程',
+        },
+      },
+    },
+    CourseCatalogSubcourseUpdateRequest: {
+      type: 'object',
+      required: ['id', 'title', 'coverMaterialId'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '本课子课程节点 id',
+        },
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 30,
+          description: '子课程名称，1～30 字',
+        },
+        coverMaterialId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '封面素材 UUID',
+        },
+      },
+    },
+    CourseCatalogSubcourseDeleteRequest: {
+      type: 'object',
+      required: ['id', 'keepContents'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '要软删的子课程节点 id',
+        },
+        keepContents: {
+          type: 'boolean',
+          description:
+            'true 保留其下章节/小节（可迁到 targetSubcourseId）；false 级联软删并重算 contentCount',
+        },
+        targetSubcourseId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '可选；keepContents=true 时把直属章节与根小节迁到该子课程后再软删本节点',
+        },
+      },
+    },
+    CourseCatalogSubcourseReorderRequest: {
+      type: 'object',
+      required: ['ids'],
+      properties: {
+        ids: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'integer', format: 'int64' },
+          description: '本课全部未软删子课程 id，按目标顺序',
+        },
+      },
+    },
+    CourseCatalogReorderItem: {
+      type: 'object',
+      required: ['id', 'parentId'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '节点 id',
+        },
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '目标父节点 id（小节可改挂；章节不可变）',
+        },
+      },
+    },
+    CourseCatalogReorderRequest: {
+      type: 'object',
+      required: ['parentId', 'mode', 'items'],
+      properties: {
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '目录上下文：根 0 或子课程 id',
+        },
+        mode: { $ref: '#/components/schemas/CatalogReorderMode' },
+        items: {
+          type: 'array',
+          minItems: 1,
+          items: { $ref: '#/components/schemas/CourseCatalogReorderItem' },
+          description: '按 mode 覆盖该上下文下须排序的节点',
+        },
+      },
+    },
+    CourseCatalogSiblingReorderRequest: {
+      type: 'object',
+      required: ['parentId', 'ids'],
+      properties: {
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '父节点 id',
+        },
+        ids: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'integer', format: 'int64' },
+          description: '该父下全部章节或全部直挂小节 id，按目标顺序',
+        },
+      },
+    },
+    CourseCatalogDeleteData: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '已软删节点 id',
+        },
+      },
+    },
+
   }
 
   // response wrappers
@@ -3569,6 +3973,16 @@ function buildAdmin() {
     ApiResponseViewerTagGroupItem: { $ref: '#/components/schemas/ViewerTagGroupPageItem' },
     ApiResponseViewerTagList: { $ref: '#/components/schemas/ViewerTagListData' },
     ApiResponseViewerTagDetail: { $ref: '#/components/schemas/ViewerTagListItem' },
+    ApiResponseActivityUserData: { $ref: '#/components/schemas/ActivityUserData' },
+    ApiResponseCourseCatalogList: {
+      $ref: '#/components/schemas/CourseCatalogListData',
+    },
+    ApiResponseCourseCatalogUsedContents: {
+      $ref: '#/components/schemas/CourseCatalogUsedContentsData',
+    },
+    ApiResponseCourseCatalogDelete: {
+      $ref: '#/components/schemas/CourseCatalogDeleteData',
+    },
 
   })) {
     schemas[name] = wrapData(data)
@@ -4518,6 +4932,18 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponsePresenceTrend'),
       },
     },
+    '/api/v1/activities/user-data/{id}': {
+      get: {
+        tags: ['统计'],
+        summary: '直播设置 · 用户数据汇总',
+        description:
+          '本站三表汇总。summary 恒等于 rows 中 type=live；rows 固定 live_replay → live → replay。',
+        operationId: 'getActivityUserData',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseActivityUserData'),
+      },
+    },
     '/api/v1/activities/attendees/{id}': {
       get: {
         tags: ['中控台'],
@@ -5305,6 +5731,286 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseAuditSubmit'),
       },
     },
+    '/api/v1/courses/catalog/list/{courseId}': {
+      get: {
+        tags: ['课程'],
+        summary: '课程目录节点列表',
+        description:
+          '扁平列表。同父排序：全部 sortOrder=0 → 子课程→章节→小节；存在小节自定义序则可交错。子课程带 chapterCount/lessonCount。',
+        operationId: 'listCourseCatalog',
+        security: bearer,
+        parameters: [courseId],
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/used-contents/{courseId}': {
+      get: {
+        tags: ['课程'],
+        summary: '本课已占用内容',
+        description: '弹窗禁勾：lives / materials。',
+        operationId: 'listCourseCatalogUsedContents',
+        security: bearer,
+        parameters: [courseId],
+        responses: ok200(
+          '#/components/schemas/ApiResponseCourseCatalogUsedContents',
+        ),
+      },
+    },
+    '/api/v1/courses/catalog/lessons/bind-lives/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '绑定直播为小节',
+        description:
+          '多选建小节 contentKind=1；标题取直播名截断 ≤30。有子课后 parentId 不可为 0。重复 → 400。',
+        operationId: 'bindCourseCatalogLives',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogBindLivesRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/lessons/bind-materials/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '绑定素材为小节',
+        description:
+          '多选建小节；contentKind 由素材 type 映射。同课素材已占用 → 400。',
+        operationId: 'bindCourseCatalogMaterials',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogBindMaterialsRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/chapters/create/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '新建章节',
+        operationId: 'createCourseCatalogChapter',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogChapterCreateRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/chapters/update/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '改章节标题',
+        operationId: 'updateCourseCatalogChapter',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogChapterUpdateRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/chapters/delete/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '软删章节',
+        description:
+          'keepContents=true 可迁到 targetChapterId；false 级联软删小节并重算 contentCount。',
+        operationId: 'deleteCourseCatalogChapter',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogChapterDeleteRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogDelete'),
+      },
+    },
+    '/api/v1/courses/catalog/chapters/reorder/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '重排章节（兼容）',
+        description: '仅重排该父下全部章节。新弹窗请用 catalog/reorder。',
+        operationId: 'reorderCourseCatalogChapters',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogSiblingReorderRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/subcourses/create/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '新建子课程',
+        description:
+          '挂根。首子课且根下已有章节/小节时须 moveRootContents=true。',
+        operationId: 'createCourseCatalogSubcourse',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogSubcourseCreateRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/subcourses/update/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '改子课程名称与封面',
+        operationId: 'updateCourseCatalogSubcourse',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogSubcourseUpdateRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/subcourses/delete/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '软删子课程',
+        description:
+          'keepContents=true 可迁到 targetSubcourseId；false 级联软删并重算 contentCount。',
+        operationId: 'deleteCourseCatalogSubcourse',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogSubcourseDeleteRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogDelete'),
+      },
+    },
+    '/api/v1/courses/catalog/subcourses/reorder/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '重排子课程',
+        description: 'ids 须与当前未软删子课程集合一致，写 sortOrder 1..n。',
+        operationId: 'reorderCourseCatalogSubcourses',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogSubcourseReorderRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/reorder/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '目录排序弹窗统一保存',
+        description:
+          'mode=chapters|lessons；自定义排序写 sortOrder=1..n（0 保留未排序）。',
+        operationId: 'reorderCourseCatalog',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogReorderRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
+    '/api/v1/courses/catalog/lessons/reorder/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '重排直挂小节（兼容）',
+        description: '仅重排该父下全部直挂小节。新弹窗请用 catalog/reorder。',
+        operationId: 'reorderCourseCatalogLessons',
+        security: bearer,
+        parameters: [courseId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogSiblingReorderRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+      },
+    },
 
     '/api/v1/materials/audits/{id}': {
       get: {
@@ -5905,7 +6611,7 @@ function buildAdmin() {
         '- JSON 不输出 `null` 字段',
         '- 除登录白名单与 `/api/v1/outside/**` 外需 `Authorization: Bearer <accessToken>`',
       ].join('\n'),
-      version: '2.7.0',
+      version: '2.8.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -6021,6 +6727,191 @@ function buildLive() {
         list: {
           type: 'array',
           items: { $ref: '#/components/schemas/WatchActivitySummary' },
+        },
+      },
+    },
+    ViewerLearningCourseItem: {
+      type: 'object',
+      required: ['id', 'title', 'subCourseCount', 'lessonCount'],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '本站课程 UUID',
+        },
+        title: { type: 'string', description: '课程名称' },
+        coverUrl: { type: 'string', description: '封面 URL' },
+        subCourseCount: {
+          type: 'integer',
+          description: '未软删子课程数；库：INT',
+        },
+        lessonCount: {
+          type: 'integer',
+          description: '小节数（course.content_count）；库：INT',
+        },
+        acquiredTime: {
+          type: 'string',
+          description:
+            '本学员获得权益时间（course_user.created_time），yyyy-MM-dd HH:mm:ss',
+        },
+      },
+    },
+    ViewerLearningCourseListData: {
+      type: 'object',
+      required: ['total', 'list'],
+      properties: {
+        total: { type: 'integer', format: 'int64', description: '总条数' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ViewerLearningCourseItem' },
+          description: '课程列表',
+        },
+      },
+    },
+    ViewerLearningSubCourseItem: {
+      type: 'object',
+      required: ['id', 'title', 'lessonCount'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '子课程节点 id；库：BIGINT',
+        },
+        title: { type: 'string', description: '子课程标题' },
+        coverUrl: { type: 'string', description: '子课程封面 URL' },
+        lessonCount: {
+          type: 'integer',
+          description: '该子课程下小节数（含章内）；库：INT',
+        },
+      },
+    },
+    ViewerLearningCatalogNode: {
+      type: 'object',
+      required: ['id', 'parentId', 'nodeType', 'title'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '目录节点 id；库：BIGINT',
+        },
+        parentId: {
+          type: 'integer',
+          format: 'int64',
+          description: '父节点 id；根为 0；库：BIGINT',
+        },
+        nodeType: {
+          type: 'integer',
+          description: '1 章节 / 2 子课程 / 3 小节',
+          enum: [1, 2, 3],
+        },
+        title: { type: 'string', description: '节点标题' },
+        contentKind: {
+          type: 'integer',
+          nullable: true,
+          description: '仅小节：1 直播 / 2 图片 / 3 视频 / 4 文档 / 5 文章',
+          enum: [1, 2, 3, 4, 5],
+        },
+        contentId: {
+          type: 'string',
+          nullable: true,
+          description: '小节内容 id（直播 UUID 或素材 UUID）',
+        },
+        coverUrl: { type: 'string', nullable: true, description: '封面 URL' },
+        lessonCount: {
+          type: 'integer',
+          nullable: true,
+          description: '章节：直属小节数；子课程：其下全部小节数；小节省略',
+        },
+        contentKindLabel: {
+          type: 'string',
+          nullable: true,
+          description: '小节类型中文：直播 / 图片 / 视频 / 文档 / 文章',
+        },
+        metaLabel: {
+          type: 'string',
+          nullable: true,
+          description: '直播「支持回放」等副文案；无则省略',
+        },
+        participateStatus: {
+          type: 'integer',
+          nullable: true,
+          description: '仅小节：本学员 0 未开始 / 1 进行中 / 2 已完成',
+          enum: [0, 1, 2],
+        },
+        progressPercent: {
+          type: 'integer',
+          nullable: true,
+          description: '仅小节：本学员进度 0～100',
+        },
+      },
+    },
+    ViewerLearningLessonContentData: {
+      type: 'object',
+      required: ['lessonNodeId', 'title', 'contentKind', 'contentId', 'participateStatus'],
+      properties: {
+        lessonNodeId: {
+          type: 'integer',
+          format: 'int64',
+          description: '小节节点 id；库：BIGINT',
+        },
+        title: { type: 'string', description: '小节标题' },
+        contentKind: {
+          type: 'integer',
+          description: '1 直播 / 2 图片 / 3 视频 / 4 文档 / 5 文章',
+          enum: [1, 2, 3, 4, 5],
+        },
+        contentId: { type: 'string', description: '直播 UUID 或素材 UUID' },
+        participateStatus: {
+          type: 'integer',
+          description: '0 未开始 / 1 进行中 / 2 已完成',
+          enum: [0, 1, 2],
+        },
+        progressPercent: { type: 'integer', description: '0～100' },
+        progressBarSec: {
+          type: 'integer',
+          nullable: true,
+          description: '进度条最远点（秒）；图/文/档可空',
+        },
+        materialUrl: { type: 'string', nullable: true, description: '素材 URL' },
+        mimeType: { type: 'string', nullable: true },
+        materialName: { type: 'string', nullable: true },
+        articleHtml: { type: 'string', nullable: true, description: '仅文章正文 HTML' },
+        author: {
+          type: 'string',
+          nullable: true,
+          description: '仅文章作者；库：material_article.author VARCHAR(16)',
+        },
+        activityId: {
+          type: 'string',
+          nullable: true,
+          description: '仅直播：活动 UUID',
+        },
+      },
+    },
+    ViewerLearningCourseDetailData: {
+      type: 'object',
+      required: ['id', 'title', 'subCourses', 'nodes'],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '本站课程 UUID',
+        },
+        title: { type: 'string', description: '课程名称' },
+        coverUrl: { type: 'string', description: '封面 URL' },
+        introduction: { type: 'string', description: '一句话简介' },
+        detailHtml: { type: 'string', description: '详情富文本 HTML' },
+        validityLabel: {
+          type: 'string',
+          description: '有效期文案（course.validity_label）',
+        },
+        subCourses: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ViewerLearningSubCourseItem' },
+          description: '根下子课程卡片（node_type=2 且 parentId=0）',
+        },
+        nodes: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ViewerLearningCatalogNode' },
+          description: '全部未软删目录节点（扁平；同父排序与管理端一致）',
         },
       },
     },
@@ -6368,14 +7259,28 @@ function buildLive() {
     WatchCommentReportRequest: {
       type: 'object',
       required: ['content'],
+      description:
+        '评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。',
       properties: {
-        content: { type: 'string', maxLength: 500 },
-        guestId: { type: 'string' },
-        viewerId: { type: 'integer', format: 'int64' },
-        nickname: { type: 'string' },
-        roleName: { type: 'integer' },
-        providerMsgId: { type: 'string' },
-        commentTime: { type: 'string' },
+        content: {
+          type: 'string',
+          maxLength: 500,
+          description: '评论正文，必填 ≤500',
+        },
+        nickname: { type: 'string', description: '展示昵称；可选' },
+        roleName: {
+          type: 'integer',
+          description: '角色标识（微吼侧）；可选',
+        },
+        providerMsgId: {
+          type: 'string',
+          description: '云侧消息 id；有则本场幂等；可选',
+        },
+        commentTime: {
+          type: 'string',
+          description:
+            '评论时间 yyyy-MM-dd HH:mm:ss；缺省用服务器当前时间',
+        },
       },
     },
     WatchCommentDeleteRequest: {
@@ -6473,6 +7378,15 @@ function buildLive() {
   for (const [name, data] of Object.entries({
     ApiResponseId: { $ref: '#/components/schemas/IdData' },
     ApiResponseWatchList: { $ref: '#/components/schemas/WatchActivityListData' },
+    ApiResponseViewerLearningCourses: {
+      $ref: '#/components/schemas/ViewerLearningCourseListData',
+    },
+    ApiResponseViewerLearningCourseDetail: {
+      $ref: '#/components/schemas/ViewerLearningCourseDetailData',
+    },
+    ApiResponseViewerLearningLessonContent: {
+      $ref: '#/components/schemas/ViewerLearningLessonContentData',
+    },
     ApiResponseWatchEmbed: { $ref: '#/components/schemas/WatchEmbedData' },
     ApiResponseWatchSummary: { $ref: '#/components/schemas/WatchSummaryData' },
     ApiResponseWatchSdk: { $ref: '#/components/schemas/WatchSdkData' },
@@ -6726,6 +7640,69 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseWatchList'),
       },
     },
+    '/api/v1/viewer/learning/courses': {
+      get: {
+        tags: ['我的学习'],
+        summary: '我的学习·课程',
+        description:
+          '仅 course_user 有效权益（entitlement_status=1 且未按售卖到期）且课程未软删；按获得权益时间倒序。',
+        operationId: 'viewerLearningCourses',
+        security: viewerBearer,
+        parameters: [...pageParams],
+        responses: ok200('#/components/schemas/ApiResponseViewerLearningCourses'),
+      },
+    },
+    '/api/v1/viewer/learning/courses/detail/{courseId}': {
+      get: {
+        tags: ['我的学习'],
+        summary: '我的学习·课程详情',
+        description:
+          '需 course_user 有效权益且课程未软删；返回封面/有效期/简介/详情 HTML、子课程与扁平目录。无权益或不存在 → 400。',
+        operationId: 'viewerLearningCourseDetail',
+        security: viewerBearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+        ],
+        responses: ok200(
+          '#/components/schemas/ApiResponseViewerLearningCourseDetail',
+        ),
+      },
+    },
+    '/api/v1/viewer/learning/courses/lessons/{courseId}/{lessonNodeId}': {
+      get: {
+        tags: ['我的学习'],
+        summary: '我的学习·小节内容',
+        description:
+          '需有效权益；返回直播 activityId 或素材 URL/文章 HTML，及本学员进度。无权益或不存在 → 400。',
+        operationId: 'viewerLearningLessonContent',
+        security: viewerBearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 id（D74）',
+          },
+          {
+            name: 'lessonNodeId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: '小节节点 id',
+          },
+        ],
+        responses: ok200(
+          '#/components/schemas/ApiResponseViewerLearningLessonContent',
+        ),
+      },
+    },
     '/api/v1/viewer/presence/ping': {
       post: {
         tags: ['观众鉴权'],
@@ -6922,8 +7899,10 @@ function buildLive() {
       post: {
         tags: ['评论'],
         summary: '上报评论',
+        description:
+          '须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。',
         operationId: 'watchCommentReport',
-        security: [],
+        security: viewerBearer,
         parameters: [watchId],
         requestBody: {
           required: true,
@@ -6938,8 +7917,9 @@ function buildLive() {
       post: {
         tags: ['评论'],
         summary: '软删评论',
+        description: '须观众 Authorization；无票 → 401。Body 传 providerMsgId 或 commentId。',
         operationId: 'watchCommentDelete',
-        security: [],
+        security: viewerBearer,
         parameters: [watchId],
         requestBody: {
           required: true,
@@ -7139,7 +8119,7 @@ function buildLive() {
         '- JSON 不输出 `null` 字段',
         '- 观看端不走管理端 JWT',
       ].join('\n'),
-      version: '2.7.0',
+      version: '2.8.0',
       contact: { name: 'zhibo-backend' },
     },
     servers: [
@@ -7231,7 +8211,7 @@ function mergeDocs(admin, live) {
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
       ].join('\n'),
-      version: '2.7.0',
+      version: '2.8.0',
       contact: { name: 'zhibo' },
     },
     servers: [

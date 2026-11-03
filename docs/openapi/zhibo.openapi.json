@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo API（admin + live）",
     "description": "钱坤直播全站 OpenAPI，供 Apifox 一次导入。\n\n- admin-service：`http://127.0.0.1:8081`\n- live-service：`http://127.0.0.1:8082`\n\n契约：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。\n本文件亦是正式后端按文档反向实现接口与建表/校验的权威输入之一。\n分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。\n\n导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "contact": {
       "name": "zhibo"
     }
@@ -2324,6 +2324,38 @@
         }
       }
     },
+    "/api/v1/activities/user-data/{id}": {
+      "get": {
+        "tags": [
+          "admin/统计"
+        ],
+        "summary": "直播设置 · 用户数据汇总",
+        "description": "本站三表汇总。summary 恒等于 rows 中 type=live；rows 固定 live_replay → live → replay。",
+        "operationId": "admin_getActivityUserData",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseActivityUserData"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/activities/attendees/{id}": {
       "get": {
         "tags": [
@@ -4115,6 +4147,571 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseAuditSubmit"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/list/{courseId}": {
+      "get": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "课程目录节点列表",
+        "description": "扁平列表。同父排序：全部 sortOrder=0 → 子课程→章节→小节；存在小节自定义序则可交错。子课程带 chapterCount/lessonCount。",
+        "operationId": "admin_listCourseCatalog",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/used-contents/{courseId}": {
+      "get": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "本课已占用内容",
+        "description": "弹窗禁勾：lives / materials。",
+        "operationId": "admin_listCourseCatalogUsedContents",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogUsedContents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/lessons/bind-lives/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "绑定直播为小节",
+        "description": "多选建小节 contentKind=1；标题取直播名截断 ≤30。有子课后 parentId 不可为 0。重复 → 400。",
+        "operationId": "admin_bindCourseCatalogLives",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogBindLivesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/lessons/bind-materials/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "绑定素材为小节",
+        "description": "多选建小节；contentKind 由素材 type 映射。同课素材已占用 → 400。",
+        "operationId": "admin_bindCourseCatalogMaterials",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogBindMaterialsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/chapters/create/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "新建章节",
+        "operationId": "admin_createCourseCatalogChapter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogChapterCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/chapters/update/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "改章节标题",
+        "operationId": "admin_updateCourseCatalogChapter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogChapterUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/chapters/delete/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "软删章节",
+        "description": "keepContents=true 可迁到 targetChapterId；false 级联软删小节并重算 contentCount。",
+        "operationId": "admin_deleteCourseCatalogChapter",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogChapterDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogDelete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/chapters/reorder/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "重排章节（兼容）",
+        "description": "仅重排该父下全部章节。新弹窗请用 catalog/reorder。",
+        "operationId": "admin_reorderCourseCatalogChapters",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogSiblingReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/subcourses/create/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "新建子课程",
+        "description": "挂根。首子课且根下已有章节/小节时须 moveRootContents=true。",
+        "operationId": "admin_createCourseCatalogSubcourse",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogSubcourseCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/subcourses/update/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "改子课程名称与封面",
+        "operationId": "admin_updateCourseCatalogSubcourse",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogSubcourseUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/subcourses/delete/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "软删子课程",
+        "description": "keepContents=true 可迁到 targetSubcourseId；false 级联软删并重算 contentCount。",
+        "operationId": "admin_deleteCourseCatalogSubcourse",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogSubcourseDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogDelete"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/subcourses/reorder/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "重排子课程",
+        "description": "ids 须与当前未软删子课程集合一致，写 sortOrder 1..n。",
+        "operationId": "admin_reorderCourseCatalogSubcourses",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogSubcourseReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/reorder/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "目录排序弹窗统一保存",
+        "description": "mode=chapters|lessons；自定义排序写 sortOrder=1..n（0 保留未排序）。",
+        "operationId": "admin_reorderCourseCatalog",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/lessons/reorder/{courseId}": {
+      "post": {
+        "tags": [
+          "admin/课程"
+        ],
+        "summary": "重排直挂小节（兼容）",
+        "description": "仅重排该父下全部直挂小节。新弹窗请用 catalog/reorder。",
+        "operationId": "admin_reorderCourseCatalogLessons",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogSiblingReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
                 }
               }
             }
@@ -7124,8 +7721,13 @@
           "live/评论"
         ],
         "summary": "上报评论",
+        "description": "须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。",
         "operationId": "live_watchCommentReport",
-        "security": [],
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/WatchActivityId"
@@ -7161,8 +7763,13 @@
           "live/评论"
         ],
         "summary": "软删评论",
+        "description": "须观众 Authorization；无票 → 401。Body 传 providerMsgId 或 commentId。",
         "operationId": "live_watchCommentDelete",
-        "security": [],
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/WatchActivityId"
@@ -14206,6 +14813,654 @@
           }
         }
       },
+      "ActivityUserDataSummary": {
+        "type": "object",
+        "required": [
+          "visitorCount",
+          "viewCount",
+          "avgStayDurationSec"
+        ],
+        "properties": {
+          "visitorCount": {
+            "type": "integer",
+            "description": "访客数；等于 rows 中 type=live 的观看人数；库：INT"
+          },
+          "viewCount": {
+            "type": "integer",
+            "description": "浏览量；等于 rows 中 type=live 的观看人次；库：INT"
+          },
+          "avgStayDurationSec": {
+            "type": "integer",
+            "description": "人均停留时长（整秒）；等于 live 行人均观看时长；库：INT"
+          }
+        }
+      },
+      "ActivityUserDataRow": {
+        "type": "object",
+        "required": [
+          "type",
+          "viewerCount",
+          "viewCount",
+          "avgWatchDurationSec"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "live_replay",
+              "live",
+              "replay"
+            ],
+            "description": "live_replay 直播+回放 / live 直播 / replay 回放；库：INT",
+            "x-apifox-enum": [
+              {
+                "value": "live_replay",
+                "name": "直播+回放",
+                "description": "直播+回放"
+              },
+              {
+                "value": "live",
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": "replay",
+                "name": "回放",
+                "description": "回放"
+              }
+            ]
+          },
+          "viewerCount": {
+            "type": "integer",
+            "description": "观看人数；库：INT"
+          },
+          "viewCount": {
+            "type": "integer",
+            "description": "观看人次；库：INT"
+          },
+          "avgWatchDurationSec": {
+            "type": "integer",
+            "description": "人均观看时长（整秒）；库：INT"
+          }
+        }
+      },
+      "ActivityUserDataTrendDefault": {
+        "type": "object",
+        "required": [
+          "startTime",
+          "endTime"
+        ],
+        "properties": {
+          "startTime": {
+            "type": "string",
+            "description": "趋势图默认起点，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "趋势图默认终点，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+          }
+        }
+      },
+      "ActivityUserData": {
+        "type": "object",
+        "required": [
+          "id",
+          "summary",
+          "rows",
+          "trendDefault"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "本站活动 UUID"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ActivityUserDataSummary",
+            "description": "顶部汇总；恒等于 rows 中 type=live"
+          },
+          "rows": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "固定三行，顺序 live_replay → live → replay",
+            "items": {
+              "$ref": "#/components/schemas/ActivityUserDataRow"
+            }
+          },
+          "trendDefault": {
+            "$ref": "#/components/schemas/ActivityUserDataTrendDefault",
+            "description": "在线趋势图默认起止时间"
+          }
+        }
+      },
+      "CatalogNodeType": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3
+        ],
+        "description": "1 章节 / 2 子课程 / 3 小节；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 1,
+            "name": "章节",
+            "description": "章节"
+          },
+          {
+            "value": 2,
+            "name": "子课程",
+            "description": "子课程"
+          },
+          {
+            "value": 3,
+            "name": "小节",
+            "description": "小节"
+          }
+        ]
+      },
+      "CatalogContentKind": {
+        "type": "integer",
+        "enum": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "description": "1 直播 / 2 图片 / 3 视频 / 4 文档 / 5 文章；库：INT",
+        "x-apifox-enum": [
+          {
+            "value": 1,
+            "name": "直播",
+            "description": "直播"
+          },
+          {
+            "value": 2,
+            "name": "图片",
+            "description": "图片"
+          },
+          {
+            "value": 3,
+            "name": "视频",
+            "description": "视频"
+          },
+          {
+            "value": 4,
+            "name": "文档",
+            "description": "文档"
+          },
+          {
+            "value": 5,
+            "name": "文章",
+            "description": "文章"
+          }
+        ]
+      },
+      "CatalogReorderMode": {
+        "type": "string",
+        "enum": [
+          "chapters",
+          "lessons"
+        ],
+        "description": "chapters 章排序 / lessons 小节排序；库：VARCHAR(16)",
+        "x-apifox-enum": [
+          {
+            "value": "chapters",
+            "name": "章排序",
+            "description": "章排序"
+          },
+          {
+            "value": "lessons",
+            "name": "小节排序",
+            "description": "小节排序"
+          }
+        ]
+      },
+      "CourseCatalogNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "courseId",
+          "parentId",
+          "nodeType",
+          "title",
+          "sortOrder"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "目录节点 id；库：BIGINT"
+          },
+          "courseId": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "所属课程 UUID"
+          },
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "父节点 id；根为 0；库：BIGINT"
+          },
+          "nodeType": {
+            "$ref": "#/components/schemas/CatalogNodeType",
+            "description": "1 章节 / 2 子课程 / 3 小节；库：INT",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "章节",
+                "description": "章节"
+              },
+              {
+                "value": 2,
+                "name": "子课程",
+                "description": "子课程"
+              },
+              {
+                "value": 3,
+                "name": "小节",
+                "description": "小节"
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 30,
+            "description": "节点标题；库：VARCHAR(30)"
+          },
+          "coverMaterialId": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "子课程封面素材 UUID；无则省略"
+          },
+          "coverUrl": {
+            "type": "string",
+            "description": "子课程封面 URL；无则省略；库：VARCHAR(2048)",
+            "maxLength": 2048
+          },
+          "contentKind": {
+            "$ref": "#/components/schemas/CatalogContentKind",
+            "description": "仅小节；内容类型",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": 3,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 4,
+                "name": "文档",
+                "description": "文档"
+              },
+              {
+                "value": 5,
+                "name": "文章",
+                "description": "文章"
+              }
+            ]
+          },
+          "contentId": {
+            "type": "string",
+            "description": "小节内容 id（直播活动 UUID 或素材 UUID）；仅小节"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "同父排序；0 表示未自定义；库：INT"
+          },
+          "chapterCount": {
+            "type": "integer",
+            "description": "子课程下章节数；仅子课程返回；库：INT"
+          },
+          "lessonCount": {
+            "type": "integer",
+            "description": "子课程下小节数；仅子课程返回；库：INT"
+          },
+          "createdTime": {
+            "type": "string",
+            "description": "创建时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+          }
+        }
+      },
+      "CourseCatalogListData": {
+        "type": "object",
+        "required": [
+          "list"
+        ],
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CourseCatalogNode"
+            },
+            "description": "扁平目录节点列表（按展示序）"
+          },
+          "contentCount": {
+            "type": "integer",
+            "description": "课程内容数（小节数）；部分写接口回写；库：INT"
+          }
+        }
+      },
+      "CourseCatalogUsedContentsData": {
+        "type": "object",
+        "required": [
+          "lives",
+          "materials"
+        ],
+        "properties": {
+          "lives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "本课已占用的直播活动 UUID"
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "本课已占用的素材 UUID"
+          }
+        }
+      },
+      "CourseCatalogBindLivesRequest": {
+        "type": "object",
+        "required": [
+          "parentId",
+          "activityIds"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "父节点 id；有子课后不可为 0；库：BIGINT"
+          },
+          "activityIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "要绑定的直播活动 UUID 列表"
+          }
+        }
+      },
+      "CourseCatalogBindMaterialsRequest": {
+        "type": "object",
+        "required": [
+          "parentId",
+          "materialIds"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "父节点 id；有子课后不可为 0；库：BIGINT"
+          },
+          "materialIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "要绑定的素材 UUID 列表"
+          }
+        }
+      },
+      "CourseCatalogChapterCreateRequest": {
+        "type": "object",
+        "required": [
+          "parentId",
+          "title"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "父节点 id；有子课后须为子课程 id；库：BIGINT"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "章节标题，1～30 字；库：VARCHAR(30)"
+          }
+        }
+      },
+      "CourseCatalogChapterUpdateRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "本课章节节点 id；库：VARCHAR(32)"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "章节标题，1～30 字；库：VARCHAR(30)"
+          }
+        }
+      },
+      "CourseCatalogChapterDeleteRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "keepContents"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "要软删的章节节点 id；库：VARCHAR(32)"
+          },
+          "keepContents": {
+            "type": "boolean",
+            "description": "true 保留其下小节（可迁到 targetChapterId）；false 级联软删小节并重算 contentCount；库：TINYINT(1)"
+          },
+          "targetChapterId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "可选；keepContents=true 时把直属小节迁到该章节后再软删本节点；库：BIGINT"
+          }
+        }
+      },
+      "CourseCatalogSubcourseCreateRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "coverMaterialId"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "子课程名称，1～30 字；库：VARCHAR(30)"
+          },
+          "coverMaterialId": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "封面素材 UUID"
+          },
+          "moveRootContents": {
+            "type": "boolean",
+            "description": "首子课且根下已有章节/小节时须 true，把根内容迁入新子课程；库：TINYINT(1)"
+          }
+        }
+      },
+      "CourseCatalogSubcourseUpdateRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "coverMaterialId"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "本课子课程节点 id；库：VARCHAR(32)"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "子课程名称，1～30 字；库：VARCHAR(30)"
+          },
+          "coverMaterialId": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "封面素材 UUID"
+          }
+        }
+      },
+      "CourseCatalogSubcourseDeleteRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "keepContents"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "要软删的子课程节点 id；库：VARCHAR(32)"
+          },
+          "keepContents": {
+            "type": "boolean",
+            "description": "true 保留其下章节/小节（可迁到 targetSubcourseId）；false 级联软删并重算 contentCount；库：TINYINT(1)"
+          },
+          "targetSubcourseId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "可选；keepContents=true 时把直属章节与根小节迁到该子课程后再软删本节点；库：BIGINT"
+          }
+        }
+      },
+      "CourseCatalogSubcourseReorderRequest": {
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "本课全部未软删子课程 id，按目标顺序"
+          }
+        }
+      },
+      "CourseCatalogReorderItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "parentId"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "节点 id；库：VARCHAR(32)"
+          },
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "目标父节点 id（小节可改挂；章节不可变）；库：BIGINT"
+          }
+        }
+      },
+      "CourseCatalogReorderRequest": {
+        "type": "object",
+        "required": [
+          "parentId",
+          "mode",
+          "items"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "目录上下文：根 0 或子课程 id；库：BIGINT"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/CatalogReorderMode",
+            "description": "chapters 章排序 / lessons 小节排序",
+            "x-apifox-enum": [
+              {
+                "value": "chapters",
+                "name": "章排序",
+                "description": "章排序"
+              },
+              {
+                "value": "lessons",
+                "name": "小节排序",
+                "description": "小节排序"
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/CourseCatalogReorderItem"
+            },
+            "description": "按 mode 覆盖该上下文下须排序的节点"
+          }
+        }
+      },
+      "CourseCatalogSiblingReorderRequest": {
+        "type": "object",
+        "required": [
+          "parentId",
+          "ids"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "父节点 id；库：BIGINT"
+          },
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "该父下全部章节或全部直挂小节 id，按目标顺序"
+          }
+        }
+      },
+      "CourseCatalogDeleteData": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "已软删节点 id；库：VARCHAR(32)"
+          }
+        }
+      },
       "ApiResponseId": {
         "allOf": [
           {
@@ -15484,6 +16739,70 @@
           }
         ]
       },
+      "ApiResponseActivityUserData": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ActivityUserData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseCourseCatalogList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/CourseCatalogListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseCourseCatalogUsedContents": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/CourseCatalogUsedContentsData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseCourseCatalogDelete": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/CourseCatalogDeleteData"
+              }
+            }
+          }
+        ]
+      },
       "WatchActivitySummary": {
         "type": "object",
         "properties": {
@@ -16635,38 +17954,29 @@
         "required": [
           "content"
         ],
+        "description": "评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。",
         "properties": {
           "content": {
             "type": "string",
             "maxLength": 500,
-            "description": "正文内容；库：VARCHAR(500)"
-          },
-          "guestId": {
-            "type": "string",
-            "description": "本站生成的游客 id；库：VARCHAR(64)",
-            "maxLength": 64
-          },
-          "viewerId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "观众 id（viewer 表主键）；库：BIGINT"
+            "description": "评论正文，必填 ≤500；库：VARCHAR(500)"
           },
           "nickname": {
             "type": "string",
-            "description": "昵称；库：VARCHAR(64)",
+            "description": "展示昵称；可选；库：VARCHAR(64)",
             "maxLength": 64
           },
           "roleName": {
             "type": "integer",
-            "description": "评论角色名；库：INT"
+            "description": "角色标识（微吼侧）；可选；库：INT"
           },
           "providerMsgId": {
             "type": "string",
-            "description": "第三方消息 id"
+            "description": "云侧消息 id；有则本场幂等；可选"
           },
           "commentTime": {
             "type": "string",
-            "description": "评论时间；库：DATETIME(3)"
+            "description": "评论时间 yyyy-MM-dd HH:mm:ss；缺省用服务器当前时间；库：DATETIME(3)"
           }
         }
       },

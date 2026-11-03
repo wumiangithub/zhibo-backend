@@ -6,13 +6,17 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.course.dto.CourseUserListResponse;
+import com.zhibo.course.CourseCatalogNodeRepository;
 import com.zhibo.course.CourseEntity;
+import com.zhibo.course.CourseLessonProgressRepository;
 import com.zhibo.course.CourseRepository;
 import com.zhibo.course.CourseUserEntity;
 import com.zhibo.course.CourseUserImportRepository;
 import com.zhibo.course.CourseUserRepository;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
+import com.zhibo.viewer.ViewerTagMemberRepository;
+import com.zhibo.viewer.ViewerTagRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +39,15 @@ class CourseUserServiceTest {
     @Mock
     private CourseUserImportRepository courseUserImportRepository;
     @Mock
+    private CourseCatalogNodeRepository catalogNodeRepository;
+    @Mock
+    private CourseLessonProgressRepository progressRepository;
+    @Mock
     private ViewerRepository viewerRepository;
+    @Mock
+    private ViewerTagMemberRepository viewerTagMemberRepository;
+    @Mock
+    private ViewerTagRepository viewerTagRepository;
     @Mock
     private SysUserAccountRepository userRepository;
     @Mock
@@ -69,11 +81,18 @@ class CourseUserServiceTest {
         viewer.setPhone("13812345678");
         when(viewerRepository.findAllById(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of(viewer));
+        when(catalogNodeRepository.countActiveByCourseIdAndNodeType(
+                        org.mockito.ArgumentMatchers.eq(CID), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(10L);
+        when(progressRepository.findByCourseId(CID)).thenReturn(List.of());
+        when(viewerTagMemberRepository.findByViewerIdIn(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
 
         CourseUserListResponse res = courseUserService.list(CID, 1, 20, null, null, null);
         assertEquals(1, res.getTotal());
         assertEquals("expired", res.getList().get(0).getEntitlementState());
         assertEquals("已到期", res.getList().get(0).getEntitlementStateLabel());
+        assertEquals(0D, res.getList().get(0).getChapterCompletionRate());
     }
 
     @Test
@@ -99,6 +118,12 @@ class CourseUserServiceTest {
         viewer.setNickname("李四");
         when(viewerRepository.findAllById(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of(viewer));
+        when(catalogNodeRepository.countActiveByCourseIdAndNodeType(
+                        org.mockito.ArgumentMatchers.eq(CID), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(10L);
+        when(progressRepository.findByCourseId(CID)).thenReturn(List.of());
+        when(viewerTagMemberRepository.findByViewerIdIn(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of());
 
         CourseUserListResponse res = courseUserService.list(CID, 1, 20, null, null, "valid");
         assertEquals(1, res.getTotal());

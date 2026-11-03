@@ -77,9 +77,12 @@ public class GlobalExceptionHandler {
                 && be.getBindingResult().getFieldError() != null) {
             return be.getBindingResult().getFieldError().getDefaultMessage();
         }
-        if (ex instanceof MissingServletRequestPartException
-                || ex instanceof MissingServletRequestParameterException) {
+        if (ex instanceof MissingServletRequestPartException) {
             return "请选择要上传的图片";
+        }
+        if (ex instanceof MissingServletRequestParameterException missing) {
+            String name = missing.getParameterName();
+            return name == null || name.isBlank() ? "缺少必填参数" : "缺少必填参数：" + name;
         }
         if (ex.getMessage() != null && !ex.getMessage().isBlank()) {
             return ex.getMessage();

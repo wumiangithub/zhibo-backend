@@ -3,7 +3,7 @@
   "info": {
     "title": "zhibo live-service",
     "description": "钱坤直播观看端 / 中控台 API（live-service :8082）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 观看端不走管理端 JWT",
-    "version": "2.7.0",
+    "version": "2.8.0",
     "contact": {
       "name": "zhibo-backend"
     }
@@ -1137,8 +1137,13 @@
           "评论"
         ],
         "summary": "上报评论",
+        "description": "须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。",
         "operationId": "watchCommentReport",
-        "security": [],
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/WatchActivityId"
@@ -1174,8 +1179,13 @@
           "评论"
         ],
         "summary": "软删评论",
+        "description": "须观众 Authorization；无票 → 401。Body 传 providerMsgId 或 commentId。",
         "operationId": "watchCommentDelete",
-        "security": [],
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/WatchActivityId"
@@ -2935,38 +2945,29 @@
         "required": [
           "content"
         ],
+        "description": "评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。",
         "properties": {
           "content": {
             "type": "string",
             "maxLength": 500,
-            "description": "正文内容；库：VARCHAR(500)"
-          },
-          "guestId": {
-            "type": "string",
-            "description": "本站生成的游客 id；库：VARCHAR(64)",
-            "maxLength": 64
-          },
-          "viewerId": {
-            "type": "integer",
-            "format": "int64",
-            "description": "观众 id（viewer 表主键）；库：BIGINT"
+            "description": "评论正文，必填 ≤500；库：VARCHAR(500)"
           },
           "nickname": {
             "type": "string",
-            "description": "昵称；库：VARCHAR(64)",
+            "description": "展示昵称；可选；库：VARCHAR(64)",
             "maxLength": 64
           },
           "roleName": {
             "type": "integer",
-            "description": "评论角色名；库：INT"
+            "description": "角色标识（微吼侧）；可选；库：INT"
           },
           "providerMsgId": {
             "type": "string",
-            "description": "第三方消息 id"
+            "description": "云侧消息 id；有则本场幂等；可选"
           },
           "commentTime": {
             "type": "string",
-            "description": "评论时间；库：DATETIME(3)"
+            "description": "评论时间 yyyy-MM-dd HH:mm:ss；缺省用服务器当前时间；库：DATETIME(3)"
           }
         }
       },

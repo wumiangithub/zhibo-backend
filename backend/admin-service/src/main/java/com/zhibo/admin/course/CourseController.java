@@ -9,6 +9,9 @@ import com.zhibo.admin.course.dto.BindMaterialsResponse;
 import com.zhibo.admin.course.dto.CatalogListResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CatalogUsedContentsResponse;
+import com.zhibo.admin.course.dto.CourseAnalyticsLessonListResponse;
+import com.zhibo.admin.course.dto.CourseAnalyticsUserLessonListResponse;
+import com.zhibo.admin.course.dto.CourseAnalyticsUserListResponse;
 import com.zhibo.admin.course.dto.CourseAuditListResponse;
 import com.zhibo.admin.course.dto.CourseAuditRequest;
 import com.zhibo.admin.course.dto.CourseAuditResultResponse;
@@ -71,6 +74,7 @@ public class CourseController {
     private final CourseService courseService;
     private final CourseCatalogService courseCatalogService;
     private final CourseUserService courseUserService;
+    private final CourseAnalyticsService courseAnalyticsService;
 
     @PostMapping("/create")
     public ApiResponse<CourseIdResponse> create(
@@ -200,6 +204,58 @@ public class CourseController {
         return csvAttachment(
                 "course-user-export.csv",
                 courseUserService.exportCsv(courseId, keywordType, keyword, entitlementState));
+    }
+
+    @GetMapping("/analytics/lessons/{courseId}")
+    public ApiResponse<CourseAnalyticsLessonListResponse> analyticsLessons(
+            @PathVariable String courseId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortOrder) {
+        return ApiResponse.ok(
+                courseAnalyticsService.listLessons(courseId, page, pageSize, sortBy, sortOrder));
+    }
+
+    @GetMapping("/analytics/lessons/export/{courseId}")
+    public ResponseEntity<byte[]> exportAnalyticsLessons(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortOrder) {
+        return csvAttachment(
+                "course-analytics-lessons.csv",
+                courseAnalyticsService.exportLessonsCsv(courseId, sortBy, sortOrder));
+    }
+
+    @GetMapping("/analytics/users/{courseId}")
+    public ApiResponse<CourseAnalyticsUserListResponse> analyticsUsers(
+            @PathVariable String courseId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword) {
+        return ApiResponse.ok(
+                courseAnalyticsService.listUsers(courseId, page, pageSize, keywordType, keyword));
+    }
+
+    @GetMapping("/analytics/users/export/{courseId}")
+    public ResponseEntity<byte[]> exportAnalyticsUsers(
+            @PathVariable String courseId,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword) {
+        return csvAttachment(
+                "course-analytics-users.csv",
+                courseAnalyticsService.exportUsersCsv(courseId, keywordType, keyword));
+    }
+
+    @GetMapping("/analytics/users/lessons/{courseId}")
+    public ApiResponse<CourseAnalyticsUserLessonListResponse> analyticsUserLessons(
+            @PathVariable String courseId,
+            @RequestParam Long viewerId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return ApiResponse.ok(
+                courseAnalyticsService.listUserLessons(courseId, viewerId, page, pageSize));
     }
 
     @DeleteMapping("/delete/{id}")

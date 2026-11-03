@@ -1,7 +1,4 @@
-package com.zhibo.admin.course;
-
-import com.zhibo.course.CourseCatalogNodeEntity;
-import com.zhibo.course.CourseCatalogNodeType;
+package com.zhibo.course;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -20,12 +17,12 @@ import java.util.Objects;
  * </ul>
  * 自定义排序写入时用 {@code 1..n}，保留 {@code 0} 表示未排序。
  */
-final class CatalogSiblingOrder {
+public final class CatalogSiblingOrder {
 
     private CatalogSiblingOrder() {
     }
 
-    static boolean isDefaultOrder(List<CourseCatalogNodeEntity> siblings) {
+    public static boolean isDefaultOrder(List<CourseCatalogNodeEntity> siblings) {
         if (siblings == null || siblings.isEmpty()) {
             return true;
         }
@@ -38,7 +35,7 @@ final class CatalogSiblingOrder {
     }
 
     /** 小节排序落库后才会出现小节非 0；此时允许交错。 */
-    static boolean usesInterleavedOrder(List<CourseCatalogNodeEntity> siblings) {
+    public static boolean usesInterleavedOrder(List<CourseCatalogNodeEntity> siblings) {
         if (siblings == null || siblings.isEmpty()) {
             return false;
         }
@@ -50,7 +47,7 @@ final class CatalogSiblingOrder {
         return false;
     }
 
-    static int typeRank(int nodeType) {
+    public static int typeRank(int nodeType) {
         if (nodeType == CourseCatalogNodeType.SUBCOURSE) {
             return 0;
         }
@@ -63,7 +60,7 @@ final class CatalogSiblingOrder {
         return 9;
     }
 
-    static Comparator<CourseCatalogNodeEntity> comparator(List<CourseCatalogNodeEntity> siblings) {
+    public static Comparator<CourseCatalogNodeEntity> comparator(List<CourseCatalogNodeEntity> siblings) {
         if (isDefaultOrder(siblings)) {
             return Comparator
                     .comparingInt((CourseCatalogNodeEntity n) -> typeRank(n.getNodeType()))
@@ -89,7 +86,7 @@ final class CatalogSiblingOrder {
     }
 
     /** 就地按同父规则排序；返回同一列表。 */
-    static List<CourseCatalogNodeEntity> sortSiblings(List<CourseCatalogNodeEntity> siblings) {
+    public static List<CourseCatalogNodeEntity> sortSiblings(List<CourseCatalogNodeEntity> siblings) {
         if (siblings == null || siblings.size() <= 1) {
             return siblings;
         }
@@ -101,7 +98,7 @@ final class CatalogSiblingOrder {
      * 将整课扁平列表整理为：按 parentId 分组排序后，再按 parentId、组内序拼接。
      * 列表接口依赖「同父相对序」正确；前端按 parent 过滤时保留相对序。
      */
-    static List<CourseCatalogNodeEntity> orderFlat(List<CourseCatalogNodeEntity> nodes) {
+    public static List<CourseCatalogNodeEntity> orderFlat(List<CourseCatalogNodeEntity> nodes) {
         if (nodes == null || nodes.isEmpty()) {
             return nodes == null ? List.of() : nodes;
         }
@@ -123,7 +120,7 @@ final class CatalogSiblingOrder {
     /**
      * 新建节点的 {@code sort_order}：同父仍全是默认 0 → 仍写 0；否则接在最大值后（跨类型）。
      */
-    static int nextSortOrder(List<CourseCatalogNodeEntity> siblings) {
+    public static int nextSortOrder(List<CourseCatalogNodeEntity> siblings) {
         if (siblings == null || siblings.isEmpty() || isDefaultOrder(siblings)) {
             return 0;
         }
@@ -137,14 +134,14 @@ final class CatalogSiblingOrder {
     }
 
     /** 自定义排序落库：从 1 起连续编号。 */
-    static void applyExplicitOrder(List<CourseCatalogNodeEntity> ordered) {
+    public static void applyExplicitOrder(List<CourseCatalogNodeEntity> ordered) {
         int sort = 1;
         for (CourseCatalogNodeEntity n : ordered) {
             n.setSortOrder(sort++);
         }
     }
 
-    static boolean sameIdSet(List<Long> expected, List<Long> actual) {
+    public static boolean sameIdSet(List<Long> expected, List<Long> actual) {
         if (expected.size() != actual.size()) {
             return false;
         }

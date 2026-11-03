@@ -15,4 +15,7 @@ public interface CourseUserRepository extends JpaRepository<CourseUserEntity, Lo
             String courseId, Collection<Long> viewerIds);
 
     List<CourseUserEntity> findByCourseIdAndEntitlementExpireTimeIsNull(String courseId);
+
+    Optional<CourseUserEntity> findByCourseIdAndViewerIdAndEntitlementStatus(
+            String courseId, Long viewerId, int entitlementStatus);
 }

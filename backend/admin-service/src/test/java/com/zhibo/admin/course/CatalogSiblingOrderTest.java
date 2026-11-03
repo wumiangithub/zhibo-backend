@@ -1,5 +1,6 @@
 package com.zhibo.admin.course;
 
+import com.zhibo.course.CatalogSiblingOrder;
 import com.zhibo.course.CourseCatalogNodeEntity;
 import com.zhibo.course.CourseCatalogNodeType;
 import org.junit.jupiter.api.Test;
