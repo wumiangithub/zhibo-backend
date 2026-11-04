@@ -9,6 +9,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 
 class DotenvLoaderTest {
@@ -49,6 +50,32 @@ class DotenvLoaderTest {
             assertEquals("abc123", environment.getProperty("VHALL_APP_KEY"));
             assertEquals("abc123", environment.getProperty("vhall.app-key"));
             assertEquals("s3cret", environment.getProperty("vhall.app-secret"));
+            assertEquals(null, environment.getProperty("server.port"));
+        } finally {
+            System.setProperty("user.dir", previous);
+        }
+    }
+
+    @Test
+    void mapsOnlyThisServicePort() throws Exception {
+        Files.writeString(tempDir.resolve(".env"), """
+                ADMIN_SERVER_PORT=18081
+                LIVE_SERVER_PORT=18082
+                """);
+        String previous = System.getProperty("user.dir");
+        System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
+        try {
+            StandardEnvironment admin = new StandardEnvironment();
+            admin.getPropertySources().addFirst(new MapPropertySource(
+                    "appName", Map.of("spring.application.name", "admin-service")));
+            new DotenvEnvironmentPostProcessor().postProcessEnvironment(admin, new SpringApplication());
+            assertEquals("18081", admin.getProperty("server.port"));
+
+            StandardEnvironment live = new StandardEnvironment();
+            live.getPropertySources().addFirst(new MapPropertySource(
+                    "appName", Map.of("spring.application.name", "live-service")));
+            new DotenvEnvironmentPostProcessor().postProcessEnvironment(live, new SpringApplication());
+            assertEquals("18082", live.getProperty("server.port"));
         } finally {
             System.setProperty("user.dir", previous);
         }

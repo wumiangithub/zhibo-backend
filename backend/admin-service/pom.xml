@@ -12,7 +12,7 @@
 
     <artifactId>admin-service</artifactId>
     <name>admin-service</name>
-    <description>直播管理端后端（PC）：活动管理、数据统计、管理后台嵌入。端口 8081</description>
+    <description>直播管理端后端（PC）：活动管理、数据统计、管理后台嵌入。默认端口 8081（ADMIN_SERVER_PORT）</description>
 
     <dependencies>
         <dependency>

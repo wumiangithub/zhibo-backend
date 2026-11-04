@@ -1,5 +1,6 @@
 server:
-  port: 8082
+  # 与 admin-service 共用一份 .env，不能再用同一个 SERVER_PORT。未配置时 8082。
+  port: ${LIVE_SERVER_PORT:8082}
   servlet:
     encoding:
       charset: UTF-8

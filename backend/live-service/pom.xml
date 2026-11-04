@@ -12,7 +12,7 @@
 
     <artifactId>live-service</artifactId>
     <name>live-service</name>
-    <description>直播观看端后端（H5/PC）：观看链接/token、观看鉴权。端口 8082</description>
+    <description>直播观看端后端（H5/PC）：观看链接/token、观看鉴权。默认端口 8082（LIVE_SERVER_PORT）</description>
 
     <dependencies>
         <dependency>
