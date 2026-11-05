@@ -4,6 +4,13 @@
  *
  * D65：改接口时须同步改本脚本（与 API约定 + 代码一致）；平时禁止跑导出、禁止手改 *.openapi.yaml/json。
  * 仅用户明确要求「重新生成 / 导出 OpenAPI」时：先删旧产物再跑本脚本；不要在旧 yaml 上打补丁。
+ *
+ * 文案对外可读（D58，红线）：summary / description / 字段 description 写给 Apifox 读者与
+ * 用文档（含 AI）反向实现服务端的人，不是本仓 agent 备忘。
+ * 必须：完整句子说清做什么、允许/禁止取值、副作用（写哪些表/字段）、错误条件；
+ *       展示类文案写字面示例；时间字段写含义+格式。
+ * 禁止：正文堆「对齐 XX」「拒收 paid」无解释、「D100：long→days…」工单缩写、
+ *       只写决策号不写行为、只写「见 API约定」却无要点。决策号最多句末括号。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -283,6 +290,7 @@ const FIELD_DESC_BY_NAME = {
   thumbUrl: '缩略图 URL',
   objectKey: '对象存储 key',
   mimeType: 'MIME 类型',
+  materialName: '素材名称',
   meta: '扩展元信息（如宽高、时长文案）',
   fileSize: '文件大小（字节）',
   status: '状态',
@@ -318,7 +326,8 @@ const FIELD_DESC_BY_NAME = {
   updatedTime: '最近更新时间，yyyy-MM-dd HH:mm:ss',
   submittedTime: '提交时间，yyyy-MM-dd HH:mm:ss',
   uploadedTime: '上传时间，yyyy-MM-dd HH:mm:ss',
-  listedTime: '上架时间，yyyy-MM-dd HH:mm:ss',
+  listedTime:
+    '上架时间，yyyy-MM-dd HH:mm:ss；创建/保存勾选上架或列表手动上架时写入；下架/驳回一般不清；无则不返回',
   enterTime: '进入时间，yyyy-MM-dd HH:mm:ss',
   leaveTime: '离开时间，yyyy-MM-dd HH:mm:ss',
   expireTime: '有效期，yyyy-MM-dd HH:mm:ss',
@@ -363,11 +372,12 @@ const FIELD_DESC_BY_NAME = {
   boundLiveCount: '已绑定直播场次数',
   canBroadcast: '当前是否允许开播',
   canList: '当前是否允许上架',
-  autoList: '风控通过后是否自动上架',
+  listed: '是否上架（创建/保存立刻改 shelfStatus）',
   sellAlone: '是否单独售卖',
   price: '售价（元）',
   linePrice: '划线价（元）',
-  validityLabel: '有效期展示文案',
+  validityLabel:
+    '售卖有效期展示文案；PUT …/sales 按 accessValidityType 重算写入。取值/示例：免费或 long →「长期有效」；days →「{N}天有效」（如「7天有效」「30天有效」「360天有效」）；课程另支持 fixed →「{yyyy-MM-dd HH:mm:ss}到期」（如「2026-11-14 00:00:00到期」；直播无 fixed）。空/缺省按「长期有效」。管理端列表售卖标签由前端拼「{售卖中文} / {validityLabel}」',
   playbackEnabled: '是否开启回放',
   playbackValidityDays: '回放有效天数',
   playbackExpired: '是否已超过回放有效期',
@@ -532,6 +542,8 @@ const FIELD_DESC_BY_PATH = {
   'LiveReportDetail.id': '报备单 UUID',
   'LiveReportAuditItem.id': '审核记录 UUID',
   'CourseSummary.id': '课程 UUID',
+  'CourseSummary.listedTime':
+    '上架时间，yyyy-MM-dd HH:mm:ss；创建/保存勾选上架或列表手动上架时写入；下架/驳回一般不清；无则不返回',
   'CourseMaterial.id': '素材 UUID',
   'OutsideCourseItem.courseId': '课程 UUID（D74）',
   'OutsideCourseItem.courseName': '课程名称',
@@ -591,6 +603,13 @@ const FIELD_DESC_BY_PATH = {
   'VhallPresenceCallback.type': 'Join 进房 / Leave 离房',
   'LoginQueryData.user': '扫码成功后的员工信息',
   'LiveReportDetail.host': '报备主播',
+  // 观众标签分组为 BIGINT，勿用全局「分组 UUID」文案
+  'ViewerTagListItem.groupId': '标签分组 id（viewer_tag_group.id）',
+  'ViewerTagCreateRequest.groupId': '标签分组 id（viewer_tag_group.id）；省略则归入默认分组',
+  'ViewerTagUpdateRequest.groupId': '标签分组 id（viewer_tag_group.id）',
+  'ViewerTagGroupBrief.id': '标签分组主键',
+  'ViewerTagGroupPageItem.id': '标签分组主键',
+  'ViewerTagListItem.id': '标签主键',
 }
 
 /** 按字段名补落库类型 / 长度（D61）；已有 maxLength 的保留。 */
@@ -778,6 +797,23 @@ const FIELD_DB_BY_PATH = {
   'PresenceTrendPoint.online': { db: 'INT' },
   'AuditSubmitRequest.reason': { db: 'VARCHAR(200)', maxLength: 200 },
   'LiveReportAuditRequest.reason': { db: 'VARCHAR(500)', maxLength: 500 },
+  // 观众标签：库列宽于 API 校验长度；id/groupId 为 BIGINT 自增（勿套业务 UUID）
+  'ViewerTagGroupBrief.id': { db: 'BIGINT', format: 'int64' },
+  'ViewerTagGroupBrief.name': { db: 'VARCHAR(32)', maxLength: 10 },
+  'ViewerTagGroupPageItem.id': { db: 'BIGINT', format: 'int64' },
+  'ViewerTagGroupPageItem.name': { db: 'VARCHAR(32)', maxLength: 10 },
+  'ViewerTagGroupCreateRequest.name': { db: 'VARCHAR(32)', maxLength: 10 },
+  'ViewerTagGroupUpdateRequest.name': { db: 'VARCHAR(32)', maxLength: 10 },
+  'ViewerTagListItem.id': { db: 'BIGINT', format: 'int64' },
+  'ViewerTagListItem.name': { db: 'VARCHAR(20)', maxLength: 20 },
+  'ViewerTagListItem.groupId': { db: 'BIGINT', format: 'int64' },
+  'ViewerTagListItem.definitionSummary': { db: 'VARCHAR(512)', maxLength: 512 },
+  'ViewerTagCreateRequest.name': { db: 'VARCHAR(20)', maxLength: 20 },
+  'ViewerTagCreateRequest.groupId': { db: 'BIGINT', format: 'int64' },
+  'ViewerTagUpdateRequest.name': { db: 'VARCHAR(20)', maxLength: 20 },
+  'ViewerTagUpdateRequest.groupId': { db: 'BIGINT', format: 'int64' },
+  // 组织部门编码来自总部表 bmbm（字符串）；勿套全局 code→INT（API 业务码）
+  'OrgDeptNode.code': { db: 'VARCHAR(64)', maxLength: 64 },
 }
 
 const DB_ANNOTATION_SKIP = new Set([
@@ -853,6 +889,28 @@ function dbFromMaxLength(max) {
   return `VARCHAR(${max})`
 }
 
+/** 字段名默认库类型是否与 OpenAPI type/format 冲突（如 int64 的 id 不要套 UUID VARCHAR(32)）。 */
+function hintCompatibleWithProp(hint, prop) {
+  if (!hint || !hint.db || !prop) return true
+  const db = String(hint.db)
+  // 透传 / 不落库 文案不做类型冲突判断
+  if (/透传|不落|微吼/.test(db)) return true
+  const stringDb = /^(VARCHAR|CHAR|TEXT|MEDIUMTEXT|LONGTEXT)\b/i.test(db)
+  const intDb = /^(BIGINT|INT|TINYINT|SMALLINT|MEDIUMINT)\b/i.test(db)
+  const decimalDb = /^(DECIMAL|NUMERIC|DOUBLE|FLOAT)\b/i.test(db)
+  const propInt =
+    prop.type === 'integer' ||
+    prop.format === 'int64' ||
+    prop.format === 'int32'
+  if (propInt && (stringDb || decimalDb)) return false
+  if (prop.type === 'boolean' && (stringDb || decimalDb || (/^(BIGINT|INT|SMALLINT|MEDIUMINT)\b/i.test(db) && !/^TINYINT\b/i.test(db)))) {
+    return false
+  }
+  if (prop.type === 'number' && (stringDb || intDb)) return false
+  if (prop.type === 'string' && (intDb || decimalDb)) return false
+  return true
+}
+
 /**
  * @param fromPath 路径特例（可表达「API maxLength≠库列长度」，如昵称校验 10 / 库 VARCHAR(64)）
  */
@@ -860,8 +918,9 @@ function inferDbLabel(prop, key, hint, fromPath) {
   if (!prop || prop.$ref) return null
   // 路径特例：库类型原文始终听 hint（校验长度可严于库列）
   if (fromPath && hint && hint.db) return hint.db
-  // 按字段名提示：与已有 maxLength 冲突时改按 maxLength 推断（避免 content 默认 500 盖住文章 100000）
-  if (hint && hint.db) {
+  // 按字段名提示：与 OpenAPI 类型冲突时丢弃（避免 id/groupId/status/code/type 等同名异型）
+  // 与已有 maxLength 冲突时改按 maxLength 推断（避免 content 默认 500 盖住文章 100000）
+  if (hint && hint.db && hintCompatibleWithProp(hint, prop)) {
     const maxConflict =
       typeof prop.maxLength === 'number' &&
       typeof hint.maxLength === 'number' &&
@@ -890,7 +949,7 @@ function inferDbLabel(prop, key, hint, fromPath) {
       return dbFromMaxLength(prop.maxLength)
     }
   }
-  if (hint && hint.db) return hint.db
+  if (hint && hint.db && hintCompatibleWithProp(hint, prop)) return hint.db
   return null
 }
 
@@ -913,7 +972,12 @@ function annotateDbConstraints(schemas) {
           ? FIELD_DB_BY_PATH[full]
           : FIELD_DB_BY_NAME[key]
 
-        if (!prop.$ref && hint) {
+        // 字段名默认与 OpenAPI 类型冲突时不套用（如 int64 id 不套 UUID maxLength/pattern）
+        if (
+          !prop.$ref &&
+          hint &&
+          (fromPath || hintCompatibleWithProp(hint, prop))
+        ) {
           if (hint.type && !prop.type) prop.type = hint.type
           if (hint.format && !prop.format) prop.format = hint.format
           // 仅补缺 maxLength；已有业务校验长度（可严于库列）不覆盖
@@ -1144,19 +1208,19 @@ function buildAdmin() {
       type: 'string',
       enum: ['free', 'paid', 'encrypted', 'specified'],
       description:
-        'free 免费 / paid 付费（PUT sales 已下线，列表仍可能回显）/ encrypted 加密 / specified 指定学员',
+        'free 免费 / paid 付费（已下线：列表/详情可读存量；PUT …/sales 不接受，传入返回「sellType 无效」）/ encrypted 加密 / specified 指定学员',
     },
     AccessValidityType: {
       type: 'string',
       enum: ['long', 'days', 'fixed'],
       description:
-        'long 长期有效 / days 权益生效后 N 天有效 / fixed 固定时刻到期',
+        'long 长期有效 / days N 天有效（直播：实际结束后起算；课程：按学员 created_time）/ fixed 固定时刻到期（仅课程）',
     },
     CourseSellType: {
       type: 'string',
       enum: ['free', 'encrypted', 'specified'],
       description:
-        'free 免费 / encrypted 加密 / specified 指定学员（课程 PUT sales 拒收 paid）',
+        'free 免费 / encrypted 加密 / specified 指定学员。课程无付费售卖：PUT …/sales 不接受 paid（传 paid → sellType 无效）；列表/详情也不会写入 paid',
     },
     CourseEntitlementState: {
       type: 'string',
@@ -1215,6 +1279,18 @@ function buildAdmin() {
       type: 'object',
       required: ['id'],
       properties: { id: { $ref: '#/components/schemas/BusinessUuid' } },
+    },
+    /** 自增数字主键回包（标签/标签分组等 BIGINT；勿与业务 UUID 的 IdData 混用） */
+    IdDataInt: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '自增主键 id（BIGINT），如标签或标签分组',
+        },
+      },
     },
     EmployeeBrief: {
       type: 'object',
@@ -1485,7 +1561,7 @@ function buildAdmin() {
         'title',
         'startTime',
         'type',
-        'autoList',
+        'listed',
         'hostIds',
         'reportId',
       ],
@@ -1524,9 +1600,9 @@ function buildAdmin() {
         },
         coverUrl: { type: 'string' },
         detailHtml: { type: 'string', maxLength: 100000 },
-        autoList: {
+        listed: {
           type: 'boolean',
-          description: '风控通过后是否自动上架；创建时 shelfStatus 一律 pending',
+          description: '是否上架；true→on，false→pending；创建 riskStatus=passed（D109）',
         },
         hostIds: {
           type: 'array',
@@ -1569,7 +1645,7 @@ function buildAdmin() {
         endTime: { type: 'string' },
         coverUrl: { type: 'string' },
         detailHtml: { type: 'string', maxLength: 100000 },
-        autoList: { type: 'boolean' },
+        listed: { type: 'boolean', description: '是否上架；保存立刻改 shelfStatus' },
         hostIds: {
           type: 'array',
           minItems: 1,
@@ -1617,25 +1693,40 @@ function buildAdmin() {
       type: 'object',
       required: ['sellAlone', 'sellType'],
       properties: {
-        sellAlone: { type: 'boolean' },
+        sellAlone: {
+          type: 'boolean',
+          description:
+            '是否单独售卖。为 false 时仍接受并保存下方字段（前端可禁用编辑，回显用）',
+        },
         sellType: { $ref: '#/components/schemas/SellType' },
         price: {
           type: 'number',
           multipleOf: 0.01,
-          description: 'paid 时必填；元，最多 2 位小数',
+          description:
+            '历史付费字段；PUT 保存时一律清空，勿再依赖。元，最多 2 位小数',
         },
         linePrice: {
           type: 'number',
           multipleOf: 0.01,
-          description: '须 > price；非 paid 忽略',
+          description: '历史划线价；PUT 保存时一律清空，勿再依赖',
         },
         password: {
           type: 'string',
           pattern: '^\\d{6}$',
-          description: 'encrypted 时必填；明文 6 位数字',
+          description:
+            'sellType=encrypted 时必填，恰好 6 位数字明文；服务端 AES 加密落库。非加密时忽略并清空密文',
         },
-        accessValidityType: { $ref: '#/components/schemas/AccessValidityType' },
-        accessValidityDays: { type: 'integer', minimum: 1 },
+        accessValidityType: {
+          $ref: '#/components/schemas/AccessValidityType',
+          description:
+            '访问有效期类型。sellType=free 时服务端强制 long；非 free 时必填 long / days（直播无 fixed）',
+        },
+        accessValidityDays: {
+          type: 'integer',
+          minimum: 1,
+          description:
+            'accessValidityType=days 时必填，整数 ≥1；表示直播实际结束后 N 天内可访问',
+        },
       },
     },
     SalesSettingsData: {
@@ -1643,7 +1734,11 @@ function buildAdmin() {
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         sellType: { $ref: '#/components/schemas/SellType' },
-        validityLabel: { type: 'string' },
+        validityLabel: {
+          type: 'string',
+          description:
+            '售卖有效期展示文案（activity.validity_label）。示例：长期有效 / 7天有效',
+        },
       },
     },
     ShelfRequest: {
@@ -1764,7 +1859,7 @@ function buildAdmin() {
               description: '录播是否定时；非录播可空；库：TINYINT(1)',
             },
             detailHtml: { type: 'string' },
-            autoList: { type: 'boolean' },
+
             reportId: {
               $ref: '#/components/schemas/BusinessUuid',
               description: '绑定的直播报备；未绑定不输出',
@@ -2527,7 +2622,7 @@ function buildAdmin() {
     },
     CreateCourseRequest: {
       type: 'object',
-      required: ['title', 'coverMaterialId', 'autoList', 'ownerIds'],
+      required: ['title', 'coverMaterialId', 'listed', 'ownerIds'],
       properties: {
         title: { type: 'string', maxLength: 45 },
         introduction: { type: 'string', maxLength: 256 },
@@ -2540,7 +2635,7 @@ function buildAdmin() {
           $ref: '#/components/schemas/BusinessUuid',
           description: '两审通过的 JPG/PNG 图片素材，≤5MB（D74）',
         },
-        autoList: { type: 'boolean' },
+        listed: { type: 'boolean', description: '是否上架（D109）' },
         ownerIds: {
           type: 'array',
           minItems: 1,
@@ -2553,14 +2648,7 @@ function buildAdmin() {
           maxItems: 100,
           items: { $ref: '#/components/schemas/CourseMaterialInput' },
           description:
-            '课件（优先）：有序数组，每项 id + accessPermission；与 materialIds 同时传时以 materials 为准',
-        },
-        materialIds: {
-          type: 'array',
-          maxItems: 100,
-          items: { $ref: '#/components/schemas/BusinessUuid' },
-          description:
-            '兼容旧字段：仅 id、权限按扩展名默认；两审通过的 image/video/document，不含 article',
+            '课件（选填）：有序数组，每项 id + accessPermission；两审通过的 image/video/document，不含 article',
         },
       },
     },
@@ -2568,26 +2656,33 @@ function buildAdmin() {
       type: 'object',
       required: ['sellAlone', 'sellType'],
       properties: {
-        sellAlone: { type: 'boolean', description: '是否单独售卖' },
+        sellAlone: {
+          type: 'boolean',
+          description:
+            '是否单独售卖。为 false 时仍接受并保存下方字段（前端可禁用编辑，回显用）',
+        },
         sellType: { $ref: '#/components/schemas/CourseSellType' },
         password: {
           type: 'string',
           pattern: '^\\d{6}$',
-          description: 'encrypted 时必填；恰好 6 位数字明文',
+          description:
+            'sellType=encrypted 时必填，恰好 6 位数字明文；服务端 AES 加密写入 course.sell_password_cipher。非加密时忽略并清空密文',
         },
         accessValidityType: {
           $ref: '#/components/schemas/AccessValidityType',
-          description: 'free 时服务端强制 long；其余必填',
+          description:
+            '访问有效期类型。sellType=free 时服务端强制 long；非 free 时必填 long / days / fixed',
         },
         accessValidityDays: {
           type: 'integer',
           minimum: 1,
-          description: 'accessValidityType=days 时必填',
+          description:
+            'accessValidityType=days 时必填，整数 ≥1；表示学员权益按 created_time 起算 N 天',
         },
         accessValidityFixedTime: {
           type: 'string',
           description:
-            'accessValidityType=fixed 时必填，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)',
+            'accessValidityType=fixed 时必填；课程统一到期时刻，格式 yyyy-MM-dd HH:mm:ss；库：DATETIME(3)',
         },
       },
     },
@@ -2597,7 +2692,11 @@ function buildAdmin() {
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         sellType: { $ref: '#/components/schemas/CourseSellType' },
-        validityLabel: { type: 'string', description: '有效期展示文案' },
+        validityLabel: {
+          type: 'string',
+          description:
+            '售卖有效期展示文案（course.validity_label）。示例：长期有效 / 7天有效 / 2026-11-14 00:00:00到期',
+        },
       },
     },
     CourseSummary: {
@@ -2608,8 +2707,11 @@ function buildAdmin() {
         coverUrl: { type: 'string' },
         shelfStatus: { $ref: '#/components/schemas/ShelfStatus' },
         riskStatus: { $ref: '#/components/schemas/RiskStatus' },
-        autoList: { type: 'boolean' },
-        listedTime: { type: 'string', description: '无则不返回' },
+        listedTime: {
+          type: 'string',
+          description:
+            '上架时间，yyyy-MM-dd HH:mm:ss；创建/保存勾选上架或列表手动上架时写入；下架/驳回一般不清；无则不返回',
+        },
         owners: {
           type: 'array',
           items: { $ref: '#/components/schemas/CoursePerson' },
@@ -2630,7 +2732,7 @@ function buildAdmin() {
           description: '内容数与总销量均为 0（标记位；软删本身不拦）',
         },
         sellType: { $ref: '#/components/schemas/CourseSellType' },
-        validityLabel: { type: 'string', description: '有效期展示文案' },
+        validityLabel: { type: 'string' },
       },
     },
     CourseDetail: {
@@ -2888,7 +2990,7 @@ function buildAdmin() {
         expireTime: {
           type: 'string',
           description:
-            '选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00；空则按售卖 expireAtJoin',
+            '选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00；空则按课程售卖规则计算到期（days → 入表时刻+N 天；fixed → 课程固定时刻；long → 空）',
         },
       },
     },
@@ -3250,20 +3352,6 @@ function buildAdmin() {
         pageSize: { type: 'integer' },
         total: { type: 'integer', format: 'int64' },
         list: { type: 'array', items: { $ref: '#/components/schemas/ViewerListItem' } },
-      },
-    },
-    ViewerStatusUpdateRequest: {
-      type: 'object',
-      required: ['status'],
-      properties: {
-        status: { type: 'integer', enum: [0, 1], description: '0 禁用 / 1 正常' },
-      },
-    },
-    ViewerStatusUpdateData: {
-      type: 'object',
-      properties: {
-        id: { type: 'integer', format: 'int64' },
-        status: { type: 'integer', enum: [0, 1], description: '0 禁用 / 1 正常' },
       },
     },
     ViewerBlacklistUpdateRequest: {
@@ -3795,23 +3883,6 @@ function buildAdmin() {
         },
       },
     },
-    CourseCatalogSiblingReorderRequest: {
-      type: 'object',
-      required: ['parentId', 'ids'],
-      properties: {
-        parentId: {
-          type: 'integer',
-          format: 'int64',
-          description: '父节点 id',
-        },
-        ids: {
-          type: 'array',
-          minItems: 1,
-          items: { type: 'integer', format: 'int64' },
-          description: '该父下全部章节或全部直挂小节 id，按目标顺序',
-        },
-      },
-    },
     CourseCatalogDeleteData: {
       type: 'object',
       required: ['id'],
@@ -3966,7 +4037,6 @@ function buildAdmin() {
     },
     ApiResponseChatFilterAdmin: { $ref: '#/components/schemas/ChatFilterAdminData' },
     ApiResponseViewerList: { $ref: '#/components/schemas/ViewerListData' },
-    ApiResponseViewerStatus: { $ref: '#/components/schemas/ViewerStatusUpdateData' },
     ApiResponseViewerBlacklist: { $ref: '#/components/schemas/ViewerBlacklistUpdateData' },
     ApiResponseViewerTags: { $ref: '#/components/schemas/ViewerTagsUpdateData' },
     ApiResponseViewerLearnSummary: { $ref: '#/components/schemas/ViewerLearnStatsSummaryData' },
@@ -3989,6 +4059,8 @@ function buildAdmin() {
     ApiResponseCourseCatalogDelete: {
       $ref: '#/components/schemas/CourseCatalogDeleteData',
     },
+    /** 数字主键成功回包：data.id 为 int64（如软删标签/标签分组） */
+    ApiResponseIntId: { $ref: '#/components/schemas/IdDataInt' },
 
   })) {
     schemas[name] = wrapData(data)
@@ -3996,7 +4068,10 @@ function buildAdmin() {
 
   const activityId = { $ref: '#/components/parameters/ActivityId' }
   const materialId = { $ref: '#/components/parameters/MaterialId' }
+  /** path 占位 `{id}`（如 /courses/detail/{id}） */
   const courseId = { $ref: '#/components/parameters/CourseId' }
+  /** path 占位 `{courseId}`（目录 / 学员等）——须与 URL 占位同名，否则 Apifox 会叠出 id+courseId */
+  const courseIdPath = { $ref: '#/components/parameters/CourseIdPath' }
   const liveReportId = { $ref: '#/components/parameters/LiveReportId' }
 
   const paths = {
@@ -4464,7 +4539,7 @@ function buildAdmin() {
                     introduction: '简介',
                     coverUrl: 'https://cnstatic01.e.vhall.com/upload/xxx.jpg',
                     ultraLowLatency: false,
-                    autoList: true,
+                    listed: false,
                     hostIds: [10001],
                     ownerIds: [10001],
                     reportId: '11111111-1111-1111-1111-111111111111',
@@ -4584,6 +4659,15 @@ function buildAdmin() {
       put: {
         tags: ['活动管理'],
         summary: '售卖设置',
+        description: [
+          '更新直播活动售卖设置，只写本站 activity 表，不改微吼 verify。',
+          'sellType 仅允许 free（免费）/ encrypted（加密）/ specified（指定学员）；不接受 paid（付费已下线；列表/详情仍可读存量 paid；传 paid →「sellType 无效」）。',
+          'sellAlone 必填。sellType=free 时服务端强制 accessValidityType=long；非 free 时必填 long / days（直播无 fixed）。',
+          'days 时 accessValidityDays 必填且 ≥1，含义为直播实际结束后 N 天内可访问。',
+          'encrypted 时 password 必填（恰好 6 位数字明文），服务端 AES 加密落库；非加密时清空密文。',
+          '保存时清空 price / linePrice；并按有效期重算写入 activity.validity_label（免费或 long →「长期有效」；days →「{N}天有效」，如「7天有效」）。',
+          '响应 data：id、sellType、validityLabel。活动不存在或已软删 → 400。',
+        ].join(''),
         operationId: 'updateSales',
         security: bearer,
         parameters: [activityId],
@@ -5225,8 +5309,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '新建课程',
-        description:
-          '成功后 riskStatus 与 shelfStatus 均为 pending，并写一条 action=submit。售卖默认 sellAlone=true、sellType=free、accessValidityType=long。',
+        description: [
+          '新建课程并写入 course 表。成功后 riskStatus=pending、shelfStatus=pending，并写一条审核流水 action=submit。',
+          '售卖字段请勿在创建请求中提交：服务端默认 sellAlone=true、sellType=free、accessValidityType=long、validityLabel=「长期有效」；改售卖请用 PUT /courses/sales/{id}。',
+          '响应 data 含新建课程 id。',
+        ].join(''),
         operationId: 'createCourse',
         security: bearer,
         requestBody: {
@@ -5244,8 +5331,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '更新课程基本信息',
-        description:
-          'Body 与创建同形。riskStatus=pending → 400。passed/rejected 保存后回 pending 并写 submit。课件传空数组表示清空。',
+        description: [
+          '更新课程基本信息（标题、封面、简介、归属人、课件等），Body 字段与创建同形；不改售卖设置。',
+          '当前 riskStatus=pending（审核中）→ 400。riskStatus 为 passed 或 rejected 时，保存后改回 pending 并写一条 action=submit。',
+          'materials 传空数组表示清空课件绑定。课程不存在或已软删 → 400。',
+        ].join(''),
         operationId: 'updateCourse',
         security: bearer,
         parameters: [courseId],
@@ -5264,6 +5354,8 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程列表',
+        description:
+          '分页查询未软删课程。支持按标题模糊、上架状态、风控状态、归属人姓名精确筛选，以及按权益用户数/累计用户数/总销量/最近更新时间排序。',
         operationId: 'listCourses',
         security: bearer,
         parameters: [
@@ -5324,7 +5416,8 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程详情',
-        description: '不存在或已软删 → 400。',
+        description:
+          '返回课程详情（含售卖字段、课件、归属人等）。课程不存在或已软删 → 400。sellType=encrypted 时 password 回显 AES 解密后的 6 位明文，仅供管理端编辑。',
         operationId: 'getCourse',
         security: bearer,
         parameters: [courseId],
@@ -5335,7 +5428,8 @@ function buildAdmin() {
       delete: {
         tags: ['课程'],
         summary: '软删课程',
-        description: '写 deleted_time。不要求内容数/总销量为 0。',
+        description:
+          '软删课程：写入 course.deleted_time。不要求内容数或总销量为 0。课程不存在或已软删 → 400。',
         operationId: 'deleteCourse',
         security: bearer,
         parameters: [courseId],
@@ -5346,8 +5440,17 @@ function buildAdmin() {
       put: {
         tags: ['课程'],
         summary: '课程售卖设置',
-        description:
-          '对齐活动售卖；拒收 paid。D100：long→days 对本课 expire 仍空的行写 created_time+N；保存 fixed 对 expire 仍空的行写入该固定时刻。',
+        description: [
+          '更新课程售卖设置，只写本站 course 表。',
+          'sellType 仅允许 free（免费）/ encrypted（加密）/ specified（指定学员）；不接受 paid（课程无付费售卖；传 paid →「sellType 无效」）。',
+          'sellAlone 必填。sellType=free 时服务端强制 accessValidityType=long；非 free 时必填 long / days / fixed。',
+          'days 时 accessValidityDays 必填且 ≥1；fixed 时 accessValidityFixedTime 必填（yyyy-MM-dd HH:mm:ss）。',
+          'encrypted 时 password 必填（恰好 6 位数字明文），服务端 AES 加密写入 course.sell_password_cipher；非加密时清空密文。',
+          '保存后按有效期重算写入 course.validity_label（免费或 long →「长期有效」；days →「{N}天有效」如「7天有效」；fixed →「{yyyy-MM-dd HH:mm:ss}到期」如「2026-11-14 00:00:00到期」）。',
+          '学员到期回写（course_user.entitlement_expire_time）：当有效期类型从非 days 改为 days 时，对本课该字段仍为空的行，按各自 created_time 加 N 天写入；',
+          '当保存为 fixed 时，对本课该字段仍为空的行写入该固定时刻；已有到期时间的行一律不改（含 days 改天数、再次改固定时刻、改回长期）。',
+          '响应 data：id、sellType、validityLabel。课程不存在或已软删 → 400。本接口不实现学员侧观看门禁。',
+        ].join(''),
         operationId: 'updateCourseSales',
         security: bearer,
         parameters: [courseId],
@@ -5366,8 +5469,12 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程用户列表',
-        description:
-          'D100。entitlementState：valid/expired/invalid；省略=全部。计算态见 API约定。',
+        description: [
+          '分页查询本课学员（course_user）。可按昵称/用户ID/手机号关键词筛选。',
+          'Query entitlementState 可选：valid（有效）/ expired（已到期）/ invalid（已失效）；省略则不过滤。',
+          '计算态：entitlement_status=0 → invalid；否则当课程售卖为 days 或 fixed、且行上 entitlement_expire_time 非空且已过当前时间 → expired；其余为 valid（售卖长期不算已到期）。',
+          '响应含课程当前 accessValidityType，供前端到期列展示。',
+        ].join(''),
         operationId: 'listCourseUsers',
         security: bearer,
         parameters: [
@@ -5399,7 +5506,8 @@ function buildAdmin() {
             name: 'entitlementState',
             in: 'query',
             schema: { $ref: '#/components/schemas/CourseEntitlementState' },
-            description: '可选；省略=全部',
+            description:
+              '权益计算态筛选：valid 有效 / expired 已到期 / invalid 已失效；省略=全部',
           },
         ],
         responses: ok200('#/components/schemas/ApiResponseCourseUserList'),
@@ -5409,6 +5517,8 @@ function buildAdmin() {
       put: {
         tags: ['课程'],
         summary: '开关课程用户观看权益',
+        description:
+          '修改指定 course_user 行的 entitlement_status：1 有效 / 0 已取消。不改 entitlement_expire_time。行不存在 → 400。',
         operationId: 'updateCourseUserEntitlement',
         security: bearer,
         parameters: [
@@ -5437,8 +5547,11 @@ function buildAdmin() {
       put: {
         tags: ['课程'],
         summary: '延迟用户时间 / 自定义到期',
-        description:
-          '改 entitlement_expire_time；不改 entitlement_status。售卖仍为长期时列表展示仍按「长期」。',
+        description: [
+          '手工改写指定 course_user 行的 entitlement_expire_time；Body expireTime 必填，格式 yyyy-MM-dd HH:mm:ss。',
+          '不改 entitlement_status。若课程售卖仍为长期（accessValidityType=long），列表 expireDisplay 仍展示「长期」（忽略行上到期时间）。',
+          '行不存在或时间格式非法 → 400。',
+        ].join(''),
         operationId: 'updateCourseUserExpire',
         security: bearer,
         parameters: [
@@ -5465,8 +5578,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '单个添加学员',
-        description:
-          'Body 二选一 phone 或 viewerId；选填 expireTime。新建 acquire_way=import；已有行仅补空导入人、不改 expire。',
+        description: [
+          '向本课添加一名学员。Body 须二选一提供 phone 或 viewerId；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。',
+          '本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。',
+          '已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。',
+        ].join(''),
         operationId: 'createCourseUser',
         security: bearer,
         parameters: [
@@ -5493,8 +5609,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: 'CSV 批量导入学员',
-        description:
-          'multipart：必填 file（仅 CSV）；选填 expireTime（弹窗级共用）。写 course_user_import 历史。',
+        description: [
+          'multipart/form-data 批量导入学员：必填 file（仅 CSV，首列/列名「手机号」）；选填 expireTime（整批新建行共用；yyyy-MM-dd 或带时分秒）。',
+          '新建行写入 course_user（acquire_way=import），到期用自定义或按课程售卖计算；已有行不改 entitlement_expire_time。',
+          '同时写入 course_user_import 导入历史。响应含 importId 与 total/created/updated/skipped/failed 等统计。',
+        ].join(''),
         operationId: 'importCourseUsers',
         security: bearer,
         parameters: [
@@ -5522,7 +5641,7 @@ function buildAdmin() {
                   expireTime: {
                     type: 'string',
                     description:
-                      '选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss',
+                      '选填；仅作用于新建 course_user 行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00；空则按课程售卖规则计算到期',
                   },
                 },
               },
@@ -5536,7 +5655,8 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '标签导入预计人数',
-        description: '只算人数、不写入；满足其一去重。',
+        description:
+          '按观众全局标签预估将导入人数：Body tagIds 满足其一即计入，结果去重；只算人数、不写入 course_user。响应 data.total 为预计人数。',
         operationId: 'estimateCourseUsersByTags',
         security: bearer,
         parameters: [
@@ -5567,8 +5687,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '按标签导入学员',
-        description:
-          'upsert course_user；不写 CSV 导入历史；已有行不改权益/expire。',
+        description: [
+          '按观众全局标签把命中观众 upsert 进本课 course_user（非 activity_audience）。Body：tagIds 必填，expireTime 选填（仅新建行）。',
+          '本课无行 → 新建 entitlement_status=1、acquire_way=import、写导入人、到期按自定义或售卖规则，total_user_count +1；',
+          '已有行且导入人为空 → 补写导入人；已有导入人 → 跳过。不改已有行的权益与 entitlement_expire_time；不写 course_user_import 历史。',
+        ].join(''),
         operationId: 'importCourseUsersByTags',
         security: bearer,
         parameters: [
@@ -5599,6 +5722,7 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程用户导入模板',
+        description: '下载 CSV 导入模板（UTF-8 BOM），表头为「手机号」。',
         operationId: 'downloadCourseUserImportTemplate',
         security: bearer,
         responses: csvOk200('UTF-8 BOM CSV，表头：手机号'),
@@ -5608,7 +5732,8 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程用户导入历史',
-        description: '最多 100 条。',
+        description:
+          '返回本课 CSV 导入历史（course_user_import），最多 100 条，按时间倒序。',
         operationId: 'listCourseUserImports',
         security: bearer,
         parameters: [
@@ -5629,6 +5754,8 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程用户导入失败明细 CSV',
+        description:
+          '按导入批次 download 失败明细 CSV，列为：行号、手机号、原因。批次不存在 → 400。',
         operationId: 'downloadCourseUserImportFailures',
         security: bearer,
         parameters: [
@@ -5647,8 +5774,10 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '导出课程学员 CSV',
-        description:
-          '按 list 同筛选不分页导出（UTF-8 BOM）。筛选项不含 page/pageSize。',
+        description: [
+          '按与用户列表相同的筛选条件导出本课全部学员 CSV（UTF-8 BOM），不分页（不含 page/pageSize）。',
+          '列：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间。',
+        ].join(''),
         operationId: 'exportCourseUsers',
         security: bearer,
         parameters: [
@@ -5691,8 +5820,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '课程上架 / 下架',
-        description:
-          '上架要求风控已通过且当前为待上架或已下架，并更新 listedTime。下架仅已上架。强制封禁不可上下架。',
+        description: [
+          'Body listed=true 上架 / false 下架。',
+          '上架要求 riskStatus=passed 且当前 shelfStatus 为 pending 或 off，成功后写入 listedTime；',
+          '下架仅当当前已上架（on）。shelfStatus=banned（强制封禁）不可上下架。条件不满足或课程不存在 → 400。',
+        ].join(''),
         operationId: 'shelfCourse',
         security: bearer,
         parameters: [courseId],
@@ -5711,7 +5843,8 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程审核记录',
-        description: '按时间倒序。action 为 submit 或 audit。submit 不返回 result / reason。',
+        description:
+          '返回本课审核流水，按时间倒序。action 为 submit（提交/重提）或 audit（审核）；submit 记录不返回 result / reason。',
         operationId: 'listCourseAudits',
         security: bearer,
         parameters: [courseId],
@@ -5722,8 +5855,11 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '审核课程',
-        description:
-          '通过不要理由。驳回把上架改为 banned。autoList=true 且通过则上架改为 on 并写 listedTime；autoList=false 且当前为 banned 时回到 pending。',
+        description: [
+          '审核本课：通过（passed）无需理由；驳回（rejected）须填理由，并把 shelfStatus 改为 banned。',
+          '审核通过时若当前为 banned 则回到 pending，否则上架不动（D109 不再读 autoList）。',
+          '写一条 action=audit 流水。课程不存在或状态不允许审核 → 400。',
+        ].join(''),
         operationId: 'auditCourse',
         security: bearer,
         parameters: [courseId],
@@ -5742,11 +5878,14 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '课程目录节点列表',
-        description:
-          '扁平列表。同父排序：全部 sortOrder=0 → 子课程→章节→小节；存在小节自定义序则可交错。子课程带 chapterCount/lessonCount。',
+        description: [
+          '返回本课目录节点扁平列表（子课程 / 章节 / 小节）。',
+          '同一父节点下：若全部 sortOrder=0，默认顺序为子课程→章节→小节；若存在小节自定义序，则可与章节交错。',
+          '子课程节点附带 chapterCount、lessonCount。',
+        ].join(''),
         operationId: 'listCourseCatalog',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
       },
     },
@@ -5754,10 +5893,11 @@ function buildAdmin() {
       get: {
         tags: ['课程'],
         summary: '本课已占用内容',
-        description: '弹窗禁勾：lives / materials。',
+        description:
+          '返回本课目录中已绑定的直播 id 列表（lives）与素材 id 列表（materials），供管理端「绑定内容」弹窗禁用已占用项，避免重复绑定。',
         operationId: 'listCourseCatalogUsedContents',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         responses: ok200(
           '#/components/schemas/ApiResponseCourseCatalogUsedContents',
         ),
@@ -5767,11 +5907,13 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '绑定直播为小节',
-        description:
-          '多选建小节 contentKind=1；标题取直播名截断 ≤30。有子课后 parentId 不可为 0。重复 → 400。',
+        description: [
+          '将多场直播批量建成小节（contentKind=1）；小节标题取直播名并截断至 ≤30 字。',
+          '课程已有子课程后，小节的 parentId 不可为 0（须挂在章节或子课程下）。同一直播已在本课占用 → 400。',
+        ].join(''),
         operationId: 'bindCourseCatalogLives',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5790,10 +5932,10 @@ function buildAdmin() {
         tags: ['课程'],
         summary: '绑定素材为小节',
         description:
-          '多选建小节；contentKind 由素材 type 映射。同课素材已占用 → 400。',
+          '将多个素材批量建成小节；contentKind 由素材 type 映射。同一素材已在本课占用 → 400。',
         operationId: 'bindCourseCatalogMaterials',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5811,9 +5953,10 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '新建章节',
+        description: '在本课目录下新建章节节点；成功后返回更新后的目录列表。',
         operationId: 'createCourseCatalogChapter',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5831,9 +5974,10 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '改章节标题',
+        description: '修改指定章节的标题；章节不存在或已软删 → 400。',
         operationId: 'updateCourseCatalogChapter',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5851,11 +5995,13 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '软删章节',
-        description:
-          'keepContents=true 可迁到 targetChapterId；false 级联软删小节并重算 contentCount。',
+        description: [
+          '软删指定章节。keepContents=true 时，可将章节下内容迁移到 targetChapterId；',
+          'keepContents=false 时级联软删下属小节，并重算课程 contentCount。',
+        ].join(''),
         operationId: 'deleteCourseCatalogChapter',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5869,36 +6015,17 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseCourseCatalogDelete'),
       },
     },
-    '/api/v1/courses/catalog/chapters/reorder/{courseId}': {
-      post: {
-        tags: ['课程'],
-        summary: '重排章节（兼容）',
-        description: '仅重排该父下全部章节。新弹窗请用 catalog/reorder。',
-        operationId: 'reorderCourseCatalogChapters',
-        security: bearer,
-        parameters: [courseId],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                $ref: '#/components/schemas/CourseCatalogSiblingReorderRequest',
-              },
-            },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
-      },
-    },
     '/api/v1/courses/catalog/subcourses/create/{courseId}': {
       post: {
         tags: ['课程'],
         summary: '新建子课程',
-        description:
-          '挂根。首子课且根下已有章节/小节时须 moveRootContents=true。',
+        description: [
+          '在课程根下新建子课程节点。',
+          '若这是首个子课程，且根下已有章节/小节，须传 moveRootContents=true 把原有根内容迁入该子课程，否则 → 400。',
+        ].join(''),
         operationId: 'createCourseCatalogSubcourse',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5916,9 +6043,10 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '改子课程名称与封面',
+        description: '修改指定子课程的名称与封面；子课程不存在或已软删 → 400。',
         operationId: 'updateCourseCatalogSubcourse',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5936,11 +6064,13 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '软删子课程',
-        description:
-          'keepContents=true 可迁到 targetSubcourseId；false 级联软删并重算 contentCount。',
+        description: [
+          '软删指定子课程。keepContents=true 时，可将下属内容迁移到 targetSubcourseId；',
+          'keepContents=false 时级联软删下属内容，并重算课程 contentCount。',
+        ].join(''),
         operationId: 'deleteCourseCatalogSubcourse',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5958,10 +6088,13 @@ function buildAdmin() {
       post: {
         tags: ['课程'],
         summary: '重排子课程',
-        description: 'ids 须与当前未软删子课程集合一致，写 sortOrder 1..n。',
+        description: [
+          '按 Body ids 顺序重排本课全部未软删子课程：ids 必须与当前集合完全一致（不多不少），并写入 sortOrder=1..n。',
+          '集合不一致 → 400。成功仅返回 code/msg，无 data（前端自行刷新目录列表）。',
+        ].join(''),
         operationId: 'reorderCourseCatalogSubcourses',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5972,18 +6105,21 @@ function buildAdmin() {
             },
           },
         },
-        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+        responses: ok200('#/components/schemas/ApiResponseBase'),
       },
     },
     '/api/v1/courses/catalog/reorder/{courseId}': {
       post: {
         tags: ['课程'],
         summary: '目录排序弹窗统一保存',
-        description:
-          'mode=chapters|lessons；自定义排序写 sortOrder=1..n（0 保留未排序）。',
+        description: [
+          '统一保存目录排序。Body mode=chapters（排章节）或 lessons（排小节）；',
+          '自定义排序写入 sortOrder=1..n，未出现在排序列表中的节点保留 sortOrder=0（未排序）。',
+          '成功仅返回 code/msg，无 data（前端自行刷新目录列表）。',
+        ].join(''),
         operationId: 'reorderCourseCatalog',
         security: bearer,
-        parameters: [courseId],
+        parameters: [courseIdPath],
         requestBody: {
           required: true,
           content: {
@@ -5994,28 +6130,7 @@ function buildAdmin() {
             },
           },
         },
-        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
-      },
-    },
-    '/api/v1/courses/catalog/lessons/reorder/{courseId}': {
-      post: {
-        tags: ['课程'],
-        summary: '重排直挂小节（兼容）',
-        description: '仅重排该父下全部直挂小节。新弹窗请用 catalog/reorder。',
-        operationId: 'reorderCourseCatalogLessons',
-        security: bearer,
-        parameters: [courseId],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                $ref: '#/components/schemas/CourseCatalogSiblingReorderRequest',
-              },
-            },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+        responses: ok200('#/components/schemas/ApiResponseBase'),
       },
     },
 
@@ -6335,32 +6450,6 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseViewerList'),
       },
     },
-    '/api/v1/viewers/update-status/{id}': {
-      put: {
-        tags: ['用户管理'],
-        summary: '更新观众状态（兼容）',
-        operationId: 'updateViewerStatus',
-        security: bearer,
-        parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'integer', format: 'int64' },
-            description: 'viewer.id',
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ViewerStatusUpdateRequest' },
-            },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseViewerStatus'),
-      },
-    },
     '/api/v1/viewers/update-blacklist/{id}': {
       put: {
         tags: ['用户管理'],
@@ -6498,12 +6587,20 @@ function buildAdmin() {
       delete: {
         tags: ['用户管理'],
         summary: '软删标签',
+        description:
+          '软删标签（写 deleted_time 等），并物理删除该标签下全部 viewer_tag_member。成功 data.id 为标签 BIGINT 主键，不是业务 UUID。',
         operationId: 'deleteViewerTag',
         security: bearer,
         parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: '标签主键（viewer_tag.id，BIGINT）',
+          },
         ],
-        responses: ok200('#/components/schemas/ApiResponseId'),
+        responses: ok200('#/components/schemas/ApiResponseIntId'),
       },
     },
     '/api/v1/viewer-tags/groups/list': {
@@ -6562,12 +6659,20 @@ function buildAdmin() {
       delete: {
         tags: ['用户管理'],
         summary: '软删标签分组',
+        description:
+          '软删标签分组。默认分组不可删；组内仍有未软删标签 → 400。成功 data.id 为分组 BIGINT 主键，不是业务 UUID。',
         operationId: 'deleteViewerTagGroup',
         security: bearer,
         parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'integer', format: 'int64' } },
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', format: 'int64' },
+            description: '标签分组主键（viewer_tag_group.id，BIGINT）',
+          },
         ],
-        responses: ok200('#/components/schemas/ApiResponseId'),
+        responses: ok200('#/components/schemas/ApiResponseIntId'),
       },
     },
     '/api/v1/outside/courses/list': {
@@ -6667,6 +6772,13 @@ function buildAdmin() {
         },
         CourseId: {
           name: 'id',
+          in: 'path',
+          required: true,
+          schema: { ...BUSINESS_UUID },
+          description: '本站课程 id（D74）',
+        },
+        CourseIdPath: {
+          name: 'courseId',
           in: 'path',
           required: true,
           schema: { ...BUSINESS_UUID },
@@ -6841,7 +6953,7 @@ function buildLive() {
         participateStatus: {
           type: 'integer',
           nullable: true,
-          description: '仅小节：本学员 0 未开始 / 1 进行中 / 2 已完成',
+          description: '0 未开始 / 1 进行中 / 2 已完成；仅小节本学员',
           enum: [0, 1, 2],
         },
         progressPercent: {
@@ -6879,8 +6991,12 @@ function buildLive() {
           description: '进度条最远点（秒）；图/文/档可空',
         },
         materialUrl: { type: 'string', nullable: true, description: '素材 URL' },
-        mimeType: { type: 'string', nullable: true },
-        materialName: { type: 'string', nullable: true },
+        mimeType: { type: 'string', nullable: true, description: 'MIME 类型' },
+        materialName: {
+          type: 'string',
+          nullable: true,
+          description: '素材名称',
+        },
         articleHtml: { type: 'string', nullable: true, description: '仅文章正文 HTML' },
         author: {
           type: 'string',
@@ -6906,10 +7022,7 @@ function buildLive() {
         coverUrl: { type: 'string', description: '封面 URL' },
         introduction: { type: 'string', description: '一句话简介' },
         detailHtml: { type: 'string', description: '详情富文本 HTML' },
-        validityLabel: {
-          type: 'string',
-          description: '有效期文案（course.validity_label）',
-        },
+        validityLabel: { type: 'string' },
         subCourses: {
           type: 'array',
           items: { $ref: '#/components/schemas/ViewerLearningSubCourseItem' },
@@ -7905,7 +8018,9 @@ function buildLive() {
       get: {
         tags: ['观看'],
         summary: '可播回放列表',
-        description: '本库 ready 且 tosUrl 非空；未过售卖门禁 → 403（D89/D90）。',
+        description:
+          '每次先跑与管理端回放列表同源的 get-list diff → pending_package → check/TOS 补偿（D88）；' +
+          '再只返回本库 ready 且 tosUrl 非空的条目。未过售卖门禁 → 403（D89/D90）。补偿失败只打日志，仍回本库可播列表。',
         operationId: 'listWatchPlayRecords',
         parameters: [watchId, activityAccessHeader],
         responses: ok200('#/components/schemas/ApiResponseWatchPlayRecords'),

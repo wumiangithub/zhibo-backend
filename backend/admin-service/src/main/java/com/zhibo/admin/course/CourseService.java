@@ -94,8 +94,8 @@ public class CourseService {
 
     @Transactional
     public CourseIdResponse create(CreateCourseRequest request, long operatorId) {
-        if (request.getAutoList() == null) {
-            throw new IllegalArgumentException("是否自动上架不能为空");
+        if (request.getListed() == null) {
+            throw new IllegalArgumentException("是否上架不能为空");
         }
         String title = requireTitle(request.getTitle());
         String introduction = trimToNull(request.getIntroduction());
@@ -105,8 +105,8 @@ public class CourseService {
         String detailHtml = normalizeDetail(request.getDetailHtml());
         MaterialEntity cover = requireCover(request.getCoverMaterialId());
         List<Long> ownerIds = parseOwnerIds(request.getOwnerIds());
-        List<BoundMaterial> materials = parseBoundMaterials(request.getMaterials(), request.getMaterialIds());
-        SysUserAccountEntity operator = requireOperator(operatorId);
+        List<BoundMaterial> materials = parseBoundMaterials(request.getMaterials());
+        requireOperator(operatorId);
 
         CourseEntity entity = new CourseEntity();
         entity.setId(UuidIds.newId());
@@ -115,9 +115,10 @@ public class CourseService {
         entity.setDetailHtml(detailHtml);
         entity.setCoverMaterialId(cover.getId());
         entity.setCoverUrl(cover.getUrl().trim());
-        entity.setAutoList(request.getAutoList());
-        entity.setShelfStatus("pending");
-        entity.setRiskStatus("pending");
+        // auto_list 列保留兼容，业务不再使用
+        entity.setAutoList(Boolean.FALSE);
+        entity.setRiskStatus("passed");
+        applyListedFlag(entity, request.getListed());
         entity.setContentCount(0);
         entity.setEntitledUserCount(0);
         entity.setTotalUserCount(0);
@@ -131,26 +132,22 @@ public class CourseService {
         courseRepository.save(entity);
         replaceOwners(entity.getId(), ownerIds);
         replaceMaterials(entity.getId(), materials);
-        addAudit(entity.getId(), "submit", null, null, operator);
         return new CourseIdResponse(entity.getId());
     }
 
     /**
-     * 更新课程基本信息。审核中不可改；通过/驳回后再保存则回 {@code pending} 并追加 {@code submit}。
+     * 更新课程基本信息。D109：免审保持 {@code passed}；{@code listed} 立刻改上架状态。
      */
     @Transactional
     public CourseIdResponse update(String id, UpdateCourseRequest request, long operatorId) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
-        if (request.getAutoList() == null) {
-            throw new IllegalArgumentException("是否自动上架不能为空");
+        if (request.getListed() == null) {
+            throw new IllegalArgumentException("是否上架不能为空");
         }
         CourseEntity entity = requireCourse(id);
-        if (isRiskPending(entity.getRiskStatus())) {
-            throw new IllegalArgumentException("审核中不可编辑");
-        }
-        boolean reapply = isRiskReapply(entity.getRiskStatus());
+        requireOperator(operatorId);
 
         String title = requireTitle(request.getTitle());
         String introduction = trimToNull(request.getIntroduction());
@@ -160,22 +157,19 @@ public class CourseService {
         String detailHtml = normalizeDetail(request.getDetailHtml());
         MaterialEntity cover = requireCover(request.getCoverMaterialId());
         List<Long> ownerIds = parseOwnerIds(request.getOwnerIds());
-        List<BoundMaterial> materials = parseBoundMaterials(request.getMaterials(), request.getMaterialIds());
-        SysUserAccountEntity operator = requireOperator(operatorId);
+        List<BoundMaterial> materials = parseBoundMaterials(request.getMaterials());
 
         entity.setTitle(title);
         entity.setIntroduction(introduction);
         entity.setDetailHtml(detailHtml);
         entity.setCoverMaterialId(cover.getId());
         entity.setCoverUrl(cover.getUrl().trim());
-        entity.setAutoList(request.getAutoList());
-        entity.setRiskStatus("pending");
+        entity.setAutoList(Boolean.FALSE);
+        entity.setRiskStatus("passed");
+        applyListedFlag(entity, request.getListed());
         courseRepository.save(entity);
         replaceOwners(entity.getId(), ownerIds);
         replaceMaterials(entity.getId(), materials);
-        if (reapply) {
-            addAudit(entity.getId(), "submit", null, null, operator);
-        }
         return new CourseIdResponse(entity.getId());
     }
 
@@ -501,10 +495,8 @@ public class CourseService {
             entity.setShelfStatus("banned");
         } else {
             entity.setRiskStatus("passed");
-            if (Boolean.TRUE.equals(entity.getAutoList())) {
-                entity.setShelfStatus("on");
-                entity.setListedTime(LocalDateTime.now());
-            } else if ("banned".equals(entity.getShelfStatus())) {
+            // D109 起不再读 autoList；通过时仅解封禁回到待上架
+            if ("banned".equals(entity.getShelfStatus())) {
                 entity.setShelfStatus("pending");
             }
         }
@@ -626,42 +618,24 @@ public class CourseService {
         return List.copyOf(ids);
     }
 
-    /**
-     * 优先 {@code materials}；否则回退 {@code materialIds}（权限按扩展名默认）。
-     */
-    private List<BoundMaterial> parseBoundMaterials(
-            List<CourseMaterialInput> materials,
-            List<String> materialIds) {
-        if (materials != null && !materials.isEmpty()) {
-            LinkedHashMap<String, Integer> ordered = new LinkedHashMap<>();
-            for (CourseMaterialInput item : materials) {
-                if (item == null) {
-                    throw new IllegalArgumentException("课件无效");
-                }
-                String id = item.getId() == null ? "" : item.getId().trim();
-                if (id.isEmpty()) {
-                    throw new IllegalArgumentException("课件无效");
-                }
-                if (ordered.containsKey(id)) {
-                    continue;
-                }
-                ordered.put(id, item.getAccessPermission());
-            }
-            return resolveBoundMaterials(ordered);
-        }
-        if (materialIds == null || materialIds.isEmpty()) {
+    /** 解析创建/更新课件：只认 {@code materials}；null 或空表示无课件。 */
+    private List<BoundMaterial> parseBoundMaterials(List<CourseMaterialInput> materials) {
+        if (materials == null || materials.isEmpty()) {
             return List.of();
         }
         LinkedHashMap<String, Integer> ordered = new LinkedHashMap<>();
-        for (String raw : materialIds) {
-            String id = raw == null ? "" : raw.trim();
+        for (CourseMaterialInput item : materials) {
+            if (item == null) {
+                throw new IllegalArgumentException("课件无效");
+            }
+            String id = item.getId() == null ? "" : item.getId().trim();
             if (id.isEmpty()) {
                 throw new IllegalArgumentException("课件无效");
             }
             if (ordered.containsKey(id)) {
                 continue;
             }
-            ordered.put(id, null);
+            ordered.put(id, item.getAccessPermission());
         }
         return resolveBoundMaterials(ordered);
     }
@@ -913,7 +887,6 @@ public class CourseService {
         summary.setCoverUrl(entity.getCoverUrl());
         summary.setShelfStatus(entity.getShelfStatus());
         summary.setRiskStatus(entity.getRiskStatus());
-        summary.setAutoList(entity.getAutoList());
         summary.setListedTime(formatTime(entity.getListedTime()));
         summary.setContentCount(entity.getContentCount());
         summary.setEntitledUserCount(entity.getEntitledUserCount());
@@ -1010,18 +983,29 @@ public class CourseService {
         return value;
     }
 
-    /** 待审核或未写状态时，课程基本信息不可改。 */
-    private static boolean isRiskPending(String status) {
-        return status == null || status.isBlank() || "pending".equalsIgnoreCase(status.trim());
-    }
-
-    /** 已通过或已驳回后再保存，视为重新发起申请。 */
-    private static boolean isRiskReapply(String status) {
-        if (status == null) {
-            return false;
+    /**
+     * 创建/改基本信息时的上架：listed=true → on 并写 listedTime；false → 已上架改 off，否则 pending；banned 勾选上架 → 400。
+     */
+    private static void applyListedFlag(CourseEntity entity, boolean listed) {
+        String current = entity.getShelfStatus() == null ? "" : entity.getShelfStatus();
+        if ("banned".equals(current)) {
+            if (listed) {
+                throw new IllegalArgumentException("强制封禁不可上下架");
+            }
+            return;
         }
-        String value = status.trim();
-        return "passed".equalsIgnoreCase(value) || "rejected".equalsIgnoreCase(value);
+        if (listed) {
+            if (!"on".equals(current)) {
+                entity.setListedTime(LocalDateTime.now());
+            }
+            entity.setShelfStatus("on");
+        } else if ("on".equals(current)) {
+            entity.setShelfStatus("off");
+        } else if ("off".equals(current)) {
+            entity.setShelfStatus("off");
+        } else {
+            entity.setShelfStatus("pending");
+        }
     }
 
     private static String trimToNull(String value) {

@@ -50,7 +50,7 @@ class ActivityControllerTest {
                         .requestAttr(AuthInterceptor.ATTR_USER_ID, 10001L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"provider":"vhall","title":"活动A","startTime":"2026-10-01 20:00:00","type":2,"autoList":true,"hostIds":[10001]}
+                                {"provider":"vhall","title":"活动A","startTime":"2026-10-01 20:00:00","type":2,"listed":false,"hostIds":[10001],"reportId":"11111111111111111111111111111111"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))

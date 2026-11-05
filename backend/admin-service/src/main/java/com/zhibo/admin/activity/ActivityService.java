@@ -151,11 +151,8 @@ public class ActivityService {
 
     @Transactional
     public CreateActivityResponse create(CreateActivityRequest request, long operatorId) {
-        if (request.getListed() != null) {
-            throw new IllegalArgumentException("请改用 autoList，不再支持 listed");
-        }
-        if (request.getAutoList() == null) {
-            throw new IllegalArgumentException("autoList 不能为空");
+        if (request.getListed() == null) {
+            throw new IllegalArgumentException("listed 不能为空");
         }
 
         String provider = normalizeProvider(request.getProvider());
@@ -192,7 +189,7 @@ public class ActivityService {
         }
         LiveReportEntity boundReport = requirePassedReport(reportId);
         assertHostMatchesReport(boundReport, hostIds);
-        SysUserAccountEntity operator = requireOperator(operatorId);
+        requireOperator(operatorId);
 
         RecordCreatePlan recordPlan = planRecordCreate(type, request, liveProvider);
         Boolean isTiming = type == 4
@@ -236,9 +233,10 @@ public class ActivityService {
         entity.setWarmupUrl(trimToNull(request.getWarmupUrl()));
         entity.setPromoCoverUrl(trimToNull(request.getPromoCoverUrl()));
         entity.setDetailHtml(trimToNull(request.getDetailHtml()));
-        entity.setAutoList(request.getAutoList());
-        entity.setShelfStatus("pending");
-        entity.setRiskStatus("pending");
+        // auto_list 列保留兼容，业务不再使用
+        entity.setAutoList(Boolean.FALSE);
+        entity.setRiskStatus("passed");
+        applyListedFlag(entity, request.getListed());
         entity.setSellType("free");
         entity.setSellAlone(Boolean.TRUE);
         entity.setAccessValidityType("long");
@@ -274,7 +272,6 @@ public class ActivityService {
         if (boundReport != null) {
             bumpBoundCount(boundReport, 1);
         }
-        addAudit(entity.getId(), "submit", null, null, operator);
         return new CreateActivityResponse(entity.getId());
     }
 
@@ -415,7 +412,7 @@ public class ActivityService {
         boolean hasEnd = request.getEndTime() != null;
         boolean hasCover = request.getCoverUrl() != null;
         boolean hasDetail = request.getDetailHtml() != null;
-        boolean hasAutoList = request.getAutoList() != null;
+        boolean hasListed = request.getListed() != null;
         boolean hasHosts = request.getHostIds() != null;
         boolean hasOwners = request.getOwnerIds() != null;
         boolean hasProducts = request.getProducts() != null;
@@ -423,24 +420,19 @@ public class ActivityService {
         boolean hasMaterialId = request.getRecordMaterialId() != null;
 
         if (!hasTitle && !hasStart && !hasIntro && !hasEnd && !hasCover && !hasDetail
-                && !hasAutoList && !hasHosts && !hasOwners && !hasProducts && !hasCoursewares
+                && !hasListed && !hasHosts && !hasOwners && !hasProducts && !hasCoursewares
                 && !hasMaterialId) {
             throw new IllegalArgumentException("至少填写一个可改字段");
         }
 
-        // 仅改关联商品：不拦审核中、不回 pending、不追加发起申请（直播带货 Tab）
+        // 仅改关联商品：不改风控/上架（直播带货 Tab）
         boolean productsOnly = hasProducts
                 && !hasTitle && !hasStart && !hasIntro && !hasEnd && !hasCover && !hasDetail
-                && !hasAutoList && !hasHosts && !hasOwners && !hasCoursewares && !hasMaterialId;
+                && !hasListed && !hasHosts && !hasOwners && !hasCoursewares && !hasMaterialId;
         if (productsOnly) {
             replaceProducts(entity.getId(), parseProducts(request.getProducts()));
             return new CreateActivityResponse(entity.getId());
         }
-
-        if (isRiskPending(entity.getRiskStatus())) {
-            throw new IllegalArgumentException("审核中不可编辑");
-        }
-        boolean reapply = isRiskReapply(entity.getRiskStatus());
 
         if (hasTitle) {
             String title = request.getTitle().trim();
@@ -475,8 +467,8 @@ public class ActivityService {
         if (hasDetail) {
             entity.setDetailHtml(trimToNull(request.getDetailHtml()));
         }
-        if (hasAutoList) {
-            entity.setAutoList(request.getAutoList());
+        if (hasListed) {
+            applyListedFlag(entity, request.getListed());
         }
         // viewerStyle / ultraLowLatency / 暖场等：创建后不可改，请求里带了忽略
 
@@ -499,7 +491,8 @@ public class ActivityService {
             ));
         }
 
-        entity.setRiskStatus("pending");
+        // D109：基本信息保存免审，保持 / 写回 passed
+        entity.setRiskStatus("passed");
         activityRepository.save(entity);
 
         if (hasHosts) {
@@ -520,9 +513,6 @@ public class ActivityService {
         }
         if (hasCoursewares) {
             replaceCoursewares(entity.getId(), parseCoursewares(request.getCoursewareMaterialIds()));
-        }
-        if (reapply) {
-            addAudit(entity.getId(), "submit", null, null, requireOperator(operatorId));
         }
         return new CreateActivityResponse(entity.getId());
     }
@@ -766,9 +756,8 @@ public class ActivityService {
             entity.setShelfStatus("banned");
         } else {
             entity.setRiskStatus("passed");
-            if (Boolean.TRUE.equals(entity.getAutoList())) {
-                entity.setShelfStatus("on");
-            } else if ("banned".equals(entity.getShelfStatus())) {
+            // D109 起不再读 autoList；通过时仅解封禁回到待上架
+            if ("banned".equals(entity.getShelfStatus())) {
                 entity.setShelfStatus("pending");
             }
         }
@@ -1275,7 +1264,6 @@ public class ActivityService {
         detail.setWarmupUrl(entity.getWarmupUrl());
         detail.setPromoCoverUrl(entity.getPromoCoverUrl());
         detail.setDetailHtml(entity.getDetailHtml());
-        detail.setAutoList(entity.getAutoList());
         detail.setSellAlone(entity.getSellAlone());
         if ("paid".equals(entity.getSellType())) {
             detail.setPrice(entity.getPrice());
@@ -1371,18 +1359,26 @@ public class ActivityService {
         return value;
     }
 
-    /** 待审核或未写状态时，直播间基本信息不可改。 */
-    private static boolean isRiskPending(String status) {
-        return status == null || status.isBlank() || "pending".equalsIgnoreCase(status.trim());
-    }
-
-    /** 已通过或已驳回后再保存，视为重新发起申请。 */
-    private static boolean isRiskReapply(String status) {
-        if (status == null) {
-            return false;
+    /**
+     * 创建/改基本信息时的上架：listed=true → on；false → 已上架改 off，否则 pending；banned 勾选上架 → 400。
+     */
+    private static void applyListedFlag(ActivityEntity entity, boolean listed) {
+        String current = entity.getShelfStatus() == null ? "" : entity.getShelfStatus();
+        if ("banned".equals(current)) {
+            if (listed) {
+                throw new IllegalArgumentException("强制封禁不可上下架");
+            }
+            return;
         }
-        String value = status.trim();
-        return "passed".equalsIgnoreCase(value) || "rejected".equalsIgnoreCase(value);
+        if (listed) {
+            entity.setShelfStatus("on");
+        } else if ("on".equals(current)) {
+            entity.setShelfStatus("off");
+        } else if ("off".equals(current)) {
+            entity.setShelfStatus("off");
+        } else {
+            entity.setShelfStatus("pending");
+        }
     }
 
     private static String trimToNull(String value) {

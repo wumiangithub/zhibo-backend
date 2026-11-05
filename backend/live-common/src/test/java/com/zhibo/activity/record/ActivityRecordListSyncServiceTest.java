@@ -115,6 +115,55 @@ class ActivityRecordListSyncServiceTest {
     }
 
     @Test
+    void sync_existingZeroDuration_backfillsPositiveFromGetList() {
+        ActivityEntity activity = activity("vhall", "666781572");
+        ActivityRecordEntity ready = new ActivityRecordEntity();
+        ready.setId(9L);
+        ready.setRecordId(799703L);
+        ready.setStatus(ActivityRecordEntity.STATUS_READY);
+        ready.setDurationSec(0);
+        ready.setTosUrl("https://tos/x.mp4");
+        when(activityRecordRepository.findByActivityId(ACTIVITY_ID)).thenReturn(List.of(ready));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1L,
+                List.of(new ProviderRecordItem(
+                        799703L, "回放A", "00:10:18", "2026-11-05 17:33:18",
+                        "https://cover", "1024", null))));
+        when(activityRecordRepository.save(any(ActivityRecordEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ActivityRecordListSyncService.SyncResult result = service.syncForActivity(activity);
+
+        assertTrue(result.providerListOk());
+        assertEquals(618, ready.getDurationSec());
+        verify(activityRecordRepository).save(ready);
+        // ready 不需要 check 推进
+        verify(liveProvider, never()).checkRecordDownload(anyLong());
+    }
+
+    @Test
+    void sync_existingPositiveDuration_doesNotOverwrite() {
+        ActivityEntity activity = activity("vhall", "666781572");
+        ActivityRecordEntity ready = new ActivityRecordEntity();
+        ready.setId(9L);
+        ready.setRecordId(799703L);
+        ready.setStatus(ActivityRecordEntity.STATUS_READY);
+        ready.setDurationSec(618);
+        when(activityRecordRepository.findByActivityId(ACTIVITY_ID)).thenReturn(List.of(ready));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.listRecords("666781572")).thenReturn(new ProviderRecordList(
+                1L,
+                List.of(new ProviderRecordItem(
+                        799703L, "回放A", "01:00:00", "2026-11-05 17:33:18",
+                        null, null, null))));
+
+        service.syncForActivity(activity);
+
+        assertEquals(618, ready.getDurationSec());
+        verify(activityRecordRepository, never()).save(any());
+    }
+
+    @Test
     void isStuckDownloading_trueWhenNoTosAndNotInFlight() {
         ActivityRecordEntity row = new ActivityRecordEntity();
         row.setRecordId(1L);

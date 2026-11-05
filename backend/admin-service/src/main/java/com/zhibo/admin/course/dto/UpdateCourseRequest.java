@@ -20,17 +20,11 @@ public class UpdateCourseRequest {
     @NotBlank(message = "请选择课程封面")
     private String coverMaterialId;
 
-    @NotNull(message = "是否自动上架不能为空")
-    private Boolean autoList;
+    @NotNull(message = "是否上架不能为空")
+    private Boolean listed;
 
     private List<Long> ownerIds;
 
-    /**
-     * 课件（有序）。与 {@link #materialIds} 二选一；同时传时以本字段为准。
-     * 传空数组表示清空课件。
-     */
+    /** 课件（有序）：素材 id + 学员权限。传空数组表示清空课件。 */
     private List<CourseMaterialInput> materials;
-
-    /** 兼容旧客户端：仅 id 有序数组，权限按扩展名默认。优先用 {@link #materials}。 */
-    private List<String> materialIds;
 }

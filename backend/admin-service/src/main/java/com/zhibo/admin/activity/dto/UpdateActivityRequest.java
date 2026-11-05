@@ -19,7 +19,8 @@ public class UpdateActivityRequest {
     private String coverUrl;
     @Size(max = 100000, message = "详情过长")
     private String detailHtml;
-    private Boolean autoList;
+    /** 是否上架；保存时立刻改 shelfStatus（banned 不可上） */
+    private Boolean listed;
     /** 全量覆盖主播；传了则至少 1 人 */
     private List<Long> hostIds;
     private List<Long> ownerIds;

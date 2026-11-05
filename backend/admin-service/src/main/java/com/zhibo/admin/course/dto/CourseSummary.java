@@ -13,7 +13,6 @@ public class CourseSummary {
     private String coverUrl;
     private String shelfStatus;
     private String riskStatus;
-    private Boolean autoList;
     private String listedTime;
     private List<CoursePerson> owners = new ArrayList<>();
     private int contentCount;

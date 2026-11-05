@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
 import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
-import com.zhibo.admin.viewer.dto.UpdateViewerStatusResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
 import com.zhibo.viewer.ViewerEntity;
@@ -165,19 +164,6 @@ class ViewerAdminServiceTest {
     }
 
     @Test
-    void updateStatus_disablesAndSetsBanAccess() {
-        ViewerEntity row = baseViewer(5L);
-        when(viewerRepository.findById(5L)).thenReturn(Optional.of(row));
-        when(viewerRepository.save(any(ViewerEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        UpdateViewerStatusResponse res = service.updateStatus(5L, ViewerStatus.DISABLED);
-        assertEquals(5L, res.getId());
-        assertEquals(ViewerStatus.DISABLED, res.getStatus());
-        assertEquals(1, row.getBanAccess());
-        verify(viewerRepository).save(row);
-    }
-
-    @Test
     void updateBlacklist_syncsStatus() {
         ViewerEntity row = baseViewer(5L);
         when(viewerRepository.findById(5L)).thenReturn(Optional.of(row));
@@ -189,11 +175,6 @@ class ViewerAdminServiceTest {
         assertEquals(1, res.getBanAccess());
         assertEquals(ViewerStatus.DISABLED, res.getStatus());
         assertEquals(ViewerStatus.DISABLED, row.getStatus());
-    }
-
-    @Test
-    void updateStatus_rejectsUnknown() {
-        assertThrows(IllegalArgumentException.class, () -> service.updateStatus(1L, 9));
     }
 
     @Test

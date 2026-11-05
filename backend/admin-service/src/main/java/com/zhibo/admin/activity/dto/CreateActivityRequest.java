@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * 创建活动请求（本站落库 + 按 provider 调云侧）。
  * <p>
- * 第十一迭代：{@code autoList} 替代 {@code listed}；必选主播；可选课件；不要求 sellType。
+ * D109：{@code listed} 表示创建时是否上架；免审直接 {@code riskStatus=passed}；不再使用 {@code autoList}。
  */
 @Data
 public class CreateActivityRequest {
@@ -77,16 +77,9 @@ public class CreateActivityRequest {
     private String detailHtml;
 
     /**
-     * 是否自动上架；创建时 shelfStatus 一律 pending。
-     * 旧字段 {@code listed} 若传入则业务 400。
+     * 是否上架：{@code true} → 创建成功 {@code shelfStatus=on}；{@code false} → {@code pending}。
      */
-    @NotNull(message = "autoList 不能为空")
-    private Boolean autoList;
-
-    /**
-     * 兼容探测：旧客户端若仍传 listed，服务端拒绝并提示改用 autoList。
-     * 无校验注解，由 Service 显式拒绝。
-     */
+    @NotNull(message = "listed 不能为空")
     private Boolean listed;
 
     /** 主播员工 id；去重后 1～20。 */

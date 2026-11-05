@@ -212,12 +212,19 @@ public class WatchService {
     }
 
     /**
-     * 观看端可播回放列表（D89）：本库 {@code status=ready} 且有 {@code tos_url}。
-     * 供结束页选片与 {@code <video src>}；不鉴权。
+     * 观看端可播回放列表（D89）：先跑与管理端同源的 get-list diff / check / TOS 补偿，
+     * 再只返回本库 {@code status=ready} 且有 {@code tos_url} 的条目。
+     * 供结束页选片与 {@code <video src>}；不鉴权（门禁在 Controller）。
      */
     public WatchRecordListResponse listRecords(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
+        try {
+            activityRecordListSyncService.syncForActivity(entity);
+        } catch (RuntimeException ex) {
+            log.warn("观看 records 回放 get-list 补偿失败 activityId={}: {}",
+                    entity.getId(), ex.getMessage());
+        }
         WatchRecordListResponse response = new WatchRecordListResponse();
         List<WatchRecordItem> list = activityRecordRepository.findByActivityId(entity.getId()).stream()
                 .filter(row -> Integer.valueOf(ActivityRecordEntity.STATUS_READY).equals(row.getStatus()))

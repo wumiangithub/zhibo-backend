@@ -165,7 +165,7 @@ class ActivityServiceTest {
         request.setEndTime(endTime);
         request.setIntroduction("  一场简介  ");
         request.setUltraLowLatency(true);
-        request.setAutoList(true);
+        request.setListed(false);
 
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
@@ -194,30 +194,36 @@ class ActivityServiceTest {
         assertEquals(endTime, entity.getValue().getEndTime());
         assertEquals(true, entity.getValue().getUltraLowLatency());
         assertEquals("pending", entity.getValue().getShelfStatus());
-        assertEquals("pending", entity.getValue().getRiskStatus());
-        assertEquals(true, entity.getValue().getAutoList());
+        assertEquals("passed", entity.getValue().getRiskStatus());
+        assertEquals(false, entity.getValue().getAutoList());
         assertEquals("free", entity.getValue().getSellType());
         assertEquals(true, entity.getValue().getSellAlone());
         assertEquals("长期有效", entity.getValue().getValidityLabel());
         assertEquals(true, entity.getValue().getPlaybackEnabled());
         verify(memberRepository).deleteByActivityIdAndRole(response.getId(), ActivityMemberRole.HOST.getCode());
         verify(memberRepository).saveAll(any());
-        verify(auditRepository).save(argThat((ActivityAuditEntity a) ->
-                "submit".equals(a.getAction())
-                        && a.getResult() == null
-                        && OPERATOR_ID == a.getOperatorId()
-                        && "余灵巧".equals(a.getOperatorName())
-                        && response.getId().equals(a.getActivityId())));
+        verify(auditRepository, never()).save(any());
     }
 
     @Test
-    void create_rejectsListed() {
+    void create_listedTrueSetsShelfOn() {
         CreateActivityRequest request = baseCreateRequest();
+        request.setTitle("测试活动");
+        request.setIntroduction("一场简介");
         request.setListed(true);
+        request.setUltraLowLatency(true);
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.create(any(CreateRoomCommand.class))).thenReturn(new CreateRoomResult("123456"));
+        when(activityRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.create(request, OPERATOR_ID));
-        assertEquals("请改用 autoList，不再支持 listed", ex.getMessage());
+        activityService.create(request, OPERATOR_ID);
+
+        ArgumentCaptor<ActivityEntity> entity = ArgumentCaptor.forClass(ActivityEntity.class);
+        verify(activityRepository).saveAndFlush(entity.capture());
+        assertEquals("on", entity.getValue().getShelfStatus());
+        assertEquals("passed", entity.getValue().getRiskStatus());
     }
 
     @Test
@@ -870,7 +876,6 @@ class ActivityServiceTest {
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(hostUser));
-        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(hostUser));
 
         activityService.update(uuid, request, OPERATOR_ID);
 
@@ -1005,7 +1010,6 @@ class ActivityServiceTest {
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(operator()));
-        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
 
         activityService.update(uuid, request, OPERATOR_ID);
 
@@ -1015,32 +1019,24 @@ class ActivityServiceTest {
     }
 
     @Test
-    void update_fromPassedAppendsSubmit() {
+    void update_keepsPassedAndAppliesListed() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
-        ActivityEntity entity = liveActivity(uuid, "on", "passed", 2);
+        ActivityEntity entity = liveActivity(uuid, "pending", "passed", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
-        request.setAutoList(true);
+        request.setListed(true);
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
 
         activityService.update(uuid, request, OPERATOR_ID);
 
-        assertEquals("pending", entity.getRiskStatus());
+        assertEquals("passed", entity.getRiskStatus());
         assertEquals("on", entity.getShelfStatus());
-        ArgumentCaptor<ActivityAuditEntity> row = ArgumentCaptor.forClass(ActivityAuditEntity.class);
-        verify(auditRepository).save(row.capture());
-        assertEquals(uuid, row.getValue().getActivityId());
-        assertEquals("submit", row.getValue().getAction());
-        assertNull(row.getValue().getResult());
-        assertNull(row.getValue().getReason());
-        assertEquals(OPERATOR_ID, row.getValue().getOperatorId());
-        assertEquals("余灵巧", row.getValue().getOperatorName());
+        verify(auditRepository, never()).save(any());
     }
 
     @Test
-    void update_fromRejectedAppendsSubmit() {
+    void update_fromRejectedSetsPassedWithoutAudit() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
@@ -1048,32 +1044,30 @@ class ActivityServiceTest {
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
         when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
 
         activityService.update(uuid, request, OPERATOR_ID);
 
-        assertEquals("pending", entity.getRiskStatus());
-        ArgumentCaptor<ActivityAuditEntity> row = ArgumentCaptor.forClass(ActivityAuditEntity.class);
-        verify(auditRepository).save(row.capture());
-        assertEquals("submit", row.getValue().getAction());
-        assertEquals(OPERATOR_ID, row.getValue().getOperatorId());
+        assertEquals("passed", entity.getRiskStatus());
+        assertEquals("banned", entity.getShelfStatus());
+        verify(auditRepository, never()).save(any());
     }
 
     @Test
-    void update_pendingDoesNotAppendSubmit() {
+    void update_pendingCanEditKeepsPassed() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "pending", "pending", 2);
         UpdateActivityRequest request = new UpdateActivityRequest();
-        request.setAutoList(false);
+        request.setListed(false);
 
         when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(activityRepository.save(any(ActivityEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> activityService.update(uuid, request, OPERATOR_ID));
-        assertEquals("审核中不可编辑", ex.getMessage());
-        assertEquals("pending", entity.getRiskStatus());
+        activityService.update(uuid, request, OPERATOR_ID);
+
+        assertEquals("passed", entity.getRiskStatus());
+        assertEquals("pending", entity.getShelfStatus());
         verify(auditRepository, never()).save(any());
-        verify(activityRepository, never()).save(any());
+        verify(activityRepository).save(entity);
     }
 
     @Test
@@ -1889,7 +1883,7 @@ class ActivityServiceTest {
     }
 
     @Test
-    void audit_passWithAutoListGoesOn() {
+    void audit_passUnbansToPending_ignoresAutoList() {
         String uuid = "a1b2c3d4e5f67890abcdef1234567890";
         ActivityEntity entity = liveActivity(uuid, "banned", "rejected", 2);
         entity.setAutoList(true);
@@ -1902,7 +1896,7 @@ class ActivityServiceTest {
 
         AuditResultResponse response = activityService.audit(uuid, request, 10001L);
         assertEquals("passed", response.getRiskStatus());
-        assertEquals("on", response.getShelfStatus());
+        assertEquals("pending", response.getShelfStatus());
     }
 
     @Test
@@ -2154,7 +2148,7 @@ class ActivityServiceTest {
         LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
         request.setStartTime(start.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         request.setType(2);
-        request.setAutoList(false);
+        request.setListed(false);
         request.setHostIds(List.of(10001L));
         request.setReportId(DEFAULT_REPORT_ID);
         return request;

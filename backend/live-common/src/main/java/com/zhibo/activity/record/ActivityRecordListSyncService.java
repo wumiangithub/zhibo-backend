@@ -20,8 +20,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * D88 回放列表 get-list diff 补偿（管理端列表与观看 summary 共用）。
+ * D88 回放列表 get-list diff 补偿（管理端列表、观看 records、观看 summary 共用）。
  * 缺行插 {@code pending_package}；对本库 {@code 1/2/5} 与卡死 {@code downloading(3)} 再 check 推进 TOS。
+ * 已有行若 {@code duration_sec} 为 null/0、云侧 get-list 有正时长则回填（成片初期常为 0）。
  */
 @Service
 @RequiredArgsConstructor
@@ -101,12 +102,36 @@ public class ActivityRecordListSyncService {
                 if (inserted != null) {
                     localByRecordId.put(item.id(), inserted);
                 }
+            } else {
+                backfillDurationIfNeeded(existing, item);
             }
         }
         for (ActivityRecordEntity row : localByRecordId.values()) {
             advanceExistingRecordOnList(liveProvider, row);
         }
         return new SyncResult(localByRecordId, providerItems, true);
+    }
+
+    /**
+     * 已有行 {@code duration_sec} 为 null/0 时，用 get-list 正时长回填并 save。
+     * 云侧仍为 0 / 空则不动；本库已有正时长不覆盖。
+     */
+    private void backfillDurationIfNeeded(ActivityRecordEntity row, ProviderRecordItem item) {
+        if (row == null || item == null) {
+            return;
+        }
+        Integer local = row.getDurationSec();
+        if (local != null && local > 0) {
+            return;
+        }
+        Integer cloud = parseDurationToSec(item.duration());
+        if (cloud == null || cloud <= 0) {
+            return;
+        }
+        row.setDurationSec(cloud);
+        activityRecordRepository.save(row);
+        log.info("回放列表回填 duration_sec={} recordId={}（本库原为 {}）",
+                cloud, row.getRecordId(), local);
     }
 
     /**

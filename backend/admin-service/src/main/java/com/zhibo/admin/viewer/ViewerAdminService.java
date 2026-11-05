@@ -4,7 +4,6 @@ import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
 import com.zhibo.admin.viewer.dto.LearningSummaryListItem;
 import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
-import com.zhibo.admin.viewer.dto.UpdateViewerStatusResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListItem;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
@@ -220,19 +219,6 @@ public class ViewerAdminService {
                 cb.equal(m.get("viewerId"), root.get("id")),
                 m.get("tagId").in(tagIds));
         return cb.exists(sq);
-    }
-
-    @Transactional
-    public UpdateViewerStatusResponse updateStatus(long id, int status) {
-        if (status != ViewerStatus.NORMAL && status != ViewerStatus.DISABLED) {
-            throw new IllegalArgumentException("status 仅支持 0 或 1");
-        }
-        ViewerEntity viewer = requireViewer(id);
-        viewer.setStatus(status);
-        viewer.setBanAccess(status == ViewerStatus.DISABLED ? 1 : 0);
-        viewer.setUpdatedTime(LocalDateTime.now());
-        viewerRepository.save(viewer);
-        return new UpdateViewerStatusResponse(viewer.getId(), viewer.getStatus());
     }
 
     @Transactional

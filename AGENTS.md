@@ -67,6 +67,7 @@ Cursor 做派给「后端」的待办；Grok bot 做派给「后端（Grok）」
 
 维护生成脚本 `docs/openapi/generate-openapi.mjs`（及点名导出后的 `docs/openapi/*.yaml`、同步到 shared 的对外片段）时：
 
+- **文案对外可读（D58，红线）**：`summary` / `description` / 字段 `description` 写给 Apifox 读者与用文档反向实现服务端的人，**不是**本仓 agent 备忘。必须完整句子说清做什么、允许/禁止取值、副作用（写哪些表/字段）、错误条件；展示文案写字面示例；时间写含义+格式。禁止「对齐 XX」「拒收 paid」无解释、`D100：long→days…` 工单缩写、只写决策号、只写「见 API约定」无要点。决策号最多句末括号。
 - **每一个**路径参数 / Query / 请求与响应 schema 属性都必须有**中文** `description`（D58）。
 - 枚举必须写 `enum` 列表，并在 `description`（或独立枚举 schema）里用中文列清每个取值（如 `0 待审核 / 1 已通过 / 2 已驳回`）。禁止只列 code 不写中文。
 - **落库类型与长度（D61）**：能表达的约束写进 `maxLength`/`format`/`minimum` 等；`description` 建议附带 `库：VARCHAR(64)` / `BIGINT` / `DECIMAL(10,2)` 等，与 Flyway 一致。导出件供 Apifox，也是正式后端按文档反向实现的输入之一。

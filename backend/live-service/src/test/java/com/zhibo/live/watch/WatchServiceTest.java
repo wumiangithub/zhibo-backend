@@ -298,6 +298,8 @@ class WatchServiceTest {
         entity.setProviderRoomId("1001");
         entity.setReady(1);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(activityRecordListSyncService.syncForActivity(entity))
+                .thenReturn(new ActivityRecordListSyncService.SyncResult(Map.of(), List.of(), true));
 
         ActivityRecordEntity ready = new ActivityRecordEntity();
         ready.setRecordId(799703L);
@@ -322,6 +324,7 @@ class WatchServiceTest {
         assertEquals("01:02:03", response.getList().get(0).getDuration());
         assertEquals("https://cdn.example.com/a.mp4", response.getList().get(0).getTosUrl());
         assertEquals("2026-10-29 18:00:00", response.getList().get(0).getCreatedTime());
+        verify(activityRecordListSyncService).syncForActivity(entity);
         verifyNoInteractions(providerRegistry, liveProvider);
     }
 
@@ -332,10 +335,38 @@ class WatchServiceTest {
         entity.setProvider("vhall");
         entity.setReady(1);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(activityRecordListSyncService.syncForActivity(entity))
+                .thenReturn(new ActivityRecordListSyncService.SyncResult(Map.of(), List.of(), true));
         when(activityRecordRepository.findByActivityId(ID)).thenReturn(List.of());
 
         WatchRecordListResponse response = watchService.listRecords(ID);
         assertTrue(response.getList().isEmpty());
+        verify(activityRecordListSyncService).syncForActivity(entity);
         verifyNoInteractions(providerRegistry, liveProvider);
+    }
+
+    @Test
+    void listRecords_syncThrows_stillReturnsLocalReady() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(activityRecordListSyncService.syncForActivity(entity))
+                .thenThrow(new RuntimeException("boom"));
+
+        ActivityRecordEntity ready = new ActivityRecordEntity();
+        ready.setRecordId(799703L);
+        ready.setTitle("回放A");
+        ready.setDurationSec(60);
+        ready.setStatus(ActivityRecordEntity.STATUS_READY);
+        ready.setTosUrl("https://cdn.example.com/a.mp4");
+        when(activityRecordRepository.findByActivityId(ID)).thenReturn(List.of(ready));
+
+        WatchRecordListResponse response = watchService.listRecords(ID);
+        assertEquals(1, response.getList().size());
+        assertEquals(799703L, response.getList().get(0).getId());
+        verify(activityRecordListSyncService).syncForActivity(entity);
     }
 }

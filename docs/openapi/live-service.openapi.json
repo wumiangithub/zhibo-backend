@@ -559,6 +559,148 @@
         }
       }
     },
+    "/api/v1/viewer/learning/courses": {
+      "get": {
+        "tags": [
+          "我的学习"
+        ],
+        "summary": "我的学习·课程",
+        "description": "仅 course_user 有效权益（entitlement_status=1 且未按售卖到期）且课程未软删；按获得权益时间倒序。",
+        "operationId": "viewerLearningCourses",
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 起（D37）；默认 1"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数；默认 20，最大 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseViewerLearningCourses"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/viewer/learning/courses/detail/{courseId}": {
+      "get": {
+        "tags": [
+          "我的学习"
+        ],
+        "summary": "我的学习·课程详情",
+        "description": "需 course_user 有效权益且课程未软删；返回封面/有效期/简介/详情 HTML、子课程与扁平目录。无权益或不存在 → 400。",
+        "operationId": "viewerLearningCourseDetail",
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "courseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+            },
+            "description": "本站课程 id（D74）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseViewerLearningCourseDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/viewer/learning/courses/lessons/{courseId}/{lessonNodeId}": {
+      "get": {
+        "tags": [
+          "我的学习"
+        ],
+        "summary": "我的学习·小节内容",
+        "description": "需有效权益；返回直播 activityId 或素材 URL/文章 HTML，及本学员进度。无权益或不存在 → 400。",
+        "operationId": "viewerLearningLessonContent",
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "courseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^[0-9a-f]{32}$",
+              "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+            },
+            "description": "本站课程 id（D74）"
+          },
+          {
+            "name": "lessonNodeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "小节节点 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseViewerLearningLessonContent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/viewer/presence/ping": {
       "post": {
         "tags": [
@@ -813,7 +955,7 @@
           "观看"
         ],
         "summary": "观看页活动摘要（页面壳）",
-        "description": "观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95）。\n字段全部取本库 Activity，不调微吼、不含 SDK 签名。\n勿用 /watch/detail（嵌入专用）顶替。须过售卖门禁，未过 → 403。",
+        "description": "观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95/D106）。\n响应取本库 Activity（对账写库后），不含 SDK 签名。\nprovider=vhall 且有 provider_room_id 时：拉微吼 webinar/info，用 webinar_state 对账本库 state；不一致则写库。\n结束类 state（3/4/5）再跑与管理端回放列表同源的 get-list → pending_package → check/TOS 补偿（D88）。\n非 vhall / 无 room id 跳过；云侧失败降级本库、不 500。勿用 /watch/detail 顶替。须过售卖门禁，未过 → 403。",
         "operationId": "getWatchSummary",
         "parameters": [
           {
@@ -981,7 +1123,7 @@
           "观看"
         ],
         "summary": "可播回放列表",
-        "description": "本库 ready 且 tosUrl 非空；未过售卖门禁 → 403（D89/D90）。",
+        "description": "每次先跑与管理端回放列表同源的 get-list diff → pending_package → check/TOS 补偿（D88）；再只返回本库 ready 且 tosUrl 非空的条目。未过售卖门禁 → 403（D89/D90）。补偿失败只打日志，仍回本库可播列表。",
         "operationId": "listWatchPlayRecords",
         "parameters": [
           {
@@ -1137,7 +1279,7 @@
           "评论"
         ],
         "summary": "上报评论",
-        "description": "须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。",
+        "description": "须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。观看端发送成功后调用。聊天不传 msgId/questionId；提问必传 questionId=云提问 id（如微吼 sendQuestion data.id，勿写入 msgId）。commentType：1 聊天 / 2 提问，省略为 1。服务端冗余写入 provider + room_id。",
         "operationId": "watchCommentReport",
         "security": [
           {
@@ -1173,13 +1315,55 @@
         }
       }
     },
+    "/api/v1/watch/comments/question-answer/{id}": {
+      "post": {
+        "tags": [
+          "评论"
+        ],
+        "summary": "提问回复 upsert",
+        "description": "须观众 Authorization；无票 → 401。question_answer_commit 后调用；按 questionId 写同一 room_comment 行的 answer_*；多观众重复 POST 幂等；行缺失可用 content 补建提问+回答（D107）。",
+        "operationId": "watchCommentQuestionAnswer",
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WatchActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WatchCommentQuestionAnswerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseIntId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/watch/comments/delete/{id}": {
       "post": {
         "tags": [
           "评论"
         ],
         "summary": "软删评论",
-        "description": "须观众 Authorization；无票 → 401。Body 传 providerMsgId 或 commentId。",
+        "description": "须观众 Authorization；无票 → 401。Body 传 commentId（本次上报返回的本站 id）或 msgId（仅历史行）。",
         "operationId": "watchCommentDelete",
         "security": [
           {
@@ -1870,6 +2054,427 @@
           }
         }
       },
+      "ViewerLearningCourseItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "subCourseCount",
+          "lessonCount"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "本站课程 UUID"
+          },
+          "title": {
+            "type": "string",
+            "description": "课程名称；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "coverUrl": {
+            "type": "string",
+            "description": "封面 URL；库：VARCHAR(2048)",
+            "maxLength": 2048
+          },
+          "subCourseCount": {
+            "type": "integer",
+            "description": "未软删子课程数；库：INT"
+          },
+          "lessonCount": {
+            "type": "integer",
+            "description": "小节数（course.content_count）；库：INT"
+          },
+          "acquiredTime": {
+            "type": "string",
+            "description": "本学员获得权益时间（course_user.created_time），yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+          }
+        }
+      },
+      "ViewerLearningCourseListData": {
+        "type": "object",
+        "required": [
+          "total",
+          "list"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "总条数；库：BIGINT"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ViewerLearningCourseItem"
+            },
+            "description": "课程列表"
+          }
+        }
+      },
+      "ViewerLearningSubCourseItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "lessonCount"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "子课程节点 id；库：BIGINT"
+          },
+          "title": {
+            "type": "string",
+            "description": "子课程标题；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "coverUrl": {
+            "type": "string",
+            "description": "子课程封面 URL；库：VARCHAR(2048)",
+            "maxLength": 2048
+          },
+          "lessonCount": {
+            "type": "integer",
+            "description": "该子课程下小节数（含章内）；库：INT"
+          }
+        }
+      },
+      "ViewerLearningCatalogNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "parentId",
+          "nodeType",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "目录节点 id；库：BIGINT"
+          },
+          "parentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "父节点 id；根为 0；库：BIGINT"
+          },
+          "nodeType": {
+            "type": "integer",
+            "description": "1 章节 / 2 子课程 / 3 小节；库：INT",
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "章节",
+                "description": "章节"
+              },
+              {
+                "value": 2,
+                "name": "子课程",
+                "description": "子课程"
+              },
+              {
+                "value": 3,
+                "name": "小节",
+                "description": "小节"
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "节点标题；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "contentKind": {
+            "type": "integer",
+            "nullable": true,
+            "description": "仅小节：1 直播 / 2 图片 / 3 视频 / 4 文档 / 5 文章；库：INT",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": 3,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 4,
+                "name": "文档",
+                "description": "文档"
+              },
+              {
+                "value": 5,
+                "name": "文章",
+                "description": "文章"
+              }
+            ]
+          },
+          "contentId": {
+            "type": "string",
+            "nullable": true,
+            "description": "小节内容 id（直播 UUID 或素材 UUID）"
+          },
+          "coverUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "封面 URL；库：VARCHAR(2048)",
+            "maxLength": 2048
+          },
+          "lessonCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "章节：直属小节数；子课程：其下全部小节数；小节省略；库：INT"
+          },
+          "contentKindLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "小节类型中文：直播 / 图片 / 视频 / 文档 / 文章"
+          },
+          "metaLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "直播「支持回放」等副文案；无则省略"
+          },
+          "participateStatus": {
+            "type": "integer",
+            "nullable": true,
+            "description": "0 未开始 / 1 进行中 / 2 已完成；仅小节本学员；库：INT",
+            "enum": [
+              0,
+              1,
+              2
+            ],
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "未开始",
+                "description": "未开始"
+              },
+              {
+                "value": 1,
+                "name": "进行中",
+                "description": "进行中"
+              },
+              {
+                "value": 2,
+                "name": "已完成；仅小节本学员",
+                "description": "已完成；仅小节本学员"
+              }
+            ]
+          },
+          "progressPercent": {
+            "type": "integer",
+            "nullable": true,
+            "description": "仅小节：本学员进度 0～100；库：INT"
+          }
+        }
+      },
+      "ViewerLearningLessonContentData": {
+        "type": "object",
+        "required": [
+          "lessonNodeId",
+          "title",
+          "contentKind",
+          "contentId",
+          "participateStatus"
+        ],
+        "properties": {
+          "lessonNodeId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "小节节点 id；库：BIGINT"
+          },
+          "title": {
+            "type": "string",
+            "description": "小节标题；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "contentKind": {
+            "type": "integer",
+            "description": "1 直播 / 2 图片 / 3 视频 / 4 文档 / 5 文章；库：INT",
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "直播",
+                "description": "直播"
+              },
+              {
+                "value": 2,
+                "name": "图片",
+                "description": "图片"
+              },
+              {
+                "value": 3,
+                "name": "视频",
+                "description": "视频"
+              },
+              {
+                "value": 4,
+                "name": "文档",
+                "description": "文档"
+              },
+              {
+                "value": 5,
+                "name": "文章",
+                "description": "文章"
+              }
+            ]
+          },
+          "contentId": {
+            "type": "string",
+            "description": "直播 UUID 或素材 UUID"
+          },
+          "participateStatus": {
+            "type": "integer",
+            "description": "0 未开始 / 1 进行中 / 2 已完成；库：INT",
+            "enum": [
+              0,
+              1,
+              2
+            ],
+            "x-apifox-enum": [
+              {
+                "value": 0,
+                "name": "未开始",
+                "description": "未开始"
+              },
+              {
+                "value": 1,
+                "name": "进行中",
+                "description": "进行中"
+              },
+              {
+                "value": 2,
+                "name": "已完成",
+                "description": "已完成"
+              }
+            ]
+          },
+          "progressPercent": {
+            "type": "integer",
+            "description": "0～100；库：INT"
+          },
+          "progressBarSec": {
+            "type": "integer",
+            "nullable": true,
+            "description": "进度条最远点（秒）；图/文/档可空；库：INT"
+          },
+          "materialUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "素材 URL"
+          },
+          "mimeType": {
+            "type": "string",
+            "nullable": true,
+            "description": "MIME 类型；库：VARCHAR(128)",
+            "maxLength": 128
+          },
+          "materialName": {
+            "type": "string",
+            "nullable": true,
+            "description": "素材名称"
+          },
+          "articleHtml": {
+            "type": "string",
+            "nullable": true,
+            "description": "仅文章正文 HTML"
+          },
+          "author": {
+            "type": "string",
+            "nullable": true,
+            "description": "仅文章作者；库：material_article.author VARCHAR(16)",
+            "maxLength": 16
+          },
+          "activityId": {
+            "type": "string",
+            "nullable": true,
+            "description": "仅直播：活动 UUID"
+          }
+        }
+      },
+      "ViewerLearningCourseDetailData": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "subCourses",
+          "nodes"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "本站课程 UUID"
+          },
+          "title": {
+            "type": "string",
+            "description": "课程名称；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "coverUrl": {
+            "type": "string",
+            "description": "封面 URL；库：VARCHAR(2048)",
+            "maxLength": 2048
+          },
+          "introduction": {
+            "type": "string",
+            "description": "一句话简介；库：VARCHAR(256)",
+            "maxLength": 256
+          },
+          "detailHtml": {
+            "type": "string",
+            "description": "详情富文本 HTML；库：TEXT",
+            "maxLength": 100000
+          },
+          "validityLabel": {
+            "type": "string",
+            "description": "售卖有效期展示文案；PUT …/sales 按 accessValidityType 重算写入。取值/示例：免费或 long →「长期有效」；days →「{N}天有效」（如「7天有效」「30天有效」「360天有效」）；课程另支持 fixed →「{yyyy-MM-dd HH:mm:ss}到期」（如「2026-11-14 00:00:00到期」；直播无 fixed）。空/缺省按「长期有效」。管理端列表售卖标签由前端拼「{售卖中文} / {validityLabel}」；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "subCourses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ViewerLearningSubCourseItem"
+            },
+            "description": "根下子课程卡片（node_type=2 且 parentId=0）"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ViewerLearningCatalogNode"
+            },
+            "description": "全部未软删目录节点（扁平；同父排序与管理端一致）"
+          }
+        }
+      },
       "WatchEmbedData": {
         "type": "object",
         "properties": {
@@ -1988,6 +2593,10 @@
             "description": "优先 Query nickname；空则默认「观众」；库：VARCHAR(50)",
             "maxLength": 50
           },
+          "head": {
+            "type": "string",
+            "description": "观众头像 URL，对应 JSSDK head；无头像为 \"\"。始终下发并参与签名，init 必须原样传入"
+          },
           "webinarId": {
             "type": "string",
             "description": "微吼活动号（= provider_room_id）；仅 provider=vhall"
@@ -2047,7 +2656,7 @@
           },
           "state": {
             "$ref": "#/components/schemas/ActivityState",
-            "description": "本库活动状态",
+            "description": "本库活动状态（D106：vhall 可能刚被 webinar/info 对账写回）",
             "x-apifox-enum": [
               {
                 "value": 0,
@@ -2364,7 +2973,7 @@
           "id": {
             "type": "integer",
             "format": "int64",
-            "description": "主键 id；库：VARCHAR(32)"
+            "description": "主键 id；库：BIGINT"
           },
           "hasPhone": {
             "type": "boolean",
@@ -2424,7 +3033,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "业务码：0 成功；400/401/403/500/501/502…；库：INT"
+            "description": "业务码：0 成功；400/401/403/500/501/502…"
           },
           "agreed": {
             "type": "boolean",
@@ -2678,7 +3287,7 @@
           "id": {
             "type": "integer",
             "format": "int64",
-            "description": "主键 id；库：VARCHAR(32)"
+            "description": "主键 id；库：BIGINT"
           },
           "category": {
             "type": "integer",
@@ -2818,7 +3427,7 @@
           "id": {
             "type": "integer",
             "format": "int64",
-            "description": "主键 id；库：VARCHAR(32)"
+            "description": "主键 id；库：BIGINT"
           },
           "title": {
             "type": "string",
@@ -2909,7 +3518,7 @@
               "Join",
               "Leave"
             ],
-            "description": "Join 进房 / Leave 离房；库：INT",
+            "description": "Join 进房 / Leave 离房",
             "x-apifox-enum": [
               {
                 "value": "Join",
@@ -2945,7 +3554,7 @@
         "required": [
           "content"
         ],
-        "description": "评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。",
+        "description": "评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。观看端在发送成功时调用。聊天不传 msgId / questionId；提问须传 questionId=云提问 id（如微吼 sendQuestion data.id，勿写入 msgId）。create 可再带 msgId 补写 msg。服务端从活动抄 provider + room_id 落库。",
         "properties": {
           "content": {
             "type": "string",
@@ -2961,9 +3570,35 @@
             "type": "integer",
             "description": "角色标识（微吼侧）；可选；库：INT"
           },
-          "providerMsgId": {
+          "commentType": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "description": "1 聊天 / 2 提问。省略按 1。非法值 → 400；库：INT",
+            "x-apifox-enum": [
+              {
+                "value": 1,
+                "name": "聊天",
+                "description": "聊天"
+              },
+              {
+                "value": 2,
+                "name": "提问",
+                "description": "提问"
+              }
+            ]
+          },
+          "questionId": {
             "type": "string",
-            "description": "云侧消息 id；有则本场幂等；可选"
+            "maxLength": 64,
+            "description": "云提问 id（如微吼 data.id）。提问必传；聊天不传。本场已存在则幂等，并可补写 msgId；库：VARCHAR(64)"
+          },
+          "msgId": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "云消息 id（如微吼 msg_id）。聊天观看端通常不传；提问 create 后可补。勿把提问 data.id 写入本字段；库：VARCHAR(64)"
           },
           "commentTime": {
             "type": "string",
@@ -2971,12 +3606,59 @@
           }
         }
       },
+      "WatchCommentQuestionAnswerRequest": {
+        "type": "object",
+        "required": [
+          "questionId",
+          "answerContent"
+        ],
+        "description": "提问回复 upsert（D107）。按 questionId 对齐同一 room_comment 行；多观众重复 POST 幂等。行不存在时须带提问 content 补建。服务端从活动抄 provider + room_id。",
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "云提问 id（如 question_answer_commit data.id）；库：VARCHAR(64)"
+          },
+          "msgId": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "云消息 id（如 data.msg_id）；可选，行上为空时补写一次；库：VARCHAR(64)"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "提问正文；行不存在时必填；库：VARCHAR(500)"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "提问人昵称；补建时可选；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "roleName": {
+            "type": "integer",
+            "description": "提问人微吼角色；补建时可选；库：INT"
+          },
+          "answerContent": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "主持人/嘉宾回复正文；库：VARCHAR(500)"
+          },
+          "answerNickname": {
+            "type": "string",
+            "description": "回复人昵称"
+          },
+          "answerRoleName": {
+            "type": "integer",
+            "description": "回复人微吼角色数字（1 主持 / 3 助理 / 4 嘉宾等）；库：INT"
+          }
+        }
+      },
       "WatchCommentDeleteRequest": {
         "type": "object",
         "properties": {
-          "providerMsgId": {
+          "msgId": {
             "type": "string",
-            "description": "第三方消息 id"
+            "description": "云消息 id（如微吼 msg_id；聊天通常不传；提问 create 后可补；删除可用历史行）。勿传提问 data.id"
           },
           "commentId": {
             "type": "integer",
@@ -3025,7 +3707,7 @@
           "id": {
             "type": "integer",
             "format": "int64",
-            "description": "主键 id；库：VARCHAR(32)"
+            "description": "主键 id；库：BIGINT"
           },
           "viewerId": {
             "type": "integer",
@@ -3050,7 +3732,7 @@
           "id": {
             "type": "integer",
             "format": "int64",
-            "description": "course_user 行 id；库：VARCHAR(32)"
+            "description": "course_user 行 id；库：BIGINT"
           },
           "viewerId": {
             "type": "integer",
@@ -3081,7 +3763,7 @@
           "id": {
             "type": "integer",
             "format": "int64",
-            "description": "主键 id；库：VARCHAR(32)"
+            "description": "主键 id；库：BIGINT"
           }
         }
       },
@@ -3100,7 +3782,7 @@
               "Join",
               "Leave"
             ],
-            "description": "Join 进房 / Leave 离房；库：INT",
+            "description": "Join 进房 / Leave 离房",
             "x-apifox-enum": [
               {
                 "value": "Join",
@@ -3180,6 +3862,54 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/WatchActivityListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseViewerLearningCourses": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ViewerLearningCourseListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseViewerLearningCourseDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ViewerLearningCourseDetailData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseViewerLearningLessonContent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ViewerLearningLessonContentData"
               }
             }
           }

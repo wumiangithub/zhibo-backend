@@ -16,8 +16,6 @@ import com.zhibo.admin.course.dto.DeleteChapterRequest;
 import com.zhibo.admin.course.dto.DeleteSubcourseRequest;
 import com.zhibo.admin.course.dto.ReorderCatalogItem;
 import com.zhibo.admin.course.dto.ReorderCatalogRequest;
-import com.zhibo.admin.course.dto.ReorderChaptersRequest;
-import com.zhibo.admin.course.dto.ReorderLessonsRequest;
 import com.zhibo.admin.course.dto.ReorderSubcoursesRequest;
 import com.zhibo.admin.course.dto.UpdateChapterRequest;
 import com.zhibo.admin.course.dto.UpdateSubcourseRequest;
@@ -697,78 +695,6 @@ public class CourseCatalogService {
         }
     }
 
-    @Transactional
-    public void reorderChapters(String courseId, ReorderChaptersRequest request) {
-        if (request == null || request.getParentId() == null
-                || request.getIds() == null || request.getIds().isEmpty()) {
-            throw new IllegalArgumentException("请提交章节排序");
-        }
-        // 兼容旧接口：仅重排章节时，同父小节保持原 sortOrder；若仍全 0 则默认章前课后
-        reorderSiblingsSameType(
-                courseId,
-                request.getParentId(),
-                request.getIds(),
-                CourseCatalogNodeType.CHAPTER,
-                "章节");
-    }
-
-    @Transactional
-    public void reorderLessons(String courseId, ReorderLessonsRequest request) {
-        if (request == null || request.getParentId() == null
-                || request.getIds() == null || request.getIds().isEmpty()) {
-            throw new IllegalArgumentException("请提交小节排序");
-        }
-        reorderSiblingsSameType(
-                courseId,
-                request.getParentId(),
-                request.getIds(),
-                CourseCatalogNodeType.LESSON,
-                "小节");
-    }
-
-    /** 同父下同类型节点全量重排（旧接口）。写 1..n。 */
-    private void reorderSiblingsSameType(
-            String courseId,
-            long parentId,
-            List<Long> ids,
-            int nodeType,
-            String label) {
-        CourseEntity course = requireCourse(courseId);
-        assertReorderParent(course.getId(), parentId, nodeType);
-        LinkedHashSet<Long> ordered = new LinkedHashSet<>();
-        for (Long id : ids) {
-            if (id == null) {
-                throw new IllegalArgumentException(label + " id 无效");
-            }
-            if (!ordered.add(id)) {
-                throw new IllegalArgumentException(label + " id 重复");
-            }
-        }
-        List<CourseCatalogNodeEntity> existing = catalogRepository
-                .findActiveByCourseIdAndParentId(course.getId(), parentId)
-                .stream()
-                .filter(n -> n.getNodeType() == nodeType)
-                .toList();
-        if (existing.size() != ordered.size()) {
-            throw new IllegalArgumentException(label + "数量与当前不一致，请刷新后重试");
-        }
-        Map<Long, CourseCatalogNodeEntity> byId = new HashMap<>();
-        for (CourseCatalogNodeEntity n : existing) {
-            byId.put(n.getId(), n);
-        }
-        List<CourseCatalogNodeEntity> inOrder = new ArrayList<>();
-        for (Long id : ordered) {
-            if (!byId.containsKey(id)) {
-                throw new IllegalArgumentException(label + "不存在或不属于该父节点");
-            }
-            inOrder.add(byId.get(id));
-        }
-        CatalogSiblingOrder.applyExplicitOrder(inOrder);
-        for (CourseCatalogNodeEntity n : inOrder) {
-            catalogRepository.save(n);
-        }
-    }
-
     private void assertCatalogContextParent(String courseId, long parentId) {
         if (parentId == 0L) {
             return;
@@ -778,28 +704,6 @@ public class CourseCatalogService {
                 .orElseThrow(() -> new IllegalArgumentException("父节点不存在"));
         if (parent.getNodeType() != CourseCatalogNodeType.SUBCOURSE) {
             throw new IllegalArgumentException("目录上下文须为课程根或子课程");
-        }
-    }
-
-    private void assertReorderParent(String courseId, long parentId, int nodeType) {
-        if (parentId == 0L) {
-            return;
-        }
-        CourseCatalogNodeEntity parent = catalogRepository
-                .findByIdAndCourseIdAndDeletedTimeIsNull(parentId, courseId)
-                .orElseThrow(() -> new IllegalArgumentException("父节点不存在"));
-        if (nodeType == CourseCatalogNodeType.CHAPTER) {
-            if (parent.getNodeType() != CourseCatalogNodeType.SUBCOURSE) {
-                throw new IllegalArgumentException("章节只能挂在课程根或子课程下");
-            }
-            return;
-        }
-        if (nodeType == CourseCatalogNodeType.LESSON) {
-            if (parent.getNodeType() == CourseCatalogNodeType.SUBCOURSE
-                    || parent.getNodeType() == CourseCatalogNodeType.CHAPTER) {
-                return;
-            }
-            throw new IllegalArgumentException("小节只能挂在课程根、章节或子课程下");
         }
     }
 

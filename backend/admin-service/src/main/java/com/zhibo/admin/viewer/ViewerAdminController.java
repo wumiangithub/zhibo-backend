@@ -4,8 +4,6 @@ import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
 import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistRequest;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
-import com.zhibo.admin.viewer.dto.UpdateViewerStatusRequest;
-import com.zhibo.admin.viewer.dto.UpdateViewerStatusResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsRequest;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
@@ -117,12 +115,6 @@ public class ViewerAdminController {
             }
         }
         return out;
-    }
-
-    @PutMapping("/update-status/{id}")
-    public ApiResponse<UpdateViewerStatusResponse> updateStatus(
-            @PathVariable long id, @Valid @RequestBody UpdateViewerStatusRequest request) {
-        return ApiResponse.ok(viewerAdminService.updateStatus(id, request.getStatus()));
     }
 
     @PutMapping("/update-blacklist/{id}")

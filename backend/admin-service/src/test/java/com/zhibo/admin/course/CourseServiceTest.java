@@ -47,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,19 +77,19 @@ class CourseServiceTest {
     private CourseService courseService;
 
     @Test
-    void create_startsPendingAndWritesSubmit() {
+    void create_passedPendingWhenNotListed() {
         stubPeople();
         when(materialRepository.findById("cover-1")).thenReturn(Optional.of(cover("cover-1")));
         when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        CourseIdResponse response = courseService.create(request(true), OPERATOR_ID);
+        CourseIdResponse response = courseService.create(request(false), OPERATOR_ID);
 
         ArgumentCaptor<CourseEntity> saved = ArgumentCaptor.forClass(CourseEntity.class);
         verify(courseRepository).save(saved.capture());
         assertEquals("新课程", saved.getValue().getTitle());
-        assertEquals("pending", saved.getValue().getRiskStatus());
+        assertEquals("passed", saved.getValue().getRiskStatus());
         assertEquals("pending", saved.getValue().getShelfStatus());
-        assertEquals(Boolean.TRUE, saved.getValue().getAutoList());
+        assertEquals(Boolean.FALSE, saved.getValue().getAutoList());
         assertNull(saved.getValue().getListedTime());
         assertEquals(Boolean.TRUE, saved.getValue().getSellAlone());
         assertEquals("free", saved.getValue().getSellType());
@@ -96,11 +97,24 @@ class CourseServiceTest {
         assertEquals("long", saved.getValue().getAccessValidityType());
         assertNull(saved.getValue().getAccessValidityDays());
         assertNull(saved.getValue().getSellPasswordCipher());
-        ArgumentCaptor<CourseAuditEntity> audit = ArgumentCaptor.forClass(CourseAuditEntity.class);
-        verify(auditRepository).save(audit.capture());
-        assertEquals("submit", audit.getValue().getAction());
-        assertNull(audit.getValue().getResult());
+        verify(auditRepository, never()).save(any());
         assertNotNull(response.getId());
+    }
+
+    @Test
+    void create_listedTrueSetsShelfOn() {
+        stubPeople();
+        when(materialRepository.findById("cover-1")).thenReturn(Optional.of(cover("cover-1")));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        courseService.create(request(true), OPERATOR_ID);
+
+        ArgumentCaptor<CourseEntity> saved = ArgumentCaptor.forClass(CourseEntity.class);
+        verify(courseRepository).save(saved.capture());
+        assertEquals("passed", saved.getValue().getRiskStatus());
+        assertEquals("on", saved.getValue().getShelfStatus());
+        assertNotNull(saved.getValue().getListedTime());
+        verify(auditRepository, never()).save(any());
     }
 
     @Test
@@ -267,7 +281,7 @@ class CourseServiceTest {
     }
 
     @Test
-    void audit_autoListTurnsShelfOn() {
+    void audit_passLeavesShelfPending_ignoresAutoList() {
         CourseEntity entity = stored("pending", "pending", true);
         stubOperator();
         CourseAuditRequest body = new CourseAuditRequest();
@@ -276,13 +290,13 @@ class CourseServiceTest {
         CourseAuditResultResponse response = courseService.audit(entity.getId(), body, OPERATOR_ID);
 
         assertEquals("passed", response.getRiskStatus());
-        assertEquals("on", response.getShelfStatus());
-        assertNotNull(entity.getListedTime());
+        assertEquals("pending", response.getShelfStatus());
+        assertNull(entity.getListedTime());
     }
 
     @Test
-    void audit_withoutAutoListStaysPending() {
-        CourseEntity entity = stored("pending", "pending", false);
+    void audit_passUnbansToPending() {
+        CourseEntity entity = stored("banned", "rejected", false);
         stubOperator();
         CourseAuditRequest body = new CourseAuditRequest();
         body.setResult("passed");
@@ -335,18 +349,25 @@ class CourseServiceTest {
     }
 
     @Test
-    void update_rejectsWhenRiskPending() {
+    void update_pendingCanEditKeepsPassed() {
         CourseEntity entity = stored("pending", "pending", true);
         entity.setTitle("旧标题");
+        entity.setCoverMaterialId("cover-old");
+        entity.setCoverUrl("https://cdn.example/old.jpg");
+        stubPeople();
+        when(materialRepository.findById("cover-1")).thenReturn(Optional.of(cover("cover-1")));
+        when(courseRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> courseService.update(entity.getId(), updateRequest(true), OPERATOR_ID));
-        assertTrue(ex.getMessage().contains("审核中不可编辑"));
+        CourseIdResponse response = courseService.update(entity.getId(), updateRequest(false), OPERATOR_ID);
+
+        assertEquals(entity.getId(), response.getId());
+        assertEquals("passed", entity.getRiskStatus());
+        assertEquals("pending", entity.getShelfStatus());
+        verify(auditRepository, never()).save(any());
     }
 
     @Test
-    void update_reappliesAfterPassed() {
+    void update_keepsPassedAndUnlists() {
         CourseEntity entity = stored("on", "passed", true);
         entity.setTitle("旧标题");
         entity.setCoverMaterialId("cover-old");
@@ -359,14 +380,11 @@ class CourseServiceTest {
 
         assertEquals(entity.getId(), response.getId());
         assertEquals("新课程", entity.getTitle());
-        assertEquals("pending", entity.getRiskStatus());
-        assertEquals("on", entity.getShelfStatus());
+        assertEquals("passed", entity.getRiskStatus());
+        assertEquals("off", entity.getShelfStatus());
         assertEquals(Boolean.FALSE, entity.getAutoList());
         assertEquals("cover-1", entity.getCoverMaterialId());
-        ArgumentCaptor<CourseAuditEntity> audit = ArgumentCaptor.forClass(CourseAuditEntity.class);
-        verify(auditRepository).save(audit.capture());
-        assertEquals("submit", audit.getValue().getAction());
-        assertNull(audit.getValue().getResult());
+        verify(auditRepository, never()).save(any());
     }
 
     @Test
@@ -439,7 +457,7 @@ class CourseServiceTest {
         String json = mapper.writeValueAsString(response);
         for (String forbidden : List.of(
                 "entitledUserCount", "totalUserCount", "salesCount",
-                "riskStatus", "shelfStatus", "autoList", "canList", "canUnlist", "canDelete",
+                "riskStatus", "shelfStatus", "canList", "canUnlist", "canDelete",
                 "detailHtml", "avatar", "owners", "coverUrl", "introduction", "listedTime",
                 "\"title\"")) {
             assertFalse(json.contains(forbidden), forbidden);
@@ -505,20 +523,20 @@ class CourseServiceTest {
         assertTrue(ex.getMessage().contains("仅下载"));
     }
 
-    private CreateCourseRequest request(boolean autoList) {
+    private CreateCourseRequest request(boolean listed) {
         CreateCourseRequest request = new CreateCourseRequest();
         request.setTitle(" 新课程 ");
         request.setCoverMaterialId("cover-1");
-        request.setAutoList(autoList);
+        request.setListed(listed);
         request.setOwnerIds(List.of(OPERATOR_ID));
         return request;
     }
 
-    private UpdateCourseRequest updateRequest(boolean autoList) {
+    private UpdateCourseRequest updateRequest(boolean listed) {
         UpdateCourseRequest request = new UpdateCourseRequest();
         request.setTitle(" 新课程 ");
         request.setCoverMaterialId("cover-1");
-        request.setAutoList(autoList);
+        request.setListed(listed);
         request.setOwnerIds(List.of(OPERATOR_ID));
         request.setMaterials(List.of());
         return request;

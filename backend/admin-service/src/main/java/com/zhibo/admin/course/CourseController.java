@@ -41,8 +41,6 @@ import com.zhibo.admin.course.dto.CreateSubcourseRequest;
 import com.zhibo.admin.course.dto.DeleteChapterRequest;
 import com.zhibo.admin.course.dto.DeleteSubcourseRequest;
 import com.zhibo.admin.course.dto.ReorderCatalogRequest;
-import com.zhibo.admin.course.dto.ReorderChaptersRequest;
-import com.zhibo.admin.course.dto.ReorderLessonsRequest;
 import com.zhibo.admin.course.dto.ReorderSubcoursesRequest;
 import com.zhibo.admin.course.dto.UpdateChapterRequest;
 import com.zhibo.admin.course.dto.UpdateSubcourseRequest;
@@ -369,22 +367,6 @@ public class CourseController {
             @PathVariable String courseId,
             @Valid @RequestBody ReorderCatalogRequest request) {
         courseCatalogService.reorderCatalog(courseId, request);
-        return ApiResponse.ok();
-    }
-
-    @PostMapping("/catalog/chapters/reorder/{courseId}")
-    public ApiResponse<Void> reorderChapters(
-            @PathVariable String courseId,
-            @Valid @RequestBody ReorderChaptersRequest request) {
-        courseCatalogService.reorderChapters(courseId, request);
-        return ApiResponse.ok();
-    }
-
-    @PostMapping("/catalog/lessons/reorder/{courseId}")
-    public ApiResponse<Void> reorderLessons(
-            @PathVariable String courseId,
-            @Valid @RequestBody ReorderLessonsRequest request) {
-        courseCatalogService.reorderLessons(courseId, request);
         return ApiResponse.ok();
     }
 
