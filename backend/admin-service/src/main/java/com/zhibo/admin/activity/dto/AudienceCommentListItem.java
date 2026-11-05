@@ -12,6 +12,8 @@ public class AudienceCommentListItem {
     private String guestId;
     private String nickname;
     private String content;
+    /** 1 聊天 / 2 提问。 */
+    private Integer commentType;
     private String commentTime;
     private boolean deleted;
 }

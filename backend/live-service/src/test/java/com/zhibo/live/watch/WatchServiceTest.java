@@ -7,6 +7,7 @@ import com.zhibo.activity.ActivityProductRepository;
 import com.zhibo.activity.ActivityRecordEntity;
 import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.activity.record.ActivityRecordListSyncService;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
@@ -27,6 +28,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -36,6 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +59,8 @@ class WatchServiceTest {
     private LiveProviderRegistry providerRegistry;
     @Mock
     private LiveProvider liveProvider;
+    @Mock
+    private ActivityRecordListSyncService activityRecordListSyncService;
     @Mock
     private Clock clock;
 
@@ -101,7 +107,8 @@ class WatchServiceTest {
         assertTrue(response.getPlaybackExpired());
         assertTrue(response.getPlaybackSpeedAllow());
         assertFalse(response.getPlaybackFastForwardAllow());
-        verifyNoInteractions(providerRegistry, liveProvider);
+        // 无 provider_room_id → 跳过云对账
+        verifyNoInteractions(providerRegistry, liveProvider, activityRecordListSyncService);
     }
 
     @Test
@@ -120,6 +127,87 @@ class WatchServiceTest {
         assertFalse(response.getPlaybackExpired());
         assertTrue(response.getPlaybackSpeedAllow());
         assertTrue(response.getPlaybackFastForwardAllow());
+        verifyNoInteractions(providerRegistry, liveProvider, activityRecordListSyncService);
+    }
+
+    @Test
+    void summary_reconcilesVhallStateAndCompensatesWhenEnded() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setTitle("直播课");
+        entity.setState(1);
+        entity.setReady(1);
+        entity.setPlaybackEnabled(Boolean.TRUE);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
+                "直播课", 3, 2, null, null, null, null, null, null, null));
+        when(activityRecordListSyncService.syncForActivity(entity))
+                .thenReturn(new ActivityRecordListSyncService.SyncResult(Map.of(), List.of(), true));
+
+        WatchSummaryResponse response = watchService.summary(ID);
+        assertEquals(3, response.getState());
+        verify(activityRepository).save(entity);
+        verify(activityRecordListSyncService).syncForActivity(entity);
+    }
+
+    @Test
+    void summary_alreadyEnded_stillRunsRecordCompensation() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setTitle("直播课");
+        entity.setState(3);
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
+                "直播课", 3, 2, null, null, null, null, null, null, null));
+        when(activityRecordListSyncService.syncForActivity(entity))
+                .thenReturn(new ActivityRecordListSyncService.SyncResult(Map.of(), List.of(), true));
+
+        WatchSummaryResponse response = watchService.summary(ID);
+        assertEquals(3, response.getState());
+        verify(activityRepository, never()).save(any());
+        verify(activityRecordListSyncService).syncForActivity(entity);
+    }
+
+    @Test
+    void summary_vhallInfoFails_returnsLocalAndSkipsHardFail() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("vhall");
+        entity.setProviderRoomId("1001");
+        entity.setTitle("直播课");
+        entity.setState(1);
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.fetchRoom("1001")).thenThrow(new RuntimeException("timeout"));
+
+        WatchSummaryResponse response = watchService.summary(ID);
+        assertEquals(1, response.getState());
+        verify(activityRepository, never()).save(any());
+        verify(activityRecordListSyncService, never()).syncForActivity(any());
+    }
+
+    @Test
+    void summary_nonVhall_skipsCloudSync() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setProvider("aliyun");
+        entity.setProviderRoomId("room-x");
+        entity.setTitle("直播课");
+        entity.setState(1);
+        entity.setReady(1);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+
+        WatchSummaryResponse response = watchService.summary(ID);
+        assertEquals(1, response.getState());
+        verifyNoInteractions(providerRegistry, liveProvider, activityRecordListSyncService);
     }
 
     @Test

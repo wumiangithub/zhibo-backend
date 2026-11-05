@@ -437,8 +437,10 @@ public class VhallLiveProvider implements LiveProvider {
         String email = resolveWatchEmail(viewerId, null);
         String account = Long.toString(viewerId);
         String webinarId = command.providerRoomId();
+        String head = command.head() == null ? "" : command.head().trim();
 
         // D94：签名接口不拉微吼详情、不下发 embedUrl；活动态/标题等由本库 Activity 填
+        // head 始终参与签名（无头像为空串），与 new VhallSDK 传入值一致
         String signedAt = Long.toString(clock.instant().getEpochSecond());
         Map<String, Object> signParams = new LinkedHashMap<>();
         signParams.put("app_key", properties.getAppKey());
@@ -446,12 +448,14 @@ public class VhallLiveProvider implements LiveProvider {
         signParams.put("webinar_id", webinarId);
         signParams.put("email", email);
         signParams.put("username", nickname);
+        signParams.put("head", head);
         String sign = VhallSignUtil.sign(appSecret, signParams);
 
         WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();
         sdk.setAccount(account);
         sdk.setEmail(email);
         sdk.setUsername(nickname);
+        sdk.setHead(head);
         sdk.setWebinarId(webinarId);
         sdk.setAppKey(properties.getAppKey());
         sdk.setSignedAt(signedAt);

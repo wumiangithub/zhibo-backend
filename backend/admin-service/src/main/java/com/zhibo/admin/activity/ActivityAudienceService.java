@@ -8,6 +8,7 @@ import com.zhibo.activity.ActivityAudienceImportRepository;
 import com.zhibo.activity.ActivityAudienceRepository;
 import com.zhibo.activity.RoomCommentEntity;
 import com.zhibo.activity.RoomCommentRepository;
+import com.zhibo.activity.RoomCommentType;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.AudienceCommentListItem;
@@ -747,6 +748,7 @@ public class ActivityAudienceService {
             item.setGuestId(c.getGuestId());
             item.setNickname(c.getNickname());
             item.setContent(c.getContent());
+            item.setCommentType(c.getCommentType() == null ? RoomCommentType.CHAT : c.getCommentType());
             item.setCommentTime(formatTime(c.getCommentTime()));
             item.setDeleted(c.getDeletedTime() != null);
             response.getList().add(item);

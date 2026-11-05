@@ -242,13 +242,31 @@ public class ViewerAuthService {
     }
 
     private ViewerAuthResponse issue(ViewerEntity viewer) {
+        String omsUsername = omsUsername(viewer);
         ViewerAuthResponse response = new ViewerAuthResponse();
-        response.setAccessToken(jwtTokenService.issueAccess(viewer.getId()));
+        response.setAccessToken(jwtTokenService.issueAccess(viewer.getId(), omsUsername));
         response.setExpiresIn(jwtTokenService.expireSeconds());
-        response.setRefreshToken(jwtTokenService.issueRefresh(viewer.getId()));
+        response.setRefreshToken(jwtTokenService.issueRefresh(viewer.getId(), omsUsername));
         response.setRefreshExpiresIn(jwtTokenService.refreshExpireSeconds());
         response.setUser(toUser(viewer));
         return response;
+    }
+
+    /**
+     * oms-go 观众票 {@code username}：对齐下单客户账号。
+     * 优先手机号；未绑手机用 mini_openid；再没有用 {@code viewer.id}（不可空）。
+     */
+    static String omsUsername(ViewerEntity viewer) {
+        if (viewer == null) {
+            return "";
+        }
+        if (!isBlank(viewer.getPhone())) {
+            return viewer.getPhone().trim();
+        }
+        if (!isBlank(viewer.getMiniOpenid())) {
+            return viewer.getMiniOpenid().trim();
+        }
+        return viewer.getId() == null ? "" : String.valueOf(viewer.getId());
     }
 
     private static ViewerUserResponse toUser(ViewerEntity viewer) {

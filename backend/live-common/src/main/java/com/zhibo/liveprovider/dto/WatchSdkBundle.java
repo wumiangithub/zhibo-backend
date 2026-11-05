@@ -14,6 +14,8 @@ public class WatchSdkBundle {
         private String account;
         private String email;
         private String username;
+        /** 观众头像 URL；无头像为 {@code ""}。对应 JSSDK {@code head}，参与签名。 */
+        private String head;
         private String webinarId;
         private String appKey;
         private String signedAt;

@@ -14,6 +14,7 @@ import com.zhibo.activity.ActivityRecordEntity;
 import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.SellPasswordCryptoService;
+import com.zhibo.activity.record.ActivityRecordListSyncService;
 import com.zhibo.activity.record.ActivityRecordTosIngestService;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
@@ -64,6 +65,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -134,6 +136,12 @@ class ActivityServiceTest {
 
     @BeforeEach
     void stubDefaultPassedReport() {
+        // 列表补偿已抽到 live-common；注入真实 SyncService（依赖同批 mock）
+        ReflectionTestUtils.setField(
+                activityService,
+                "activityRecordListSyncService",
+                new ActivityRecordListSyncService(
+                        activityRecordRepository, providerRegistry, activityRecordTosIngestService));
         org.mockito.Mockito.lenient()
                 .when(liveReportRepository.findById(DEFAULT_REPORT_ID))
                 .thenReturn(Optional.of(passedReport(DEFAULT_REPORT_ID, OPERATOR_ID)));

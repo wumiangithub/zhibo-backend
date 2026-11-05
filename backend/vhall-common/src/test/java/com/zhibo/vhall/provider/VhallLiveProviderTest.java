@@ -6,6 +6,9 @@ import com.zhibo.liveprovider.dto.ProviderChatHistory;
 import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
+import com.zhibo.liveprovider.dto.WatchSdkBundle;
+import com.zhibo.liveprovider.dto.WatchSdkCommand;
+import com.zhibo.vhall.util.VhallSignUtil;
 import com.zhibo.vhall.client.VhallClient;
 import com.zhibo.vhall.config.VhallProperties;
 import com.zhibo.vhall.exception.VhallException;
@@ -19,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -591,6 +595,34 @@ class VhallLiveProviderTest {
     void cancelRole_rejectsBlankEmail() {
         assertThrows(IllegalArgumentException.class, () -> provider.cancelRole("100", "  "));
         verify(vhallClient, never()).postForData(eq(VhallLiveProvider.PATH_CANCEL_ROLE), anyMap(), eq(Map.class));
+    }
+
+    @Test
+    void buildWatchSdk_signsHeadUrlAndEmptyString() {
+        WatchSdkBundle withHead = provider.buildWatchSdk(
+                new WatchSdkCommand("1001", "观众", 12L, " https://cdn.example/a.png "));
+        assertEquals("https://cdn.example/a.png", withHead.getSdk().getHead());
+        assertEquals("12@qkzb.com", withHead.getSdk().getEmail());
+        assertEquals(expectedWatchSign(withHead, "https://cdn.example/a.png"), withHead.getSdk().getSign());
+
+        WatchSdkBundle empty = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", 12L, "  "));
+        assertEquals("", empty.getSdk().getHead());
+        assertEquals(expectedWatchSign(empty, ""), empty.getSdk().getSign());
+
+        WatchSdkBundle missing = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", 12L, null));
+        assertEquals("", missing.getSdk().getHead());
+        assertEquals(expectedWatchSign(missing, ""), missing.getSdk().getSign());
+    }
+
+    private static String expectedWatchSign(WatchSdkBundle bundle, String head) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("app_key", "key");
+        params.put("signedat", bundle.getSdk().getSignedAt());
+        params.put("webinar_id", "1001");
+        params.put("email", "12@qkzb.com");
+        params.put("username", "观众");
+        params.put("head", head);
+        return VhallSignUtil.sign("secret", params);
     }
 
     @Test

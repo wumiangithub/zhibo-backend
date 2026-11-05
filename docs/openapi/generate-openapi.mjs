@@ -491,7 +491,8 @@ const FIELD_DESC_BY_NAME = {
   socketId: '回放心跳 socket id',
   lastReportTime: '上次上报时间',
   roleName: '评论角色名',
-  providerMsgId: '第三方消息 id',
+  msgId: '云消息 id（如微吼 msg_id；聊天通常不传；提问 create 后可补；删除可用历史行）。勿传提问 data.id',
+  questionId: '云提问 id（如微吼 data.id；提问上报必传；聊天不传）',
   commentId: '评论 id',
   courseId: '课程 UUID（D74）',
   courseName: '课程名称',
@@ -541,7 +542,7 @@ const FIELD_DESC_BY_PATH = {
   'WatchSummaryData.id': '本站活动 UUID',
   'WatchSummaryData.provider': '服务商（页壳可忽略；init 仍以 sdk-sign 的 provider 为准）',
   'WatchSummaryData.title': '本库活动标题',
-  'WatchSummaryData.state': '本库活动状态',
+  'WatchSummaryData.state': '本库活动状态（D106：vhall 可能刚被 webinar/info 对账写回）',
   'WatchSummaryData.type': '本库活动类型',
   'WatchSummaryData.startTime': '计划/实际开始，yyyy-MM-dd HH:mm:ss；本库',
   'WatchSummaryData.endTime': '结束时间；占位 0000-00-00… 时不输出',
@@ -1256,7 +1257,7 @@ function buildAdmin() {
         captchaId: { type: 'string', format: 'uuid' },
         imageBase64: {
           type: 'string',
-          description: 'data:image/png;base64,... 可直接作 img src',
+          description: 'data:image/png;base64,...；PNG 固定 120×48 像素，可直接作 img src',
         },
       },
     },
@@ -3198,6 +3199,11 @@ function buildAdmin() {
         guestId: { type: 'string' },
         nickname: { type: 'string' },
         content: { type: 'string' },
+        commentType: {
+          type: 'integer',
+          enum: [1, 2],
+          description: '1 聊天 / 2 提问',
+        },
         commentTime: { type: 'string' },
         deleted: { type: 'boolean' },
       },
@@ -3998,6 +4004,7 @@ function buildAdmin() {
       get: {
         tags: ['登录鉴权'],
         summary: '图形验证码',
+        description: '无鉴权。imageBase64 为 PNG，固定 120×48 像素。',
         operationId: 'getCaptcha',
         security: [],
         responses: ok200('#/components/schemas/ApiResponseCaptcha'),
@@ -6936,6 +6943,10 @@ function buildLive() {
         account: { type: 'string', description: '回显 String(viewerId)；init 不要传（与 email 互斥）' },
         email: { type: 'string', description: '{viewerId}@qkzb.com，参与签名；new VhallSDK 必须用这份' },
         username: { type: 'string', description: '优先 Query nickname；空则默认「观众」' },
+        head: {
+          type: 'string',
+          description: '观众头像 URL，对应 JSSDK head；无头像为 ""。始终下发并参与签名，init 必须原样传入',
+        },
         webinarId: { type: 'string', description: '微吼活动号（= provider_room_id）；仅 provider=vhall' },
         appKey: { type: 'string', description: '微吼 app_key' },
         signedAt: { type: 'string', description: '签名时间戳（约 5 分钟有效）' },
@@ -7260,7 +7271,7 @@ function buildLive() {
       type: 'object',
       required: ['content'],
       description:
-        '评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。',
+        '评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。观看端在发送成功时调用。聊天不传 msgId / questionId；提问须传 questionId=云提问 id（如微吼 sendQuestion data.id，勿写入 msgId）。create 可再带 msgId 补写 msg。服务端从活动抄 provider + room_id 落库。',
       properties: {
         content: {
           type: 'string',
@@ -7272,9 +7283,22 @@ function buildLive() {
           type: 'integer',
           description: '角色标识（微吼侧）；可选',
         },
-        providerMsgId: {
+        commentType: {
+          type: 'integer',
+          enum: [1, 2],
+          description: '1 聊天 / 2 提问。省略按 1。非法值 → 400',
+        },
+        questionId: {
           type: 'string',
-          description: '云侧消息 id；有则本场幂等；可选',
+          maxLength: 64,
+          description:
+            '云提问 id（如微吼 data.id）。提问必传；聊天不传。本场已存在则幂等，并可补写 msgId',
+        },
+        msgId: {
+          type: 'string',
+          maxLength: 64,
+          description:
+            '云消息 id（如微吼 msg_id）。聊天观看端通常不传；提问 create 后可补。勿把提问 data.id 写入本字段',
         },
         commentTime: {
           type: 'string',
@@ -7283,10 +7307,48 @@ function buildLive() {
         },
       },
     },
+    WatchCommentQuestionAnswerRequest: {
+      type: 'object',
+      required: ['questionId', 'answerContent'],
+      description:
+        '提问回复 upsert（D107）。按 questionId 对齐同一 room_comment 行；多观众重复 POST 幂等。行不存在时须带提问 content 补建。服务端从活动抄 provider + room_id。',
+      properties: {
+        questionId: {
+          type: 'string',
+          maxLength: 64,
+          description: '云提问 id（如 question_answer_commit data.id）',
+        },
+        msgId: {
+          type: 'string',
+          maxLength: 64,
+          description: '云消息 id（如 data.msg_id）；可选，行上为空时补写一次',
+        },
+        content: {
+          type: 'string',
+          maxLength: 500,
+          description: '提问正文；行不存在时必填',
+        },
+        nickname: { type: 'string', description: '提问人昵称；补建时可选' },
+        roleName: {
+          type: 'integer',
+          description: '提问人微吼角色；补建时可选',
+        },
+        answerContent: {
+          type: 'string',
+          maxLength: 500,
+          description: '主持人/嘉宾回复正文',
+        },
+        answerNickname: { type: 'string', description: '回复人昵称' },
+        answerRoleName: {
+          type: 'integer',
+          description: '回复人微吼角色数字（1 主持 / 3 助理 / 4 嘉宾等）',
+        },
+      },
+    },
     WatchCommentDeleteRequest: {
       type: 'object',
       properties: {
-        providerMsgId: { type: 'string' },
+        msgId: { type: 'string' },
         commentId: { type: 'integer', format: 'int64' },
       },
     },
@@ -7782,9 +7844,11 @@ function buildLive() {
         tags: ['观看'],
         summary: '观看页活动摘要（页面壳）',
         description: [
-          '观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95）。',
-          '字段全部取本库 Activity，不调微吼、不含 SDK 签名。',
-          '勿用 /watch/detail（嵌入专用）顶替。须过售卖门禁，未过 → 403。',
+          '观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95/D106）。',
+          '响应取本库 Activity（对账写库后），不含 SDK 签名。',
+          'provider=vhall 且有 provider_room_id 时：拉微吼 webinar/info，用 webinar_state 对账本库 state；不一致则写库。',
+          '结束类 state（3/4/5）再跑与管理端回放列表同源的 get-list → pending_package → check/TOS 补偿（D88）。',
+          '非 vhall / 无 room id 跳过；云侧失败降级本库、不 500。勿用 /watch/detail 顶替。须过售卖门禁，未过 → 403。',
         ].join('\n'),
         operationId: 'getWatchSummary',
         parameters: [watchId, activityAccessHeader],
@@ -7900,7 +7964,7 @@ function buildLive() {
         tags: ['评论'],
         summary: '上报评论',
         description:
-          '须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。',
+          '须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。观看端发送成功后调用。聊天不传 msgId/questionId；提问必传 questionId=云提问 id（如微吼 sendQuestion data.id，勿写入 msgId）。commentType：1 聊天 / 2 提问，省略为 1。服务端冗余写入 provider + room_id。',
         operationId: 'watchCommentReport',
         security: viewerBearer,
         parameters: [watchId],
@@ -7913,11 +7977,32 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseIntId'),
       },
     },
+    '/api/v1/watch/comments/question-answer/{id}': {
+      post: {
+        tags: ['评论'],
+        summary: '提问回复 upsert',
+        description:
+          '须观众 Authorization；无票 → 401。question_answer_commit 后调用；按 questionId 写同一 room_comment 行的 answer_*；多观众重复 POST 幂等；行缺失可用 content 补建提问+回答（D107）。',
+        operationId: 'watchCommentQuestionAnswer',
+        security: viewerBearer,
+        parameters: [watchId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WatchCommentQuestionAnswerRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseIntId'),
+      },
+    },
     '/api/v1/watch/comments/delete/{id}': {
       post: {
         tags: ['评论'],
         summary: '软删评论',
-        description: '须观众 Authorization；无票 → 401。Body 传 providerMsgId 或 commentId。',
+        description:
+          '须观众 Authorization；无票 → 401。Body 传 commentId（本次上报返回的本站 id）或 msgId（仅历史行）。',
         operationId: 'watchCommentDelete',
         security: viewerBearer,
         parameters: [watchId],

@@ -21,12 +21,18 @@ import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRegisterChannel;
 import com.zhibo.viewer.ViewerRepository;
 import com.zhibo.viewer.ViewerStatus;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Date;
 import java.util.Optional;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -134,6 +140,23 @@ class ViewerAuthServiceTest {
         String json = new ObjectMapper().writeValueAsString(response);
         assertTrue(json.contains("136****8079"));
         assertFalse(json.contains("13612348079"));
+
+        // oms-go SignViewersToken：username=手机号，third_user_id=viewer.id
+        Claims accessClaims = parseAccess(response.getAccessToken());
+        assertEquals("13612348079", accessClaims.get("username", String.class));
+        assertEquals(String.valueOf(response.getUser().getId()), accessClaims.get("third_user_id", String.class));
+    }
+
+    @Test
+    void omsUsername_prefersPhoneThenOpenidThenId() {
+        ViewerEntity withPhone = viewer(9L, ViewerStatus.NORMAL, "13800138000", "oid-x");
+        assertEquals("13800138000", ViewerAuthService.omsUsername(withPhone));
+
+        ViewerEntity openidOnly = viewer(9L, ViewerStatus.NORMAL, null, "oid-only");
+        assertEquals("oid-only", ViewerAuthService.omsUsername(openidOnly));
+
+        ViewerEntity idOnly = viewer(9L, ViewerStatus.NORMAL, null, null);
+        assertEquals("9", ViewerAuthService.omsUsername(idOnly));
     }
 
     @Test
@@ -303,6 +326,24 @@ class ViewerAuthServiceTest {
             }
             return Optional.empty();
         });
+    }
+
+    private Claims parseAccess(String token) {
+        byte[] bytes = properties.getJwtSecret().getBytes(StandardCharsets.UTF_8);
+        if (bytes.length < 32) {
+            byte[] padded = new byte[32];
+            System.arraycopy(bytes, 0, padded, 0, bytes.length);
+            bytes = padded;
+        }
+        SecretKey key = Keys.hmacShaKeyFor(bytes);
+        return Jwts.parser()
+                .verifyWith(key)
+                .requireIssuer("zhibo-viewer")
+                .requireAudience("viewer")
+                .clock(() -> Date.from(clock.instant()))
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     private static WechatLoginRequest wechat(String code) {

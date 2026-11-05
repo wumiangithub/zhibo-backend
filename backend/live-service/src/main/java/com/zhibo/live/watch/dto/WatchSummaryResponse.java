@@ -3,7 +3,7 @@ package com.zhibo.live.watch.dto;
 import lombok.Data;
 
 /**
- * {@code GET /api/v1/watch/summary/{id}} 响应：观看页壳（D95；本库 Activity，无签名）。
+ * {@code GET /api/v1/watch/summary/{id}} 响应：观看页壳（D95/D106；本库 Activity，vhall 可对账写库后回传；无签名）。
  */
 @Data
 public class WatchSummaryResponse {

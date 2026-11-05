@@ -5,6 +5,6 @@ import lombok.Data;
 @Data
 public class DeleteCommentRequest {
 
-    private String providerMsgId;
+    private String msgId;
     private Long commentId;
 }

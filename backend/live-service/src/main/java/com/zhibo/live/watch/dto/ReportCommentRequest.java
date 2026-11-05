@@ -19,8 +19,23 @@ public class ReportCommentRequest {
 
     private Integer roleName;
 
+    /**
+     * 1 聊天 / 2 提问。省略按聊天。
+     */
+    private Integer commentType;
+
+    /**
+     * 云消息 id（如微吼 msg_id）。聊天观看端通常不传；提问可在 create 后补传。
+     * 勿把提问 data.id 写进本字段。
+     */
     @Size(max = 64)
-    private String providerMsgId;
+    private String msgId;
+
+    /**
+     * 云提问 id（如微吼 data.id）。提问上报必传；聊天不传。
+     */
+    @Size(max = 64)
+    private String questionId;
 
     /** yyyy-MM-dd HH:mm:ss；缺省服务器当前时间 */
     private String commentTime;

@@ -11,7 +11,9 @@ import org.springframework.data.repository.query.Param;
 
 public interface RoomCommentRepository extends JpaRepository<RoomCommentEntity, Long> {
 
-    Optional<RoomCommentEntity> findByActivityIdAndProviderMsgId(String activityId, String providerMsgId);
+    Optional<RoomCommentEntity> findByActivityIdAndMsgId(String activityId, String msgId);
+
+    Optional<RoomCommentEntity> findByActivityIdAndQuestionId(String activityId, String questionId);
 
     Page<RoomCommentEntity> findByActivityIdOrderByDeletedTimeAscCommentTimeDesc(
             String activityId, Pageable pageable);
@@ -19,6 +21,7 @@ public interface RoomCommentRepository extends JpaRepository<RoomCommentEntity, 
     Page<RoomCommentEntity> findByActivityIdAndNicknameContainingOrderByDeletedTimeAscCommentTimeDesc(
             String activityId, String nickname, Pageable pageable);
 
+    /** 未软删的聊天 + 提问均计入「评论次数」（D107）。 */
     @Query(
             "SELECT c.viewerId, COUNT(c) FROM RoomCommentEntity c "
                     + "WHERE c.activityId = :activityId AND c.deletedTime IS NULL "

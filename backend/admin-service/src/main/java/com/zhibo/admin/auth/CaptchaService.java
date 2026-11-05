@@ -65,8 +65,9 @@ public class CaptchaService {
     }
 
     private String renderPngBase64(String code) {
+        // 与登录页 .captcha-img-btn 一致，避免前端把 120×40 拉成 120×48
         int w = 120;
-        int h = 40;
+        int h = 48;
         BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = image.createGraphics();
         try {
@@ -75,7 +76,7 @@ public class CaptchaService {
             g.setFont(new Font("Arial", Font.BOLD, 24));
             for (int i = 0; i < code.length(); i++) {
                 g.setColor(new Color(40 + random.nextInt(80), 40 + random.nextInt(80), 40 + random.nextInt(80)));
-                g.drawString(String.valueOf(code.charAt(i)), 18 + i * 24, 28 + random.nextInt(5));
+                g.drawString(String.valueOf(code.charAt(i)), 18 + i * 24, 32 + random.nextInt(5));
             }
             for (int i = 0; i < 6; i++) {
                 g.setColor(new Color(160 + random.nextInt(60), 160 + random.nextInt(60), 160 + random.nextInt(60)));

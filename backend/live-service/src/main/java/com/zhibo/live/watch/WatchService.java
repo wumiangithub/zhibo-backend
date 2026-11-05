@@ -8,6 +8,7 @@ import com.zhibo.activity.ActivityRecordEntity;
 import com.zhibo.activity.ActivityRecordRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.PlaybackRules;
+import com.zhibo.activity.record.ActivityRecordListSyncService;
 import com.zhibo.live.watch.dto.WatchActivityItem;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchProductItem;
@@ -21,6 +22,7 @@ import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -36,9 +38,17 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WatchService {
 
     static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+
+    /** 本站 / 微吼 webinar_state：结束及点播/回放云侧态（D89 一律结束页） */
+    static final int STATE_ENDED = 3;
+    static final int STATE_VOD = 4;
+    static final int STATE_REPLAY = 5;
+
+    private static final String PROVIDER_VHALL = "vhall";
 
     private static final DateTimeFormatter CREATED_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -46,6 +56,7 @@ public class WatchService {
     private final ActivityProductRepository productRepository;
     private final ActivityRecordRepository activityRecordRepository;
     private final LiveProviderRegistry providerRegistry;
+    private final ActivityRecordListSyncService activityRecordListSyncService;
     private final Clock clock;
 
     public WatchActivityListResponse listActivities(int page, int pageSize, Integer state) {
@@ -70,11 +81,15 @@ public class WatchService {
     }
 
     /**
-     * 观看页壳摘要（D95）：本库 Activity，无签名、不调微吼。
+     * 观看页壳摘要（D95 / D106）：本库 Activity，无签名。
+     * {@code provider=vhall} 且有 {@code provider_room_id} 时：拉微吼 webinar/info 对账
+     * {@code webinar_state}→本站 {@code state}；不一致则写库。结束态（3/4/5）再跑与管理端回放列表
+     * 同源的 get-list → pending_package → check/TOS 补偿（D88）。云侧失败降级本库，不 500。
      */
     public WatchSummaryResponse summary(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
+        reconcileWithProviderOnSummary(entity);
 
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
         boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
@@ -95,6 +110,74 @@ public class WatchService {
         response.setPlaybackSpeedAllow(!Boolean.FALSE.equals(entity.getPlaybackSpeedAllow()));
         response.setPlaybackFastForwardAllow(!Boolean.FALSE.equals(entity.getPlaybackFastForwardAllow()));
         return response;
+    }
+
+    /**
+     * D106：summary 侧云态对账 + 结束态回放补偿。失败只打日志。
+     */
+    void reconcileWithProviderOnSummary(ActivityEntity entity) {
+        if (entity == null) {
+            return;
+        }
+        String provider = entity.getProvider();
+        String roomId = entity.getProviderRoomId();
+        if (provider == null || !PROVIDER_VHALL.equalsIgnoreCase(provider.trim())) {
+            return;
+        }
+        if (roomId == null || roomId.isBlank()) {
+            return;
+        }
+
+        Integer cloudState = null;
+        try {
+            LiveProvider liveProvider = providerRegistry.require(provider);
+            ProviderRoomSnapshot snap = liveProvider.fetchRoom(roomId.trim());
+            if (snap != null) {
+                cloudState = snap.state();
+            }
+        } catch (RuntimeException ex) {
+            log.warn("观看 summary 拉微吼 info 失败，降级本库 state activityId={} roomId={}: {}",
+                    entity.getId(), roomId, ex.getMessage());
+            // info 失败时仍若本库已是结束态则尝试回放补偿（本地无回调场景）
+            if (isEndedLikeState(entity.getState())) {
+                tryCompensateRecordsOnSummary(entity);
+            }
+            return;
+        }
+
+        if (cloudState == null) {
+            if (isEndedLikeState(entity.getState())) {
+                tryCompensateRecordsOnSummary(entity);
+            }
+            return;
+        }
+
+        Integer localState = entity.getState();
+        if (localState == null || !localState.equals(cloudState)) {
+            Integer old = localState;
+            entity.setState(cloudState);
+            activityRepository.save(entity);
+            log.info("观看 summary 云态对账写回 state id={} roomId={} {}→{}",
+                    entity.getId(), roomId, old, cloudState);
+        }
+
+        if (isEndedLikeState(cloudState) || isEndedLikeState(entity.getState())) {
+            tryCompensateRecordsOnSummary(entity);
+        }
+    }
+
+    private void tryCompensateRecordsOnSummary(ActivityEntity entity) {
+        try {
+            activityRecordListSyncService.syncForActivity(entity);
+        } catch (RuntimeException ex) {
+            log.warn("观看 summary 回放 get-list 补偿失败 activityId={}: {}",
+                    entity.getId(), ex.getMessage());
+        }
+    }
+
+    static boolean isEndedLikeState(Integer state) {
+        return state != null
+                && (state == STATE_ENDED || state == STATE_VOD || state == STATE_REPLAY);
     }
 
     public WatchResponse watch(String activityId, String guestId, String nickname, Long viewerId) {
