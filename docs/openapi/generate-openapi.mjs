@@ -7375,14 +7375,6 @@ function buildLive() {
         agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
       },
     },
-    ViewerAuthDevPhoneLoginRequest: {
-      type: 'object',
-      required: ['phone', 'agreed'],
-      properties: {
-        phone: { type: 'string', pattern: "^1\\d{10}$" },
-        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
-      },
-    },
     ViewerAuthRefreshRequest: {
       type: 'object',
       required: ['accessToken', 'refreshToken'],
@@ -7535,97 +7527,6 @@ function buildLive() {
     WatchReplayHeartbeatData: {
       type: 'object',
       properties: { lastReportTime: { type: 'string' } },
-    },
-    WatchDevPresenceRequest: {
-      type: 'object',
-      properties: {
-        type: {
-          type: 'string',
-          enum: ['Join', 'Leave'],
-          description: 'Join 进房 / Leave 离房',
-        },
-        userId: { type: 'string' },
-        nickname: { type: 'string' },
-        email: { type: 'string' },
-      },
-    },
-    WatchCommentReportRequest: {
-      type: 'object',
-      required: ['content'],
-      description:
-        '评论上报 Body。发言观众 id 只从 Authorization 解析；不接受 viewerId / guestId。观看端在发送成功时调用。聊天不传 msgId / questionId；提问须传 questionId=云提问 id（如微吼 sendQuestion data.id，勿写入 msgId）。create 可再带 msgId 补写 msg。服务端从活动抄 provider + room_id 落库。',
-      properties: {
-        content: {
-          type: 'string',
-          maxLength: 500,
-          description: '评论正文，必填 ≤500',
-        },
-        nickname: { type: 'string', description: '展示昵称；可选' },
-        roleName: {
-          type: 'integer',
-          description: '角色标识（微吼侧）；可选',
-        },
-        commentType: {
-          type: 'integer',
-          enum: [1, 2],
-          description: '1 聊天 / 2 提问。省略按 1。非法值 → 400',
-        },
-        questionId: {
-          type: 'string',
-          maxLength: 64,
-          description:
-            '云提问 id（如微吼 data.id）。提问必传；聊天不传。本场已存在则幂等，并可补写 msgId',
-        },
-        msgId: {
-          type: 'string',
-          maxLength: 64,
-          description:
-            '云消息 id（如微吼 msg_id）。聊天观看端通常不传；提问 create 后可补。勿把提问 data.id 写入本字段',
-        },
-        commentTime: {
-          type: 'string',
-          description:
-            '评论时间 yyyy-MM-dd HH:mm:ss；缺省用服务器当前时间',
-        },
-      },
-    },
-    WatchCommentQuestionAnswerRequest: {
-      type: 'object',
-      required: ['questionId', 'answerContent'],
-      description:
-        '提问回复 upsert（D107）。按 questionId 对齐同一 room_comment 行；多观众重复 POST 幂等。行不存在时须带提问 content 补建。服务端从活动抄 provider + room_id。',
-      properties: {
-        questionId: {
-          type: 'string',
-          maxLength: 64,
-          description: '云提问 id（如 question_answer_commit data.id）',
-        },
-        msgId: {
-          type: 'string',
-          maxLength: 64,
-          description: '云消息 id（如 data.msg_id）；可选，行上为空时补写一次',
-        },
-        content: {
-          type: 'string',
-          maxLength: 500,
-          description: '提问正文；行不存在时必填',
-        },
-        nickname: { type: 'string', description: '提问人昵称；补建时可选' },
-        roleName: {
-          type: 'integer',
-          description: '提问人微吼角色；补建时可选',
-        },
-        answerContent: {
-          type: 'string',
-          maxLength: 500,
-          description: '主持人/嘉宾回复正文',
-        },
-        answerNickname: { type: 'string', description: '回复人昵称' },
-        answerRoleName: {
-          type: 'integer',
-          description: '回复人微吼角色数字（1 主持 / 3 助理 / 4 嘉宾等）',
-        },
-      },
     },
     WatchCommentDeleteRequest: {
       type: 'object',
@@ -7885,22 +7786,7 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseViewerTokenPair'),
       },
     },
-    '/api/v1/viewer/auth/dev-phone-login': {
-      post: {
-        tags: ['观众鉴权'],
-        summary: '本地造号登录',
-        description: '仅 spring profile=local；非 local 返回 404「接口不存在」。',
-        operationId: 'viewerDevPhoneLogin',
-        security: [],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/ViewerAuthDevPhoneLoginRequest' } },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseViewerTokenPair'),
-      },
-    },
+    // 仅本地 profile：POST /api/v1/viewer/auth/dev-phone-login —— 不入 OpenAPI
     '/api/v1/viewer/auth/refresh': {
       post: {
         tags: ['观众鉴权'],
@@ -8284,60 +8170,7 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseWatchReplayHeartbeat'),
       },
     },
-    '/api/v1/watch/dev/presence/{id}': {
-      post: {
-        tags: ['开发'],
-        summary: '本地模拟进出',
-        description: '仅 local profile；非 local 返回 404。',
-        operationId: 'watchDevPresence',
-        security: [],
-        parameters: [watchId],
-        requestBody: {
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/WatchDevPresenceRequest' } },
-          },
-        },
-        responses: plainTextSuccess200(),
-      },
-    },
-    '/api/v1/watch/comments/report/{id}': {
-      post: {
-        tags: ['评论'],
-        summary: '上报评论',
-        description:
-          '须观众 Authorization；发言观众 id 只从 JWT 解析；Body 不接受 viewerId / guestId；无票 → 401。观看端发送成功后调用。聊天不传 msgId/questionId；提问必传 questionId=云提问 id（如微吼 sendQuestion data.id，勿写入 msgId）。commentType：1 聊天 / 2 提问，省略为 1。服务端冗余写入 provider + room_id。',
-        operationId: 'watchCommentReport',
-        security: viewerBearer,
-        parameters: [watchId],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/WatchCommentReportRequest' } },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseIntId'),
-      },
-    },
-    '/api/v1/watch/comments/question-answer/{id}': {
-      post: {
-        tags: ['评论'],
-        summary: '提问回复 upsert',
-        description:
-          '须观众 Authorization；无票 → 401。question_answer_commit 后调用；按 questionId 写同一 room_comment 行的 answer_*；多观众重复 POST 幂等；行缺失可用 content 补建提问+回答（D107）。',
-        operationId: 'watchCommentQuestionAnswer',
-        security: viewerBearer,
-        parameters: [watchId],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/WatchCommentQuestionAnswerRequest' },
-            },
-          },
-        },
-        responses: ok200('#/components/schemas/ApiResponseIntId'),
-      },
-    },
+    // 仅本地：POST /api/v1/watch/dev/presence/{id}、/watch/comments/report|question-answer —— 不入 OpenAPI（D104）
     '/api/v1/watch/comments/delete/{id}': {
       post: {
         tags: ['评论'],
@@ -8413,8 +8246,9 @@ function buildLive() {
     '/api/v1/callbacks/vhall/presence': {
       post: {
         tags: ['回调'],
-        summary: '微吼上下线回调（主通道）',
-        description: '微吼主动 POST，不是前端调用。method_id 须为 20。',
+        summary: '微吼上下线回调',
+        description:
+          '配置到微吼回调：POST /api/v1/callbacks/vhall/presence。微吼主动调用，不是前端调用。method_id 须为 20；校签失败 403；成功返回纯文本 success。写入本站进出名单与流水。',
         operationId: 'vhallPresenceCallback',
         security: [],
         requestBody: {
@@ -8432,7 +8266,8 @@ function buildLive() {
       post: {
         tags: ['回调'],
         summary: '微吼开播/结束回调',
-        description: 'method_id=1；校签失败 403，成功纯文本 success。',
+        description:
+          '配置到微吼回调：POST /api/v1/callbacks/vhall/live-state。method_id=1；type 1 开播 / 3 结束；校签失败 403；成功纯文本 success。写回本站活动 state。',
         operationId: 'vhallLiveStateCallback',
         security: [],
         responses: plainTextSuccess200(),
@@ -8442,6 +8277,8 @@ function buildLive() {
       post: {
         tags: ['回调'],
         summary: '微吼转码回调',
+        description:
+          '配置到微吼回调：POST /api/v1/callbacks/vhall/transcode。进度 method_id=38、完成 method_id=3；校签失败 403；成功纯文本 success。写素材转码字段。',
         operationId: 'vhallTranscodeCallback',
         security: [],
         responses: plainTextSuccess200(),
@@ -8451,7 +8288,8 @@ function buildLive() {
       post: {
         tags: ['回调'],
         summary: '微吼回放生成回调',
-        description: 'method_id=4（D88）',
+        description:
+          '配置到微吼回调：POST /api/v1/callbacks/vhall/record-generate。method_id=4；校签失败 403；成功纯文本 success。回放元数据落 activity_record。',
         operationId: 'vhallRecordGenerateCallback',
         security: [],
         responses: plainTextSuccess200(),
@@ -8461,7 +8299,8 @@ function buildLive() {
       post: {
         tags: ['回调'],
         summary: '微吼回放打包完成回调',
-        description: 'method_id=6（D88）',
+        description:
+          '配置到微吼回调：POST /api/v1/callbacks/vhall/record-download。method_id=6；校签失败 403；成功先回纯文本 success，再异步下载到 TOS。',
         operationId: 'vhallRecordDownloadCallback',
         security: [],
         responses: plainTextSuccess200(),
