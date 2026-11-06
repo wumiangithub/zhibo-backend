@@ -434,13 +434,24 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalArgumentException("请先登录");
         }
         String nickname = resolveNickname(command.nickname());
-        String email = resolveWatchEmail(viewerId, null);
-        String account = Long.toString(viewerId);
+        String emailOverride = command.email() == null ? "" : command.email().trim();
+        String email;
+        String account;
+        if (!emailOverride.isEmpty()) {
+            // 中控台进房（D110）：email=z{id}@qkzb.com；account 回显 z{id}（与角色 e{id} 错开）
+            email = emailOverride;
+            String parsed = com.zhibo.presence.PresenceUserIds.parseEmail(email);
+            account = parsed != null ? parsed : ("z" + viewerId);
+        } else {
+            email = resolveWatchEmail(viewerId, null);
+            account = Long.toString(viewerId);
+        }
         String webinarId = command.providerRoomId();
         String head = command.head() == null ? "" : command.head().trim();
 
         // D94：签名接口不拉微吼详情、不下发 embedUrl；活动态/标题等由本库 Activity 填
-        // head 始终参与签名（无头像为空串），与 new VhallSDK 传入值一致
+        // head：仅非空参与签名。JSSDK get-scope-token 用 `this.config.head &&` 才带 head；
+        // 空串签入但请求不带 → 微吼 20005「数据签名错误」（中控台员工常无头像，比观看更易踩中）
         String signedAt = Long.toString(clock.instant().getEpochSecond());
         Map<String, Object> signParams = new LinkedHashMap<>();
         signParams.put("app_key", properties.getAppKey());
@@ -448,7 +459,9 @@ public class VhallLiveProvider implements LiveProvider {
         signParams.put("webinar_id", webinarId);
         signParams.put("email", email);
         signParams.put("username", nickname);
-        signParams.put("head", head);
+        if (!head.isEmpty()) {
+            signParams.put("head", head);
+        }
         String sign = VhallSignUtil.sign(appSecret, signParams);
 
         WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();

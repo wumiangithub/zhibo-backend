@@ -589,6 +589,21 @@ const FIELD_DESC_BY_PATH = {
   'WatchChatHistoryData.page': '回显请求页码',
   'WatchChatHistoryData.pageSize': '回显每页条数（固定 50）',
   'WatchChatHistoryData.list': '旧→新；仅文本类消息',
+  'WatchQuestionHistoryItem.questionId':
+    '云提问 id（room_comment.question_id）；前端作 ChatMessage.msgId 对齐键；可空',
+  'WatchQuestionHistoryItem.senderId': '发言观众 id；补建行可空',
+  'WatchQuestionHistoryItem.senderName': '昵称快照；库空时服务端可兜底「观众」',
+  'WatchQuestionHistoryItem.msg': '提问正文',
+  'WatchQuestionHistoryItem.msgId': '云消息 id（room_comment.msg_id）；可空',
+  'WatchQuestionHistoryItem.roleName': '1 主持 / 2 观众 / 3 助理 / 4 嘉宾；可空',
+  'WatchQuestionHistoryItem.timestamp': 'comment_time 毫秒（上海时区）',
+  'WatchQuestionHistoryItem.answerContent': '主持人/嘉宾回复；无可空',
+  'WatchQuestionHistoryItem.answerNickname': '回复人昵称；可空',
+  'WatchQuestionHistoryItem.answerRoleName': '回复人角色数字；可空',
+  'WatchQuestionHistoryData.total': '本场未软删提问行数（截断前）',
+  'WatchQuestionHistoryData.list': '旧→新；最多 500 条',
+  'ConsoleQuestionHistoryData.total': '本场未软删提问行数（截断前）',
+  'ConsoleQuestionHistoryData.list': '旧→新；最多 500 条；形状同 WatchQuestionHistoryItem',
   'CoursewareItem.id': '素材 UUID',
   'AttendeeItem.online': '是否在线',
   'PresenceTrendPoint.online': '该桶在线人数',
@@ -4992,7 +5007,7 @@ function buildAdmin() {
       get: {
         tags: ['统计'],
         summary: '进出三线走势（管理端）',
-        description: '与 live GET /api/v1/watch/presence-trend/{id} 同形。',
+        description: '中控台三线图（D110）；数据来自 room_presence_event。',
         operationId: 'getActivityPresenceTrend',
         security: bearer,
         parameters: [
@@ -5037,12 +5052,11 @@ function buildAdmin() {
     },
     '/api/v1/activities/attendees/{id}': {
       get: {
-        tags: ['中控台'],
-        summary: '中控台进出名单（废弃）',
+        tags: ['直播中控台'],
+        summary: '中控台进出名单',
         description:
-          '废弃：新代码一律用 live GET /api/v1/watch/attendees/{id}。实现可暂时保留。',
-        deprecated: true,
-        operationId: 'listActivityAttendeesDeprecated',
+          'admin-web 中控台名单（D110）。admin JWT。原 live GET /watch/attendees 已删除。',
+        operationId: 'listActivityAttendees',
         security: bearer,
         parameters: [
           activityId,
@@ -6410,8 +6424,9 @@ function buildAdmin() {
     '/api/v1/activities/chat-filter/{id}': {
       get: {
         tags: ['活动管理'],
-        summary: '评论管理 iframe URL',
-        description: '用户运营 · 评论管理；仅 provider=vhall，否则 501。',
+        summary: '评论管理 / 中控台评论审核 iframe URL',
+        description:
+          '用户运营 · 评论管理与中控台共用（D34/D110）。仅 provider=vhall，否则 501。省略 email/name 时用当前员工 e{id}@qkzb.com / 姓名。',
         operationId: 'getActivityChatFilter',
         security: bearer,
         parameters: [
@@ -6420,6 +6435,64 @@ function buildAdmin() {
           { name: 'name', in: 'query', schema: { type: 'string', maxLength: 30 } },
         ],
         responses: ok200('#/components/schemas/ApiResponseChatFilterAdmin'),
+      },
+    },
+    '/api/v1/activities/console/summary/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台页壳摘要',
+        description:
+          'admin-web 单场中控台页壳（D110）。读本库 Activity；admin JWT；无观众售卖门禁；可不做云态对账。字段对齐 /watch/summary。',
+        operationId: 'getConsoleSummary',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseConsoleSummary'),
+      },
+    },
+    '/api/v1/activities/console/sdk-sign': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台员工进房 SDK 签名',
+        description: [
+          '中控台挂微吼观看 SDK（D110）。活动 UUID 用 Query id（同观看 sdk-sign 的 D92 例外）。',
+          '员工 id 只从 admin JWT 取；sdk.email 一律 z{员工id}@qkzb.com 并参与签名（与角色 e{id} 错开，避免微吼同邮箱 20005）；sdk.account 回显 z{员工id}。',
+          '中控台页默认省略 Query nickname（勿写死「助理」）。',
+          '昵称（sdk.username / 顶层 nickname）：Query nickname（若传）→ 本场 activity_member.nickname（开播设置·角色设置本场直播昵称）→ 员工姓名 → 助理（≤30）。',
+          '头像（sdk.head）：本场 activity_member.avatar_url（本场直播头像）→ 员工微信头像 headimgurl → 员工 user_avatar → 空串；空串可 init，仅非空参与签名（JSSDK 真值才带 head）。',
+        ].join('\n'),
+        operationId: 'getConsoleSdkSign',
+        security: bearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'query',
+            required: true,
+            schema: { $ref: '#/components/schemas/BusinessUuid' },
+            description: '本站活动 UUID',
+          },
+          {
+            name: 'nickname',
+            in: 'query',
+            schema: { type: 'string', maxLength: 30 },
+            description:
+              '可选覆盖展示昵称。中控台页默认省略；省略则按本场 activity_member.nickname → 员工姓名 → 助理',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseConsoleSdkSign'),
+      },
+    },
+    '/api/v1/activities/console/question-history/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台问答历史兜底',
+        description:
+          '讨论区提问历史：前端先微吼 vhall_get_live_history_question_msg；方法缺失 / 失败 / 无有效条再调本接口。' +
+          '读本站 room_comment（comment_type=提问、未软删），按 comment_time 旧→新，最多 500 条。' +
+          '响应形状对齐观看 /watch/question-history；admin JWT；无售卖门禁。活动不存在或已软删 → 400。',
+        operationId: 'getConsoleQuestionHistory',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseConsoleQuestionHistory'),
       },
     },
     '/api/v1/live-reports/delete/{id}': {
@@ -7058,7 +7131,7 @@ function buildLive() {
         username: { type: 'string', description: '优先 Query nickname；空则默认「观众」' },
         head: {
           type: 'string',
-          description: '观众头像 URL，对应 JSSDK head；无头像为 ""。始终下发并参与签名，init 必须原样传入',
+          description: '观众头像 URL，对应 JSSDK head；无头像为 ""。始终下发；仅非空时参与签名（JSSDK 真值才带 head；空串勿签入否则 20005）。init 原样传入',
         },
         webinarId: { type: 'string', description: '微吼活动号（= provider_room_id）；仅 provider=vhall' },
         appKey: { type: 'string', description: '微吼 app_key' },
@@ -7157,6 +7230,45 @@ function buildLive() {
         list: {
           type: 'array',
           items: { $ref: '#/components/schemas/WatchChatHistoryItem' },
+        },
+      },
+    },
+    WatchQuestionHistoryItem: {
+      type: 'object',
+      properties: {
+        questionId: { type: 'string' },
+        senderId: { type: 'string' },
+        senderName: { type: 'string' },
+        msg: { type: 'string' },
+        msgId: { type: 'string' },
+        roleName: { type: 'integer' },
+        timestamp: { type: 'integer', format: 'int64' },
+        answerContent: { type: 'string' },
+        answerNickname: { type: 'string' },
+        answerRoleName: { type: 'integer' },
+      },
+    },
+    WatchQuestionHistoryData: {
+      type: 'object',
+      description:
+        '本站 room_comment 提问行（D91）。回放页直接用；直播页微吼问答历史空/失败后兜底。',
+      properties: {
+        total: { type: 'integer', format: 'int64' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/WatchQuestionHistoryItem' },
+        },
+      },
+    },
+    ConsoleQuestionHistoryData: {
+      type: 'object',
+      description:
+        '中控台问答历史兜底。读本站 room_comment 提问行；形状对齐 WatchQuestionHistoryData；admin JWT。',
+      properties: {
+        total: { type: 'integer', format: 'int64' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/WatchQuestionHistoryItem' },
         },
       },
     },
@@ -7564,12 +7676,55 @@ function buildLive() {
     },
     ApiResponseWatchEmbed: { $ref: '#/components/schemas/WatchEmbedData' },
     ApiResponseWatchSummary: { $ref: '#/components/schemas/WatchSummaryData' },
+    ApiResponseConsoleSummary: { $ref: '#/components/schemas/ConsoleSummaryData' },
+    ApiResponseConsoleSdkSign: { $ref: '#/components/schemas/ConsoleSdkSignData' },
+    ApiResponseConsoleQuestionHistory: {
+      $ref: '#/components/schemas/ConsoleQuestionHistoryData',
+    },
+    ConsoleSummaryData: {
+      type: 'object',
+      description:
+        '中控台页壳（D110）：字段对齐观看 /watch/summary；本库 Activity；admin JWT；无观众售卖门禁',
+      properties: {
+        id: { $ref: '#/components/schemas/BusinessUuid' },
+        provider: { $ref: '#/components/schemas/Provider' },
+        title: { type: 'string' },
+        state: { $ref: '#/components/schemas/ActivityState' },
+        type: { $ref: '#/components/schemas/ActivityType' },
+        startTime: { type: 'string' },
+        endTime: { type: 'string' },
+        playbackEnabled: { type: 'boolean' },
+        playbackValidityType: { $ref: '#/components/schemas/PlaybackValidityType' },
+        playbackValidityDays: { type: 'integer' },
+        playbackExpired: { type: 'boolean' },
+        playbackSpeedAllow: { type: 'boolean' },
+        playbackFastForwardAllow: { type: 'boolean' },
+      },
+    },
+    ConsoleSdkSignData: {
+      type: 'object',
+      description:
+        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 viewerId；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称/头像本场成员优先否则员工资料',
+      properties: {
+        id: { $ref: '#/components/schemas/BusinessUuid' },
+        provider: { $ref: '#/components/schemas/Provider' },
+        nickname: {
+          type: 'string',
+          description: '与 sdk.username 同；本场成员昵称 → 员工姓名 → 助理',
+        },
+        employeeId: { type: 'integer', format: 'int64', description: '当前登录员工 rs_mainkey_id' },
+        sdk: { $ref: '#/components/schemas/VhallSdkPayload' },
+      },
+    },
     ApiResponseWatchSdk: { $ref: '#/components/schemas/WatchSdkData' },
     ApiResponseWatchAccess: { $ref: '#/components/schemas/WatchAccessData' },
     ApiResponseWatchAccessVerifyPassword: {
       $ref: '#/components/schemas/WatchAccessVerifyPasswordData',
     },
     ApiResponseWatchChatHistory: { $ref: '#/components/schemas/WatchChatHistoryData' },
+    ApiResponseWatchQuestionHistory: {
+      $ref: '#/components/schemas/WatchQuestionHistoryData',
+    },
     ApiResponseAttendeeList: { $ref: '#/components/schemas/AttendeeListData' },
     ApiResponsePresenceTrend: { $ref: '#/components/schemas/PresenceTrend' },
     ApiResponseChatFilter: { $ref: '#/components/schemas/ChatFilterData' },
@@ -7999,7 +8154,7 @@ function buildLive() {
         tags: ['观看'],
         summary: '观看端聊天历史（回放只读）',
         description:
-          '回放页只读聊天；代理微吼 get-list。须过售卖门禁，未过 → 403。page 从 1 起，每页 50（D91）。',
+          '回放页只读普通聊天；代理微吼 get-list。须过售卖门禁，未过 → 403。page 从 1 起，每页 50（D91）。问答另见 question-history。',
         operationId: 'getWatchChatHistory',
         parameters: [
           watchId,
@@ -8012,6 +8167,19 @@ function buildLive() {
           },
         ],
         responses: ok200('#/components/schemas/ApiResponseWatchChatHistory'),
+      },
+    },
+    '/api/v1/watch/question-history/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '观看端问答历史（本站提问行）',
+        description:
+          '读本站 room_comment（comment_type=提问、未软删），按 comment_time 旧→新，最多 500 条。' +
+          '回放页直接用（不挂观看 SDK）；直播页在微吼 vhall_get_live_history_question_msg 空/失败后兜底。' +
+          '须过售卖门禁，未过 → 403（D91）。中控台同源兜底见 /activities/console/question-history。',
+        operationId: 'getWatchQuestionHistory',
+        parameters: [watchId, activityAccessHeader],
+        responses: ok200('#/components/schemas/ApiResponseWatchQuestionHistory'),
       },
     },
     '/api/v1/watch/records/{id}': {
@@ -8241,62 +8409,7 @@ function buildLive() {
         responses: plainTextSuccess200(),
       },
     },
-    '/api/v1/watch/attendees/{id}': {
-      get: {
-        tags: ['中控台'],
-        summary: '中控台进出名单',
-        description: '打开页面、换 Tab、搜索、加载更多时调用；不要轮询。',
-        operationId: 'listWatchAttendees',
-        parameters: [
-          watchId,
-          {
-            name: 'tab',
-            in: 'query',
-            schema: {
-              type: 'string',
-              enum: ['all', 'online', 'offline'],
-              default: 'all',
-              description: 'all 全部 / online 在线 / offline 离线',
-            },
-          },
-          ...pageParams,
-          { name: 'keyword', in: 'query', schema: { type: 'string' } },
-        ],
-        responses: ok200('#/components/schemas/ApiResponseAttendeeList'),
-      },
-    },
-    '/api/v1/watch/presence-trend/{id}': {
-      get: {
-        tags: ['中控台'],
-        summary: '进出三线走势',
-        description: '数据来自 room_presence_event，不要调微吼 report/online。',
-        operationId: 'getWatchPresenceTrend',
-        parameters: [
-          watchId,
-          { name: 'startTime', in: 'query', required: true, schema: { type: 'string' } },
-          { name: 'endTime', in: 'query', required: true, schema: { type: 'string' } },
-          {
-            name: 'bucketSeconds',
-            in: 'query',
-            schema: { type: 'integer', default: 60, enum: [60], description: '60 秒' },
-          },
-        ],
-        responses: ok200('#/components/schemas/ApiResponsePresenceTrend'),
-      },
-    },
-    '/api/v1/watch/chat-filter/{id}': {
-      get: {
-        tags: ['中控台'],
-        summary: '聊天审核页 URL',
-        operationId: 'getChatFilterPage',
-        parameters: [
-          watchId,
-          { name: 'email', in: 'query', schema: { type: 'string' }, description: '默认 assistant@zhibo.local' },
-          { name: 'name', in: 'query', schema: { type: 'string', maxLength: 30 }, description: '默认「助理」' },
-        ],
-        responses: ok200('#/components/schemas/ApiResponseChatFilter'),
-      },
-    },
+    // D110：中控台名单 / 走势 / 评论审核已迁 admin `/activities/*`；live 不再提供 watch/attendees|presence-trend|chat-filter
   }
 
 
@@ -8307,7 +8420,7 @@ function buildLive() {
     info: {
       title: 'zhibo live-service',
       description: [
-        '钱坤直播观看端 / 中控台 API（live-service :8082）。',
+        '钱坤直播观看端 API（live-service :8082）。中控台已迁 admin-service（D110）。',
         '',
         '契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。',
         '本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。',

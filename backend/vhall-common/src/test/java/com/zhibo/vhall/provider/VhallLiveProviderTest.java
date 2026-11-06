@@ -598,7 +598,7 @@ class VhallLiveProviderTest {
     }
 
     @Test
-    void buildWatchSdk_signsHeadUrlAndEmptyString() {
+    void buildWatchSdk_signsHeadUrlAndOmitsEmpty() {
         WatchSdkBundle withHead = provider.buildWatchSdk(
                 new WatchSdkCommand("1001", "观众", 12L, " https://cdn.example/a.png "));
         assertEquals("https://cdn.example/a.png", withHead.getSdk().getHead());
@@ -607,13 +607,14 @@ class VhallLiveProviderTest {
 
         WatchSdkBundle empty = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", 12L, "  "));
         assertEquals("", empty.getSdk().getHead());
-        assertEquals(expectedWatchSign(empty, ""), empty.getSdk().getSign());
+        assertEquals(expectedWatchSign(empty, null), empty.getSdk().getSign());
 
         WatchSdkBundle missing = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", 12L, null));
         assertEquals("", missing.getSdk().getHead());
-        assertEquals(expectedWatchSign(missing, ""), missing.getSdk().getSign());
+        assertEquals(expectedWatchSign(missing, null), missing.getSdk().getSign());
     }
 
+    /** {@code head} 为 null 表示签名串不含 head（与 JSSDK 空头像行为对齐）。 */
     private static String expectedWatchSign(WatchSdkBundle bundle, String head) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("app_key", "key");
@@ -621,7 +622,9 @@ class VhallLiveProviderTest {
         params.put("webinar_id", "1001");
         params.put("email", "12@qkzb.com");
         params.put("username", "观众");
-        params.put("head", head);
+        if (head != null && !head.isEmpty()) {
+            params.put("head", head);
+        }
         return VhallSignUtil.sign("secret", params);
     }
 
@@ -630,5 +633,23 @@ class VhallLiveProviderTest {
         assertEquals("12@qkzb.com", VhallLiveProvider.resolveWatchEmail(12L, "guest1"));
         assertEquals("guest1@zhibo.local", VhallLiveProvider.resolveWatchEmail(null, "guest1"));
         assertThrows(IllegalArgumentException.class, () -> VhallLiveProvider.resolveWatchEmail(0L, "guest1"));
+    }
+
+    @Test
+    void buildWatchSdk_consoleEmailOverride() {
+        WatchSdkBundle console = provider.buildWatchSdk(
+                new WatchSdkCommand("1001", "助理", 10001L, "", "z10001@qkzb.com"));
+        assertEquals("z10001@qkzb.com", console.getSdk().getEmail());
+        assertEquals("z10001", console.getSdk().getAccount());
+        assertEquals("助理", console.getSdk().getUsername());
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("app_key", "key");
+        params.put("signedat", console.getSdk().getSignedAt());
+        params.put("webinar_id", "1001");
+        params.put("email", "z10001@qkzb.com");
+        params.put("username", "助理");
+        // 空 head 不进签名串（JSSDK 也不会带）
+        assertEquals(VhallSignUtil.sign("secret", params), console.getSdk().getSign());
     }
 }

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
  * 观看 SDK 签名（D92/D95/D96）。{@code viewerId} 由 Controller 从观众 JWT 解析后传入；
  * email 签成 {@code {id}@qkzb.com}；{@code sdk.username} 优先用请求里非空的展示昵称
  * （小程序 URL 已按通则算好），昵称不为此再查 viewer。
- * {@code sdk.head} 取 {@code viewer.avatar_url}，没有则为空串，并参与签名。
+ * {@code sdk.head} 取 {@code viewer.avatar_url}，没有则为空串；仅非空参与签名。
  * 页壳字段（title/state/playback*）见 {@link WatchService#summary}，不进本响应。
  */
 @Service

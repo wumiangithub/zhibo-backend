@@ -22,8 +22,8 @@ public class SdkPayload {
     /** 昵称。 */
     private String username;
     /**
-     * 观众头像 URL，对应 JSSDK {@code head}，参与签名。
-     * 无头像为 {@code ""}，不要省略。
+     * 观众头像 URL，对应 JSSDK {@code head}；仅非空参与签名。
+     * 无头像为 {@code ""}（仍下发；JSSDK 真值才带 head）。
      */
     private String head;
     /** 活动 id（SDK 参数名 webinar_id）。 */

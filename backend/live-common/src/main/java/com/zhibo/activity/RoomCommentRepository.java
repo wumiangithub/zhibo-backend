@@ -15,6 +15,10 @@ public interface RoomCommentRepository extends JpaRepository<RoomCommentEntity, 
 
     Optional<RoomCommentEntity> findByActivityIdAndQuestionId(String activityId, String questionId);
 
+    /** 回放页问答历史：未软删提问，旧→新。 */
+    List<RoomCommentEntity> findByActivityIdAndCommentTypeAndDeletedTimeIsNullOrderByCommentTimeAsc(
+            String activityId, Integer commentType);
+
     Page<RoomCommentEntity> findByActivityIdOrderByDeletedTimeAscCommentTimeDesc(
             String activityId, Pageable pageable);
 

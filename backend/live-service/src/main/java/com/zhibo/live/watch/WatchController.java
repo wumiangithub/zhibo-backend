@@ -4,6 +4,7 @@ import com.zhibo.live.viewer.ViewerJwtTokenService;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchChatHistoryResponse;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
+import com.zhibo.live.watch.dto.WatchQuestionHistoryResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
 import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.live.watch.dto.WatchSdkResponse;
@@ -27,6 +28,7 @@ public class WatchController {
     private final WatchSdkService watchSdkService;
     private final WatchAccessService watchAccessService;
     private final WatchChatHistoryService watchChatHistoryService;
+    private final WatchQuestionHistoryService watchQuestionHistoryService;
     private final ViewerJwtTokenService viewerJwtTokenService;
 
     @GetMapping("/activities")
@@ -93,5 +95,15 @@ public class WatchController {
         Long viewerId = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
         watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchChatHistoryService.list(id, page));
+    }
+
+    /** 回放页只读问答历史（本站 room_comment）；须过售卖门禁。 */
+    @GetMapping("/question-history/{id}")
+    public ApiResponse<WatchQuestionHistoryResponse> questionHistory(
+            @PathVariable String id,
+            HttpServletRequest request) {
+        Long viewerId = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        return ApiResponse.ok(watchQuestionHistoryService.list(id));
     }
 }

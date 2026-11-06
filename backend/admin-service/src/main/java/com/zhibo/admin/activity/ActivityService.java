@@ -1124,15 +1124,31 @@ public class ActivityService {
     }
 
     /**
-     * 管理端「用户运营 · 评论管理」嵌微吼聊天审核页（同 live {@code /watch/chat-filter}，D34）。
+     * 中控台 / 用户运营 · 评论管理嵌微吼聊天审核页（D34 / D110）。
      * 仅 {@code provider=vhall}；他厂由 {@link LiveProviderRegistry#require} 抛 501。
+     * 省略 email/name 时用当前员工 {@code e{id}@qkzb.com} / 姓名（不再默认 assistant@zhibo.local）。
      */
     @Transactional(readOnly = true)
-    public ActivityChatFilterResponse chatFilter(String id, String email, String name) {
+    public ActivityChatFilterResponse chatFilter(String id, String email, String name, long operatorId) {
         ActivityEntity entity = requireActivity(id);
+        String resolvedEmail = trimToNull(email);
+        String resolvedName = trimToNull(name);
+        if (resolvedEmail == null || resolvedName == null) {
+            SysUserAccountEntity operator = requireOperator(operatorId);
+            if (resolvedEmail == null) {
+                resolvedEmail = PresenceUserIds.staffEmail(operator.getId());
+            }
+            if (resolvedName == null) {
+                String userName = trimToNull(operator.getUserName());
+                resolvedName = userName != null ? userName : "助理";
+                if (resolvedName.length() > 30) {
+                    resolvedName = resolvedName.substring(0, 30);
+                }
+            }
+        }
         String pageUrl = providerRegistry
                 .require(entity.getProvider())
-                .buildChatFilterUrl(entity.getProviderRoomId(), email, name);
+                .buildChatFilterUrl(entity.getProviderRoomId(), resolvedEmail, resolvedName);
         return new ActivityChatFilterResponse(pageUrl);
     }
 

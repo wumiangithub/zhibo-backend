@@ -11,9 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PresenceUserIdsTest {
 
     @Test
-    void parseEmail_viewerStaffGuest() {
+    void parseEmail_viewerStaffConsoleGuest() {
         assertEquals("12", PresenceUserIds.parseEmail("12@qkzb.com"));
         assertEquals("e10001", PresenceUserIds.parseEmail("e10001@qkzb.com"));
+        assertEquals("z10001", PresenceUserIds.parseEmail("z10001@qkzb.com"));
         assertEquals("guest1", PresenceUserIds.parseEmail("guest1@zhibo.local"));
     }
 
@@ -29,17 +30,24 @@ class PresenceUserIdsTest {
     void emails_roundTrip() {
         assertEquals("12@qkzb.com", PresenceUserIds.viewerEmail(12L));
         assertEquals("e10001@qkzb.com", PresenceUserIds.staffEmail(10001L));
+        assertEquals("z10001@qkzb.com", PresenceUserIds.consoleEmail(10001L));
         assertEquals(12L, PresenceUserIds.viewerId("12"));
         assertNull(PresenceUserIds.viewerId("e10001"));
+        assertNull(PresenceUserIds.viewerId("z10001"));
         assertTrue(PresenceUserIds.isViewer("12"));
         assertThrows(IllegalArgumentException.class, () -> PresenceUserIds.staffEmail(0));
+        assertThrows(IllegalArgumentException.class, () -> PresenceUserIds.consoleEmail(0));
     }
 
     @Test
-    void mayWriteRoom_viewerAndStaffOnly() {
+    void mayWriteRoom_viewerStaffConsoleOnly() {
         assertTrue(PresenceUserIds.mayWriteRoom("12"));
         assertTrue(PresenceUserIds.mayWriteRoom("e10001"));
+        assertTrue(PresenceUserIds.mayWriteRoom("z10001"));
         assertTrue(PresenceUserIds.isStaff("e10001"));
+        assertTrue(PresenceUserIds.isConsole("z10001"));
+        assertFalse(PresenceUserIds.isStaff("z10001"));
+        assertFalse(PresenceUserIds.isConsole("e10001"));
         assertFalse(PresenceUserIds.mayWriteRoom("guest1"));
         assertFalse(PresenceUserIds.mayWriteRoom(null));
         assertTrue(PresenceUserIds.isGuestEmail("guest1@zhibo.local"));

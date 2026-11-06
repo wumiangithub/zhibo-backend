@@ -12,7 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 管理端旧路径。算法在 {@link AttendeeRoster}，这里只转成管理端自己的响应类型。
+ * 中控台名单（D110）。算法在 {@link AttendeeRoster}，这里转成管理端响应类型。
  */
 @Service
 @RequiredArgsConstructor

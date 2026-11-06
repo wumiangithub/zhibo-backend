@@ -246,12 +246,16 @@ public class ActivityController {
         return ApiResponse.ok(hostPasscodeService.resetPasscode(id));
     }
 
-    /** 用户运营 · 评论管理：微吼聊天审核页 URL（D34，与 watch/chat-filter 同形）。 */
+    /**
+     * 中控台 / 用户运营 · 评论管理：微吼聊天审核页 URL（D34 / D110）。
+     * 省略 {@code email}/{@code name} 时用当前员工 {@code e{id}@qkzb.com} / 姓名。
+     */
     @GetMapping("/chat-filter/{id}")
     public ApiResponse<ActivityChatFilterResponse> chatFilter(
             @PathVariable String id,
             @RequestParam(required = false) String email,
-            @RequestParam(required = false) String name) {
-        return ApiResponse.ok(activityService.chatFilter(id, email, name));
+            @RequestParam(required = false) String name,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(activityService.chatFilter(id, email, name, currentUserId(httpRequest)));
     }
 }

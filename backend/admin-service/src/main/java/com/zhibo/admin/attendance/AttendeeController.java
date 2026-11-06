@@ -16,7 +16,7 @@ public class AttendeeController {
 
     private final AttendeeService attendeeService;
 
-    /** 废弃：新代码用 live GET /api/v1/watch/attendees/{id}。 */
+    /** 中控台名单（D110；原 live {@code /watch/attendees} 已删）。 */
     @GetMapping("/attendees/{id}")
     public ApiResponse<AttendeeListResponse> list(
             @PathVariable String id,
