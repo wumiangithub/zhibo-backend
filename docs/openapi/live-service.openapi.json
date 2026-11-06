@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "zhibo live-service",
-    "description": "钱坤直播观看端 / 中控台 API（live-service :8082）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 观看端不走管理端 JWT",
+    "description": "钱坤直播观看端 API（live-service :8082）。中控台已迁 admin-service（D110）。\n\n契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。\n本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。\n\n**通则**\n- 成功：`code === 0`（HTTP 仍多为 200）\n- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**\n- 时间：`yyyy-MM-dd HH:mm:ss`\n- JSON 不输出 `null` 字段\n- 观看端不走管理端 JWT",
     "version": "2.8.0",
     "contact": {
       "name": "zhibo-backend"
@@ -991,7 +991,7 @@
           "观看"
         ],
         "summary": "观看 SDK 签名与初始化载荷",
-        "description": "旧路径 GET /api/v1/watch/sdk/{id} 已删除。\nQuery 仅 id + 可选 nickname；viewerId 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。\n仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。\n不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。\n签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。",
+        "description": "旧路径 GET /api/v1/watch/sdk/{id} 已删除。\nQuery 仅 id + 可选 nickname；viewerId 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。\n仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。\n不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。\n签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。\n头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={viewerId}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。",
         "operationId": "getWatchSdkSign",
         "security": [
           {
@@ -1077,7 +1077,7 @@
           "观看"
         ],
         "summary": "观看端聊天历史（回放只读）",
-        "description": "回放页只读聊天；代理微吼 get-list。须过售卖门禁，未过 → 403。page 从 1 起，每页 50（D91）。",
+        "description": "回放页只读普通聊天；代理微吼 get-list。须过售卖门禁，未过 → 403。page 从 1 起，每页 50（D91）。问答另见 question-history。",
         "operationId": "getWatchChatHistory",
         "parameters": [
           {
@@ -1110,6 +1110,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseWatchChatHistory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/watch/question-history/{id}": {
+      "get": {
+        "tags": [
+          "观看"
+        ],
+        "summary": "观看端问答历史（本站提问行）",
+        "description": "读本站 room_comment（comment_type=提问、未软删），按 comment_time 旧→新，最多 500 条。回放页直接用（不挂观看 SDK）；直播页在微吼 vhall_get_live_history_question_msg 空/失败后兜底。须过售卖门禁，未过 → 403（D91）。中控台同源兜底见 /activities/console/question-history。",
+        "operationId": "getWatchQuestionHistory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WatchActivityId"
+          },
+          {
+            "name": "X-Activity-Access",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWatchQuestionHistory"
                 }
               }
             }
@@ -1614,197 +1650,6 @@
                 "schema": {
                   "type": "string",
                   "example": "success"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/watch/attendees/{id}": {
-      "get": {
-        "tags": [
-          "中控台"
-        ],
-        "summary": "中控台进出名单",
-        "description": "打开页面、换 Tab、搜索、加载更多时调用；不要轮询。",
-        "operationId": "listWatchAttendees",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WatchActivityId"
-          },
-          {
-            "name": "tab",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "all",
-                "online",
-                "offline"
-              ],
-              "default": "all",
-              "description": "all 全部 / online 在线 / offline 离线",
-              "x-apifox-enum": [
-                {
-                  "value": "all",
-                  "name": "全部",
-                  "description": "全部"
-                },
-                {
-                  "value": "online",
-                  "name": "在线",
-                  "description": "在线"
-                },
-                {
-                  "value": "offline",
-                  "name": "离线",
-                  "description": "离线"
-                }
-              ]
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "minimum": 1
-            },
-            "description": "页码，从 1 起（D37）；默认 1"
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "minimum": 1,
-              "maximum": 100
-            },
-            "description": "每页条数；默认 20，最大 100"
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "业务结果（看 body.code；成功 code===0）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseAttendeeList"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/watch/presence-trend/{id}": {
-      "get": {
-        "tags": [
-          "中控台"
-        ],
-        "summary": "进出三线走势",
-        "description": "数据来自 room_presence_event，不要调微吼 report/online。",
-        "operationId": "getWatchPresenceTrend",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WatchActivityId"
-          },
-          {
-            "name": "startTime",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "endTime",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "bucketSeconds",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 60,
-              "enum": [
-                60
-              ],
-              "description": "60 秒",
-              "x-apifox-enum": [
-                {
-                  "value": 60,
-                  "name": "秒",
-                  "description": "秒"
-                }
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "业务结果（看 body.code；成功 code===0）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponsePresenceTrend"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/watch/chat-filter/{id}": {
-      "get": {
-        "tags": [
-          "中控台"
-        ],
-        "summary": "聊天审核页 URL",
-        "operationId": "getChatFilterPage",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WatchActivityId"
-          },
-          {
-            "name": "email",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "默认 assistant@zhibo.local"
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "maxLength": 30
-            },
-            "description": "默认「助理」"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "业务结果（看 body.code；成功 code===0）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponseChatFilter"
                 }
               }
             }
@@ -2581,7 +2426,7 @@
         "properties": {
           "account": {
             "type": "string",
-            "description": "回显 String(viewerId)；init 不要传（与 email 互斥）"
+            "description": "第三方用户唯一标识（观众=数字 viewerId）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）"
           },
           "email": {
             "type": "string",
@@ -2595,7 +2440,7 @@
           },
           "head": {
             "type": "string",
-            "description": "观众头像 URL，对应 JSSDK head；无头像为 \"\"。始终下发并参与签名，init 必须原样传入"
+            "description": "对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 viewerId（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）"
           },
           "webinarId": {
             "type": "string",
@@ -2950,6 +2795,89 @@
               "$ref": "#/components/schemas/WatchChatHistoryItem"
             },
             "description": "旧→新；仅文本类消息"
+          }
+        }
+      },
+      "WatchQuestionHistoryItem": {
+        "type": "object",
+        "properties": {
+          "questionId": {
+            "type": "string",
+            "description": "云提问 id（room_comment.question_id）；前端作 ChatMessage.msgId 对齐键；可空"
+          },
+          "senderId": {
+            "type": "string",
+            "description": "发言观众 id；补建行可空"
+          },
+          "senderName": {
+            "type": "string",
+            "description": "昵称快照；库空时服务端可兜底「观众」"
+          },
+          "msg": {
+            "type": "string",
+            "description": "提问正文；库：VARCHAR(256)",
+            "maxLength": 256
+          },
+          "msgId": {
+            "type": "string",
+            "description": "云消息 id（room_comment.msg_id）；可空"
+          },
+          "roleName": {
+            "type": "integer",
+            "description": "1 主持 / 2 观众 / 3 助理 / 4 嘉宾；可空；库：INT"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "comment_time 毫秒（上海时区）；库：BIGINT"
+          },
+          "answerContent": {
+            "type": "string",
+            "description": "主持人/嘉宾回复；无可空"
+          },
+          "answerNickname": {
+            "type": "string",
+            "description": "回复人昵称；可空"
+          },
+          "answerRoleName": {
+            "type": "integer",
+            "description": "回复人角色数字；可空；库：INT"
+          }
+        }
+      },
+      "WatchQuestionHistoryData": {
+        "type": "object",
+        "description": "本站 room_comment 提问行（D91）。回放页直接用；直播页微吼问答历史空/失败后兜底。",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "本场未软删提问行数（截断前）；库：BIGINT"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WatchQuestionHistoryItem"
+            },
+            "description": "旧→新；最多 500 条"
+          }
+        }
+      },
+      "ConsoleQuestionHistoryData": {
+        "type": "object",
+        "description": "中控台问答历史兜底。读本站 room_comment 提问行；形状对齐 WatchQuestionHistoryData；admin JWT。",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "本场未软删提问行数（截断前）；库：BIGINT"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WatchQuestionHistoryItem"
+            },
+            "description": "旧→新；最多 500 条；形状同 WatchQuestionHistoryItem"
           }
         }
       },
@@ -3947,6 +3875,253 @@
           }
         ]
       },
+      "ApiResponseConsoleSummary": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleSummaryData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleSdkSign": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleSdkSignData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleQuestionHistory": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleQuestionHistoryData"
+              }
+            }
+          }
+        ]
+      },
+      "ConsoleSummaryData": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "中控台页壳（D110）：字段对齐观看 /watch/summary；本库 Activity；admin JWT；无观众售卖门禁",
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/BusinessUuid",
+                    "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+                  },
+                  "provider": {
+                    "$ref": "#/components/schemas/Provider",
+                    "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改",
+                    "x-apifox-enum": [
+                      {
+                        "value": "vhall",
+                        "name": "微吼",
+                        "description": "微吼"
+                      },
+                      {
+                        "value": "aliyun",
+                        "name": "阿里云",
+                        "description": "阿里云"
+                      },
+                      {
+                        "value": "tencent",
+                        "name": "腾讯云",
+                        "description": "腾讯云"
+                      }
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "标题；库：VARCHAR(64)",
+                    "maxLength": 64
+                  },
+                  "state": {
+                    "$ref": "#/components/schemas/ActivityState",
+                    "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
+                    "x-apifox-enum": [
+                      {
+                        "value": 0,
+                        "name": "全部(列表筛)",
+                        "description": "全部(列表筛)"
+                      },
+                      {
+                        "value": 1,
+                        "name": "直播",
+                        "description": "直播"
+                      },
+                      {
+                        "value": 2,
+                        "name": "预告",
+                        "description": "预告"
+                      },
+                      {
+                        "value": 3,
+                        "name": "结束",
+                        "description": "结束"
+                      },
+                      {
+                        "value": 4,
+                        "name": "点播",
+                        "description": "点播"
+                      },
+                      {
+                        "value": 5,
+                        "name": "回放",
+                        "description": "回放"
+                      }
+                    ]
+                  },
+                  "type": {
+                    "$ref": "#/components/schemas/ActivityType",
+                    "description": "1 音频 / 2 视频 / 3 互动 / 4 录播。创建后不可改",
+                    "x-apifox-enum": [
+                      {
+                        "value": 1,
+                        "name": "音频",
+                        "description": "音频"
+                      },
+                      {
+                        "value": 2,
+                        "name": "视频",
+                        "description": "视频"
+                      },
+                      {
+                        "value": 3,
+                        "name": "互动",
+                        "description": "互动"
+                      },
+                      {
+                        "value": 4,
+                        "name": "录播",
+                        "description": "录播"
+                      }
+                    ]
+                  },
+                  "startTime": {
+                    "type": "string",
+                    "description": "开始时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+                  },
+                  "endTime": {
+                    "type": "string",
+                    "description": "结束时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+                  },
+                  "playbackEnabled": {
+                    "type": "boolean",
+                    "description": "是否开启回放；库：TINYINT(1)"
+                  },
+                  "playbackValidityType": {
+                    "$ref": "#/components/schemas/PlaybackValidityType",
+                    "description": "回放有效期类型"
+                  },
+                  "playbackValidityDays": {
+                    "type": "integer",
+                    "description": "回放有效天数；库：INT"
+                  },
+                  "playbackExpired": {
+                    "type": "boolean",
+                    "description": "是否已超过回放有效期；库：TINYINT(1)"
+                  },
+                  "playbackSpeedAllow": {
+                    "type": "boolean",
+                    "description": "是否允许倍速；库：TINYINT(1)"
+                  },
+                  "playbackFastForwardAllow": {
+                    "type": "boolean",
+                    "description": "是否允许快进；库：TINYINT(1)"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ConsoleSdkSignData": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 viewerId；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签",
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/components/schemas/BusinessUuid",
+                    "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+                  },
+                  "provider": {
+                    "$ref": "#/components/schemas/Provider",
+                    "description": "vhall 微吼 / aliyun 阿里云 / tencent 腾讯云。创建后不可改",
+                    "x-apifox-enum": [
+                      {
+                        "value": "vhall",
+                        "name": "微吼",
+                        "description": "微吼"
+                      },
+                      {
+                        "value": "aliyun",
+                        "name": "阿里云",
+                        "description": "阿里云"
+                      },
+                      {
+                        "value": "tencent",
+                        "name": "腾讯云",
+                        "description": "腾讯云"
+                      }
+                    ]
+                  },
+                  "nickname": {
+                    "type": "string",
+                    "description": "与 sdk.username 同；本场成员昵称 → 员工姓名 → 助理；库：VARCHAR(64)",
+                    "maxLength": 64
+                  },
+                  "employeeId": {
+                    "type": "integer",
+                    "format": "int64",
+                    "description": "当前登录员工 rs_mainkey_id；库：BIGINT"
+                  },
+                  "sdk": {
+                    "$ref": "#/components/schemas/VhallSdkPayload",
+                    "description": "微吼签名/init 鉴权字段；脚本 CDN 由前端适配器加载（D93）"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
       "ApiResponseWatchSdk": {
         "allOf": [
           {
@@ -4006,6 +4181,22 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/WatchChatHistoryData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseWatchQuestionHistory": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/WatchQuestionHistoryData"
               }
             }
           }

@@ -438,12 +438,14 @@ public class VhallLiveProvider implements LiveProvider {
         String email;
         String account;
         if (!emailOverride.isEmpty()) {
-            // 中控台进房（D110）：email=z{id}@qkzb.com；account 回显 z{id}（与角色 e{id} 错开）
+            // 中控台进房（D110）：email=z{id}@qkzb.com；
+            // account = 第三方用户唯一标识 z{id}（与角色 e{id} 错开；聊天回包未必带回）
             email = emailOverride;
             String parsed = com.zhibo.presence.PresenceUserIds.parseEmail(email);
             account = parsed != null ? parsed : ("z" + viewerId);
         } else {
             email = resolveWatchEmail(viewerId, null);
+            // account = 第三方用户唯一标识（观众数字 id）；聊天回包未必带回
             account = Long.toString(viewerId);
         }
         String webinarId = command.providerRoomId();

@@ -1,5 +1,6 @@
 package com.zhibo.admin.viewer;
 
+import com.zhibo.admin.viewer.dto.LearningCourseListItem;
 import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
 import com.zhibo.admin.viewer.dto.LearningSummaryListItem;
 import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
@@ -7,6 +8,13 @@ import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListItem;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
+import com.zhibo.course.CourseCatalogContentKind;
+import com.zhibo.course.CourseCatalogNodeEntity;
+import com.zhibo.course.CourseCatalogNodeRepository;
+import com.zhibo.course.CourseLessonProgressEntity;
+import com.zhibo.course.CourseLessonProgressRepository;
+import com.zhibo.material.MaterialEntity;
+import com.zhibo.material.MaterialRepository;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerDisplayNames;
 import com.zhibo.viewer.ViewerRepository;
@@ -29,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -37,7 +46,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 顶栏用户管理 · 用户列表 / 学习统计（D79 / D82 / D83）。 */
+/** 顶栏用户管理 · 用户列表 / 学习统计（D79 / D82 / D83 / D112）。 */
 @Service
 @RequiredArgsConstructor
 public class ViewerAdminService {
@@ -63,6 +72,9 @@ public class ViewerAdminService {
     private final ViewerRepository viewerRepository;
     private final ViewerTagMemberRepository viewerTagMemberRepository;
     private final ViewerTagRepository viewerTagRepository;
+    private final CourseLessonProgressRepository courseLessonProgressRepository;
+    private final CourseCatalogNodeRepository courseCatalogNodeRepository;
+    private final MaterialRepository materialRepository;
 
     @Transactional(readOnly = true)
     public ViewerListResponse list(
@@ -186,7 +198,7 @@ public class ViewerAdminService {
     }
 
     /**
-     * 学习统计 · 课程数据。本轮无流水，恒空表；仍校验分页与筛选参数。
+     * 学习统计 · 课程数据（D112）：小节维度，读 {@code course_lesson_progress}。
      */
     @Transactional(readOnly = true)
     public LearningCourseListResponse learningCourses(
@@ -197,14 +209,198 @@ public class ViewerAdminService {
             List<Long> tagIds,
             String tagMatch) {
         requirePage(page, pageSize);
-        resolveKeywordType(keywordType);
-        resolveTagMatch(tagMatch);
-        normalizeFilterTagIds(tagIds);
+        String type = resolveKeywordType(keywordType);
+        String match = resolveTagMatch(tagMatch);
+        List<Long> filterTagIds = normalizeFilterTagIds(tagIds);
         String kw = keyword == null ? "" : keyword.trim();
-        if ("id".equals(resolveKeywordType(keywordType)) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
+        if ("id".equals(type) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
             return emptyLearningCourses(page, pageSize);
         }
-        return emptyLearningCourses(page, pageSize);
+
+        boolean filterViewers = !kw.isEmpty() || !filterTagIds.isEmpty();
+        List<Long> viewerIdFilter = null;
+        if (filterViewers) {
+            List<ViewerEntity> matched =
+                    viewerRepository.findAll(viewerKeywordTagSpec(type, kw, filterTagIds, match));
+            if (matched.isEmpty()) {
+                return emptyLearningCourses(page, pageSize);
+            }
+            viewerIdFilter = matched.stream().map(ViewerEntity::getId).toList();
+        }
+
+        List<Long> finalViewerIds = viewerIdFilter;
+        Specification<CourseLessonProgressEntity> progressSpec = (root, query, cb) -> {
+            if (finalViewerIds == null) {
+                return cb.conjunction();
+            }
+            return root.get("viewerId").in(finalViewerIds);
+        };
+        Page<CourseLessonProgressEntity> result = courseLessonProgressRepository.findAll(
+                progressSpec, PageRequest.of(page - 1, pageSize, Sort.by(Sort.Direction.DESC, "id")));
+
+        List<CourseLessonProgressEntity> rows = result.getContent();
+        Set<Long> viewerIds = rows.stream().map(CourseLessonProgressEntity::getViewerId).collect(Collectors.toSet());
+        Set<Long> lessonIds =
+                rows.stream().map(CourseLessonProgressEntity::getLessonNodeId).collect(Collectors.toSet());
+
+        Map<Long, ViewerEntity> viewersById = new HashMap<>();
+        if (!viewerIds.isEmpty()) {
+            for (ViewerEntity v : viewerRepository.findAllById(viewerIds)) {
+                viewersById.put(v.getId(), v);
+            }
+        }
+        Map<Long, List<TagRef>> tagsByViewer =
+                loadTagsByViewer(new ArrayList<>(viewersById.values()));
+
+        Map<Long, CourseCatalogNodeEntity> nodesById = new HashMap<>();
+        if (!lessonIds.isEmpty()) {
+            for (CourseCatalogNodeEntity n : courseCatalogNodeRepository.findAllById(lessonIds)) {
+                nodesById.put(n.getId(), n);
+            }
+        }
+        Set<String> materialIds = new HashSet<>();
+        for (CourseCatalogNodeEntity n : nodesById.values()) {
+            if (n.getContentKind() != null
+                    && n.getContentKind() == CourseCatalogContentKind.VIDEO
+                    && n.getContentId() != null
+                    && !n.getContentId().isBlank()) {
+                materialIds.add(n.getContentId().trim());
+            }
+        }
+        Map<String, MaterialEntity> materialsById = new HashMap<>();
+        if (!materialIds.isEmpty()) {
+            for (MaterialEntity m : materialRepository.findAllById(materialIds)) {
+                materialsById.put(m.getId(), m);
+            }
+        }
+
+        LearningCourseListResponse response = new LearningCourseListResponse();
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        response.setTotal(result.getTotalElements());
+        for (CourseLessonProgressEntity row : rows) {
+            ViewerEntity viewer = viewersById.get(row.getViewerId());
+            CourseCatalogNodeEntity node = nodesById.get(row.getLessonNodeId());
+            response.getList()
+                    .add(toLearningCourseItem(
+                            row,
+                            viewer,
+                            tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
+                            node,
+                            materialsById));
+        }
+        return response;
+    }
+
+    private static LearningCourseListItem toLearningCourseItem(
+            CourseLessonProgressEntity row,
+            ViewerEntity viewer,
+            List<TagRef> tags,
+            CourseCatalogNodeEntity node,
+            Map<String, MaterialEntity> materialsById) {
+        LearningCourseListItem item = new LearningCourseListItem();
+        item.setId(row.getId());
+        item.setViewerId(row.getViewerId());
+        if (viewer != null) {
+            item.setNickname(displayNickname(viewer));
+            if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
+                item.setAvatarUrl(viewer.getAvatarUrl().trim());
+            }
+        } else {
+            item.setNickname("用户_" + row.getViewerId());
+        }
+        List<Long> tagIds = new ArrayList<>();
+        List<String> tagLabels = new ArrayList<>();
+        for (TagRef ref : tags) {
+            tagIds.add(ref.tagId());
+            tagLabels.add(ref.name());
+        }
+        item.setTagIds(tagIds);
+        item.setTagLabels(tagLabels);
+        item.setCourseId(row.getCourseId());
+        item.setLessonNodeId(row.getLessonNodeId());
+        if (node != null && node.getTitle() != null && !node.getTitle().isBlank()) {
+            item.setLessonName(node.getTitle().trim());
+        }
+        long learnSec = row.getLearnDurationSec();
+        item.setTotalLearnDurationSec(learnSec > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) learnSec);
+        item.setProgressPercent(Math.max(0, Math.min(100, row.getProgressPercent())));
+        if (row.getFirstParticipateTime() != null) {
+            item.setFirstLearnTime(TIME_FMT.format(row.getFirstParticipateTime()));
+        }
+        if (row.getCompletedTime() != null) {
+            item.setCompletedTime(TIME_FMT.format(row.getCompletedTime()));
+        }
+        if (node != null) {
+            String typeLabel = contentKindLabel(node.getContentKind());
+            if (typeLabel != null) {
+                item.setLessonType(typeLabel);
+            }
+            item.setLessonDurationSec(resolveLessonDurationSec(node, materialsById));
+        }
+        return item;
+    }
+
+    private static String contentKindLabel(Integer kind) {
+        if (kind == null) {
+            return null;
+        }
+        return switch (kind) {
+            case CourseCatalogContentKind.LIVE -> "直播";
+            case CourseCatalogContentKind.IMAGE -> "图片";
+            case CourseCatalogContentKind.VIDEO -> "视频";
+            case CourseCatalogContentKind.DOCUMENT -> "文档";
+            case CourseCatalogContentKind.ARTICLE -> "文章";
+            default -> null;
+        };
+    }
+
+    /** 视频素材 meta（mm:ss / h:mm:ss）→ 秒；其它类型或解析失败 → 0。 */
+    static int resolveLessonDurationSec(CourseCatalogNodeEntity node, Map<String, MaterialEntity> materialsById) {
+        if (node == null
+                || node.getContentKind() == null
+                || node.getContentKind() != CourseCatalogContentKind.VIDEO) {
+            return 0;
+        }
+        if (node.getContentId() == null || node.getContentId().isBlank()) {
+            return 0;
+        }
+        MaterialEntity material = materialsById.get(node.getContentId().trim());
+        if (material == null) {
+            return 0;
+        }
+        return parseDurationMetaToSec(material.getMeta());
+    }
+
+    /** 解析素材视频时长 meta：{@code mm:ss} 或 {@code h:mm:ss}。 */
+    static int parseDurationMetaToSec(String meta) {
+        if (meta == null || meta.isBlank()) {
+            return 0;
+        }
+        String raw = meta.trim();
+        String[] parts = raw.split(":");
+        try {
+            if (parts.length == 2) {
+                int m = Integer.parseInt(parts[0]);
+                int s = Integer.parseInt(parts[1]);
+                if (m < 0 || s < 0 || s > 59) {
+                    return 0;
+                }
+                return m * 60 + s;
+            }
+            if (parts.length == 3) {
+                int h = Integer.parseInt(parts[0]);
+                int m = Integer.parseInt(parts[1]);
+                int s = Integer.parseInt(parts[2]);
+                if (h < 0 || m < 0 || m > 59 || s < 0 || s > 59) {
+                    return 0;
+                }
+                return h * 3600 + m * 60 + s;
+            }
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+        return 0;
     }
 
     private static Predicate existsMember(

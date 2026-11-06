@@ -386,7 +386,7 @@ const FIELD_DESC_BY_NAME = {
   accessExpired: '访问是否已过期',
   accessState: '观看售卖门禁状态',
   accessValidityDays: '购买后有效天数',
-  account: '回显 String(viewerId)；init 不要传',
+  account: '第三方用户唯一标识（观众=数字 viewerId）；本站回显；init 以 email 为准；聊天回包未必带回',
   ultraLowLatency:
     '是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。创建后不可改',
   verify: '观看验证方式（微吼 verify）',
@@ -3429,13 +3429,55 @@ function buildAdmin() {
         },
       },
     },
+    ViewerLearnStatsCourseItem: {
+      type: 'object',
+      required: [
+        'id',
+        'viewerId',
+        'nickname',
+        'tagIds',
+        'tagLabels',
+        'lessonNodeId',
+        'totalLearnDurationSec',
+        'progressPercent',
+        'lessonDurationSec',
+      ],
+      properties: {
+        id: { type: 'integer', format: 'int64', description: 'course_lesson_progress.id' },
+        viewerId: { type: 'integer', format: 'int64', description: 'viewer.id' },
+        nickname: { type: 'string', description: '观众展示昵称' },
+        avatarUrl: { type: 'string', description: '头像 URL；无则省略' },
+        tagIds: { type: 'array', items: { type: 'integer', format: 'int64' }, description: '标签 id 列表；无则 []' },
+        tagLabels: { type: 'array', items: { type: 'string' }, description: '标签名列表；无则 []' },
+        courseId: { type: 'string', description: '本站课程 UUID' },
+        lessonNodeId: { type: 'integer', format: 'int64', description: 'course_catalog_node.id（小节）' },
+        lessonName: { type: 'string', description: '小节标题；节点缺失时可省略' },
+        totalLearnDurationSec: { type: 'integer', description: '该小节累计学习秒数' },
+        progressPercent: { type: 'integer', description: '学习进度 0～100' },
+        firstLearnTime: { type: 'string', description: '首次参与时间 yyyy-MM-dd HH:mm:ss；可省略' },
+        completedTime: { type: 'string', description: '完成时间 yyyy-MM-dd HH:mm:ss；未完成省略' },
+        lessonType: {
+          type: 'string',
+          description: '小节内容类型中文：直播 / 图片 / 视频 / 文档 / 文章；未知可省略',
+        },
+        lessonDurationSec: {
+          type: 'integer',
+          description: '课程资源时长（秒）。视频：解析素材 meta（mm:ss 或 h:mm:ss）；解不出或非视频为 0',
+        },
+      },
+    },
     ViewerLearnStatsCourseListData: {
       type: 'object',
+      required: ['page', 'pageSize', 'total', 'list'],
       properties: {
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
         total: { type: 'integer', format: 'int64' },
-        list: { type: 'array', items: { type: 'object', properties: { id: { type: 'integer', format: 'int64', description: '占位；本轮恒空表' } } } },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ViewerLearnStatsCourseItem' },
+          description: '小节学习行；无进度时为空数组',
+        },
       },
     },
     ViewerTagGroupBrief: {
@@ -6455,10 +6497,10 @@ function buildAdmin() {
         summary: '中控台员工进房 SDK 签名',
         description: [
           '中控台挂微吼观看 SDK（D110）。活动 UUID 用 Query id（同观看 sdk-sign 的 D92 例外）。',
-          '员工 id 只从 admin JWT 取；sdk.email 一律 z{员工id}@qkzb.com 并参与签名（与角色 e{id} 错开，避免微吼同邮箱 20005）；sdk.account 回显 z{员工id}。',
+          '员工 id 只从 admin JWT 取；sdk.email 一律 z{员工id}@qkzb.com 并参与签名（与角色 e{id} 错开，避免微吼同邮箱 20005）；sdk.account 为第三方用户唯一标识 z{员工id}（聊天回包未必带回，认人不能只靠它）。',
           '中控台页默认省略 Query nickname（勿写死「助理」）。',
           '昵称（sdk.username / 顶层 nickname）：Query nickname（若传）→ 本场 activity_member.nickname（开播设置·角色设置本场直播昵称）→ 员工姓名 → 助理（≤30）。',
-          '头像（sdk.head）：本场 activity_member.avatar_url（本场直播头像）→ 员工微信头像 headimgurl → 员工 user_avatar → 空串；空串可 init，仅非空参与签名（JSSDK 真值才带 head）。',
+          '头像链接拼接（sdk.head）：底座按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar 取第一个非空白绝对 URL；都空则用与观看相同的默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v=z{员工id}（已有其它 query 则 &v=；身份与 email/account 本地部分一致）。响应始终非空并参与签名；前端 new VhallSDK 原样传 head（D111）。',
         ].join('\n'),
         operationId: 'getConsoleSdkSign',
         security: bearer,
@@ -6588,11 +6630,21 @@ function buildAdmin() {
     '/api/v1/viewers/learning-stats/courses': {
       get: {
         tags: ['用户管理'],
-        summary: '学习统计课程',
-        description: '本轮恒空表，仍返回分页结构。',
+        summary: '学习统计课程数据（小节维度）',
+        description:
+          '管理端员工 JWT。一行=一名观众×一小节进度，读 course_lesson_progress，不是课级聚合。' +
+          '筛选 keywordType/keyword/tagIds/tagMatch 同学习统计汇总；有筛时先收窄观众再取进度行。' +
+          '默认按进度行 id 倒序。lessonName 为小节标题；lessonType 为内容类型中文；' +
+          'lessonDurationSec 仅视频素材 meta（mm:ss 或 h:mm:ss）可解析时有秒数，否则 0。',
         operationId: 'viewerLearnStatsCourses',
         security: bearer,
-        parameters: [...pageParams],
+        parameters: [
+          ...pageParams,
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], default: 'nickname', description: 'nickname 昵称 / id 用户ID / phone 手机号' }, description: '用户关键字类型；缺省 nickname' },
+          { name: 'keyword', in: 'query', schema: { type: 'string' }, description: '用户关键字；空则不过滤' },
+          { name: 'tagIds', in: 'query', schema: { type: 'string' }, description: '标签 id，逗号分隔，如 1,2,3' },
+          { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'all', 'none'], default: 'any', description: 'any 满足其一 / none 不包含 / all 全部满足' }, description: '标签匹配；缺省 any' },
+        ],
         responses: ok200('#/components/schemas/ApiResponseViewerLearnCourses'),
       },
     },
@@ -7126,12 +7178,17 @@ function buildLive() {
       type: 'object',
       description: '微吼签名/init 鉴权字段；脚本 CDN 由前端适配器加载（D93）',
       properties: {
-        account: { type: 'string', description: '回显 String(viewerId)；init 不要传（与 email 互斥）' },
+        account: {
+          type: 'string',
+          description:
+            '第三方用户唯一标识（观众=数字 viewerId）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）',
+        },
         email: { type: 'string', description: '{viewerId}@qkzb.com，参与签名；new VhallSDK 必须用这份' },
         username: { type: 'string', description: '优先 Query nickname；空则默认「观众」' },
         head: {
           type: 'string',
-          description: '观众头像 URL，对应 JSSDK head；无头像为 ""。始终下发；仅非空时参与签名（JSSDK 真值才带 head；空串勿签入否则 20005）。init 原样传入',
+          description:
+            '对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 viewerId（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）',
         },
         webinarId: { type: 'string', description: '微吼活动号（= provider_room_id）；仅 provider=vhall' },
         appKey: { type: 'string', description: '微吼 app_key' },
@@ -7704,7 +7761,7 @@ function buildLive() {
     ConsoleSdkSignData: {
       type: 'object',
       description:
-        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 viewerId；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称/头像本场成员优先否则员工资料',
+        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 viewerId；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
@@ -8133,6 +8190,7 @@ function buildLive() {
           '仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
           '不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。',
           '签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。',
+          '头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={viewerId}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。',
         ].join('\n'),
         operationId: 'getWatchSdkSign',
         security: viewerBearer,

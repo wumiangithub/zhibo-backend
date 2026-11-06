@@ -1,6 +1,7 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.common.SdkAvatarHeads;
 import com.zhibo.live.watch.dto.SdkPayload;
 import com.zhibo.live.watch.dto.WatchSdkResponse;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -10,14 +11,15 @@ import com.zhibo.vhall.provider.VhallLiveProvider;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * 观看 SDK 签名（D92/D95/D96）。{@code viewerId} 由 Controller 从观众 JWT 解析后传入；
+ * 观看 SDK 签名（D92/D95/D96/D111）。{@code viewerId} 由 Controller 从观众 JWT 解析后传入；
  * email 签成 {@code {id}@qkzb.com}；{@code sdk.username} 优先用请求里非空的展示昵称
  * （小程序 URL 已按通则算好），昵称不为此再查 viewer。
- * {@code sdk.head} 取 {@code viewer.avatar_url}，没有则为空串；仅非空参与签名。
- * 页壳字段（title/state/playback*）见 {@link WatchService#summary}，不进本响应。
+ * {@code sdk.head} 取 {@code viewer.avatar_url}，有无真实头像都拼/覆盖 {@code ?v={viewerId}}（无头像用默认底座）；
+ * {@code sdk.account} = 第三方用户唯一标识（观众数字 id）。页壳见 {@link WatchService#summary}。
  */
 @Service
 @RequiredArgsConstructor
@@ -26,6 +28,12 @@ public class WatchSdkService {
     private final WatchService watchService;
     private final LiveProviderRegistry providerRegistry;
     private final ViewerRepository viewerRepository;
+
+    /**
+     * 默认头像底座（无 query）。上传 TOS 后用 {@code ZHIBO_DEFAULT_AVATAR_URL} 换成公网 URL。
+     */
+    @Value("${zhibo.default-avatar-url:" + SdkAvatarHeads.PLACEHOLDER_BASE_URL + "}")
+    private String defaultAvatarUrl = SdkAvatarHeads.PLACEHOLDER_BASE_URL;
 
     public WatchSdkResponse sdk(String activityId, String nickname, Long viewerId) {
         if (viewerId == null || viewerId <= 0) {
@@ -66,13 +74,13 @@ public class WatchSdkService {
         return VhallLiveProvider.resolveNickname(nickname);
     }
 
-    /** {@code viewer.avatar_url} 去空白；没有观众行或没有头像则为 {@code ""}。 */
+    /**
+     * {@code viewer.avatar_url} 去空白；有无真实头像都拼/覆盖 {@code ?v={viewerId}}（D111）。
+     */
     String resolveSdkHead(Long viewerId) {
         ViewerEntity viewer = viewerRepository.findById(viewerId).orElse(null);
-        if (viewer == null || viewer.getAvatarUrl() == null) {
-            return "";
-        }
-        return viewer.getAvatarUrl().trim();
+        String avatar = viewer == null ? null : viewer.getAvatarUrl();
+        return SdkAvatarHeads.resolveForViewer(avatar, viewerId, defaultAvatarUrl);
     }
 
     private static SdkPayload toSdkPayload(WatchSdkBundle.SdkInit sdk) {

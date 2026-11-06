@@ -17,8 +17,11 @@ import com.zhibo.admin.console.dto.ConsoleQuestionHistoryResponse;
 import com.zhibo.admin.console.dto.ConsoleSdkPayload;
 import com.zhibo.admin.console.dto.ConsoleSdkSignResponse;
 import com.zhibo.admin.console.dto.ConsoleSummaryResponse;
+import com.zhibo.common.SdkAvatarHeads;
 import com.zhibo.common.UuidIds;
+import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
 import com.zhibo.liveprovider.dto.WatchSdkCommand;
 import com.zhibo.presence.PresenceUserIds;
@@ -27,18 +30,22 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 中控台页壳 + 员工进房签名（D110）。鉴权员工 id 由 Controller 从 admin JWT 传入。
+ * 中控台页壳 + 员工进房签名（D110 / D111）。鉴权员工 id 由 Controller 从 admin JWT 传入。
  * 进房 email 为 {@code z{id}@qkzb.com}（与角色 {@code e{id}} 错开）。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ConsoleService {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final String PROVIDER_VHALL = "vhall";
     private static final int NICKNAME_MAX = 30;
     private static final String DEFAULT_NICKNAME = "助理";
     /** 与观看 question-history 同上限；单场提问体量通常远小于聊天 */
@@ -51,9 +58,20 @@ public class ConsoleService {
     private final LiveProviderRegistry providerRegistry;
     private final Clock clock;
 
-    @Transactional(readOnly = true)
+    /**
+     * 默认头像底座（无 query）。上传 TOS 后用 {@code ZHIBO_DEFAULT_AVATAR_URL} 换成公网 URL。
+     */
+    @Value("${zhibo.default-avatar-url:" + SdkAvatarHeads.PLACEHOLDER_BASE_URL + "}")
+    private String defaultAvatarUrl = SdkAvatarHeads.PLACEHOLDER_BASE_URL;
+
+    /**
+     * 中控台页壳。vhall 时对账 {@code webinar_state}→本站 {@code state}（与观看 D106 同口径，
+     * 不含回放 get-list 补偿）。再开播后本库若仍结束，summary / {@code live_start} 拉本接口可写回直播。
+     */
+    @Transactional
     public ConsoleSummaryResponse summary(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
+        reconcileWithProviderOnSummary(entity);
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
         boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
 
@@ -73,6 +91,49 @@ public class ConsoleService {
         response.setPlaybackSpeedAllow(!Boolean.FALSE.equals(entity.getPlaybackSpeedAllow()));
         response.setPlaybackFastForwardAllow(!Boolean.FALSE.equals(entity.getPlaybackFastForwardAllow()));
         return response;
+    }
+
+    /**
+     * 云态对账：拉微吼 webinar/info，不一致则写库。失败只打日志，仍回本库。
+     * 不做观看侧回放补偿（中控台不需 D88 get-list）。
+     */
+    void reconcileWithProviderOnSummary(ActivityEntity entity) {
+        if (entity == null) {
+            return;
+        }
+        String provider = entity.getProvider();
+        String roomId = entity.getProviderRoomId();
+        if (provider == null || !PROVIDER_VHALL.equalsIgnoreCase(provider.trim())) {
+            return;
+        }
+        if (roomId == null || roomId.isBlank()) {
+            return;
+        }
+
+        Integer cloudState = null;
+        try {
+            LiveProvider liveProvider = providerRegistry.require(provider);
+            ProviderRoomSnapshot snap = liveProvider.fetchRoom(roomId.trim());
+            if (snap != null) {
+                cloudState = snap.state();
+            }
+        } catch (RuntimeException ex) {
+            log.warn("中控台 summary 拉微吼 info 失败，降级本库 state activityId={} roomId={}: {}",
+                    entity.getId(), roomId, ex.getMessage());
+            return;
+        }
+
+        if (cloudState == null) {
+            return;
+        }
+        Integer localState = entity.getState();
+        if (localState == null || !localState.equals(cloudState)) {
+            Integer old = localState;
+            entity.setState(cloudState);
+            activityRepository.save(entity);
+            log.info("中控台 summary 云态对账写回 state id={} roomId={} {}→{}",
+                    entity.getId(), roomId, old, cloudState);
+        }
     }
 
     /**
@@ -122,7 +183,7 @@ public class ConsoleService {
                 .orElse(null);
 
         String nickname = resolveConsoleNickname(nicknameQuery, member, employee);
-        String head = resolveConsoleHead(member, employee);
+        String head = resolveConsoleHead(member, employee, employeeId);
         // 中控台用 z{id}，与主持/嘉宾/助理 e{id} 错开（微吼同邮箱会 20005）
         String email = PresenceUserIds.consoleEmail(employeeId);
 
@@ -160,24 +221,23 @@ public class ConsoleService {
         return DEFAULT_NICKNAME;
     }
 
-    static String resolveConsoleHead(ActivityMemberEntity member, SysUserAccountEntity employee) {
+    /**
+     * 本场成员头像 → 微信头像 → user_avatar；有无真实头像都拼/覆盖 {@code ?v=z{employeeId}}（D111）。
+     * 无头像用默认底座。
+     */
+    String resolveConsoleHead(
+            ActivityMemberEntity member, SysUserAccountEntity employee, long employeeId) {
+        String own = null;
         if (member != null) {
-            String fromMember = trimToNull(member.getAvatarUrl());
-            if (fromMember != null) {
-                return fromMember;
+            own = trimToNull(member.getAvatarUrl());
+        }
+        if (own == null && employee != null) {
+            own = trimToNull(employee.getHeadimgurl());
+            if (own == null) {
+                own = trimToNull(employee.getUserAvatar());
             }
         }
-        if (employee != null) {
-            String head = trimToNull(employee.getHeadimgurl());
-            if (head != null) {
-                return head;
-            }
-            String avatar = trimToNull(employee.getUserAvatar());
-            if (avatar != null) {
-                return avatar;
-            }
-        }
-        return "";
+        return SdkAvatarHeads.resolveForConsole(own, employeeId, defaultAvatarUrl);
     }
 
     private static String truncateNick(String nick) {

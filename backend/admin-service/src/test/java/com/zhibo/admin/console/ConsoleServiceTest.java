@@ -16,6 +16,7 @@ import com.zhibo.admin.console.dto.ConsoleSdkSignResponse;
 import com.zhibo.admin.console.dto.ConsoleSummaryResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
+import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
 import com.zhibo.liveprovider.dto.WatchSdkCommand;
 import java.time.Clock;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -92,6 +94,25 @@ class ConsoleServiceTest {
         assertEquals(1, res.getState());
         assertEquals("forever", res.getPlaybackValidityType());
         assertFalse(Boolean.TRUE.equals(res.getPlaybackExpired()));
+        verify(activityRepository, never()).save(any());
+    }
+
+    @Test
+    void summary_reconcilesEndedLocalToLiveCloud() {
+        ActivityEntity entity = baseActivity();
+        entity.setProviderRoomId("room-1");
+        entity.setTitle("再开播场");
+        entity.setState(3);
+        when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.fetchRoom("room-1")).thenReturn(new ProviderRoomSnapshot(
+                "再开播场", 1, 0, null, null, null, null, null, null, null));
+
+        ConsoleSummaryResponse res = service.summary(ACTIVITY_ID);
+
+        assertEquals(1, res.getState());
+        verify(activityRepository).save(entity);
+        assertEquals(1, entity.getState());
     }
 
     @Test
@@ -119,7 +140,8 @@ class ConsoleServiceTest {
         sdk.setAccount("z10001");
         sdk.setEmail("z10001@qkzb.com");
         sdk.setUsername("本场助理");
-        sdk.setHead("http://cdn/m.png");
+        String expectedHead = "http://cdn/m.png?v=z" + EMPLOYEE_ID;
+        sdk.setHead(expectedHead);
         sdk.setWebinarId("room-1");
         sdk.setAppKey("key");
         sdk.setSignedAt("1");
@@ -142,7 +164,7 @@ class ConsoleServiceTest {
         assertEquals("z10001@qkzb.com", cmd.email());
         assertEquals(EMPLOYEE_ID, cmd.viewerId());
         assertEquals("本场助理", cmd.nickname());
-        assertEquals("http://cdn/m.png", cmd.head());
+        assertEquals(expectedHead, cmd.head());
     }
 
     @Test
@@ -218,6 +240,39 @@ class ConsoleServiceTest {
         assertEquals("成员昵称", ConsoleService.resolveConsoleNickname(null, member, employee));
         assertEquals("员工名", ConsoleService.resolveConsoleNickname(null, null, employee));
         assertEquals("助理", ConsoleService.resolveConsoleNickname(null, null, null));
+    }
+
+    @Test
+    void sdkSign_blankAvatarUsesDefaultHeadWithEmployeeQuery() {
+        ActivityEntity entity = baseActivity();
+        entity.setProviderRoomId("room-1");
+        entity.setReady(ActivityReady.OK);
+        when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
+
+        SysUserAccountEntity employee = new SysUserAccountEntity();
+        employee.setId(EMPLOYEE_ID);
+        employee.setUserName("张三");
+        when(userRepository.findById(EMPLOYEE_ID)).thenReturn(Optional.of(employee));
+        when(memberRepository.findById(new ActivityMemberId(ACTIVITY_ID, EMPLOYEE_ID)))
+                .thenReturn(Optional.empty());
+
+        String expectedHead = com.zhibo.common.SdkAvatarHeads.PLACEHOLDER_BASE_URL + "?v=z" + EMPLOYEE_ID;
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();
+        sdk.setAccount("z" + EMPLOYEE_ID);
+        sdk.setEmail("z" + EMPLOYEE_ID + "@qkzb.com");
+        sdk.setUsername("张三");
+        sdk.setHead(expectedHead);
+        WatchSdkBundle bundle = new WatchSdkBundle();
+        bundle.setSdk(sdk);
+        when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
+
+        ConsoleSdkSignResponse res = service.sdkSign(ACTIVITY_ID, null, EMPLOYEE_ID);
+        assertEquals(expectedHead, res.getSdk().getHead());
+
+        ArgumentCaptor<WatchSdkCommand> captor = ArgumentCaptor.forClass(WatchSdkCommand.class);
+        verify(liveProvider).buildWatchSdk(captor.capture());
+        assertEquals(expectedHead, captor.getValue().head());
     }
 
     private static ActivityEntity baseActivity() {

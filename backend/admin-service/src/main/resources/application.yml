@@ -50,7 +50,9 @@ activity:
   sell-password-aes-key-base64: ${ACTIVITY_SELL_PASSWORD_AES_KEY_BASE64:}
 
 # 回放 downloading in-flight 僵尸阈值（分钟）：按 JVM map 开始时间，超时清 map；重启后不在 map 立刻恢复，不看 updated_time
+# 默认头像底座（D111；无 query；签名时再拼 ?v= 身份）
 zhibo:
+  default-avatar-url: ${ZHIBO_DEFAULT_AVATAR_URL:https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png}
   activity-record:
     downloading-stale-minutes: ${ZHIBO_ACTIVITY_RECORD_DOWNLOADING_STALE_MINUTES:30}
 

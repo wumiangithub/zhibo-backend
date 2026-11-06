@@ -14,7 +14,9 @@ import lombok.Data;
 public class SdkPayload {
 
     /**
-     * {@code String(viewerId)} 回显；<strong>不要</strong>传给 3.9.1 init（与 email 互斥）。
+     * 第三方用户唯一标识（观众 = 数字 {@code viewerId}）。本站回显；
+     * 微吼 3.9.1 init 以 email 为准，<strong>不要</strong>与 email 同时传冲突字段。
+     * 聊天回包未必带回，认人不能只靠它（见 D111 / chatViewerId）。
      */
     private String account;
     /** {@code {viewerId}@qkzb.com}，参会身份并参与签名（D92）。 */
@@ -23,7 +25,7 @@ public class SdkPayload {
     private String username;
     /**
      * 观众头像 URL，对应 JSSDK {@code head}；仅非空参与签名。
-     * 无头像为 {@code ""}（仍下发；JSSDK 真值才带 head）。
+     * 有无真实头像都拼/覆盖 {@code ?v={viewerId}}（无头像用默认底座，D111）。
      */
     private String head;
     /** 活动 id（SDK 参数名 webinar_id）。 */

@@ -8,12 +8,15 @@ import lombok.Data;
 @Data
 public class ConsoleSdkPayload {
 
-    /** 回显 {@code z{员工id}}；3.9.1 init 不要与 email 同时传。 */
+    /**
+     * 第三方用户唯一标识 = {@code z{员工id}}。本站回显；init 以 email 为准。
+     * 聊天回包未必带回，认人不能只靠它（D111）。
+     */
     private String account;
     /** {@code z{员工id}@qkzb.com}，参与签名（与角色 {@code e{id}} 错开）。 */
     private String email;
     private String username;
-    /** 无头像为 {@code ""}；仅非空参与签名。 */
+    /** 有无真实头像都拼/覆盖 {@code ?v=z{员工id}}（无头像用默认底座，D111）；仅非空参与签名。 */
     private String head;
     private String webinarId;
     private String appKey;

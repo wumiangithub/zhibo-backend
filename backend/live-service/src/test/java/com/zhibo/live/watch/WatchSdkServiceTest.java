@@ -53,7 +53,9 @@ class WatchSdkServiceTest {
         sdk.setAccount("12");
         sdk.setEmail("12@qkzb.com");
         sdk.setUsername("用户8079");
-        sdk.setHead("https://cdn.example/a.png");
+        // 外链头像：签名侧会补 ?v={viewerId}；本站 /viewer/avatar/{id}.* 不补
+        String expectedHead = "https://cdn.example/a.png?v=12";
+        sdk.setHead(expectedHead);
         sdk.setWebinarId("1001");
         sdk.setAppKey("key");
         sdk.setSignedAt("1");
@@ -79,23 +81,24 @@ class WatchSdkServiceTest {
         assertEquals("1001", response.getSdk().getWebinarId());
         assertEquals("abc", response.getSdk().getSign());
         assertEquals("12@qkzb.com", response.getSdk().getEmail());
-        assertEquals("https://cdn.example/a.png", response.getSdk().getHead());
+        assertEquals(expectedHead, response.getSdk().getHead());
 
         ArgumentCaptor<WatchSdkCommand> captor = ArgumentCaptor.forClass(WatchSdkCommand.class);
         verify(liveProvider).buildWatchSdk(captor.capture());
-        assertEquals("https://cdn.example/a.png", captor.getValue().head());
+        assertEquals(expectedHead, captor.getValue().head());
     }
 
     @Test
-    void sdk_blankAvatarSignsEmptyHead() {
+    void sdk_blankAvatarUsesDefaultHeadWithViewerQuery() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setProvider("vhall");
         entity.setProviderRoomId("1001");
 
+        String expectedHead = com.zhibo.common.SdkAvatarHeads.PLACEHOLDER_BASE_URL + "?v=12";
         WatchSdkBundle.SdkInit sdk = new WatchSdkBundle.SdkInit();
         sdk.setUsername("观众");
-        sdk.setHead("");
+        sdk.setHead(expectedHead);
         WatchSdkBundle bundle = new WatchSdkBundle();
         bundle.setSdk(sdk);
 
@@ -105,11 +108,11 @@ class WatchSdkServiceTest {
         when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
 
         WatchSdkResponse response = watchSdkService.sdk(ID, null, 12L);
-        assertEquals("", response.getSdk().getHead());
+        assertEquals(expectedHead, response.getSdk().getHead());
 
         ArgumentCaptor<WatchSdkCommand> captor = ArgumentCaptor.forClass(WatchSdkCommand.class);
         verify(liveProvider).buildWatchSdk(captor.capture());
-        assertEquals("", captor.getValue().head());
+        assertEquals(expectedHead, captor.getValue().head());
     }
 
     @Test

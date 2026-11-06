@@ -14,6 +14,13 @@ import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
+import com.zhibo.course.CourseCatalogContentKind;
+import com.zhibo.course.CourseCatalogNodeEntity;
+import com.zhibo.course.CourseCatalogNodeRepository;
+import com.zhibo.course.CourseLessonProgressEntity;
+import com.zhibo.course.CourseLessonProgressRepository;
+import com.zhibo.material.MaterialEntity;
+import com.zhibo.material.MaterialRepository;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRegisterChannel;
 import com.zhibo.viewer.ViewerRepository;
@@ -38,6 +45,9 @@ class ViewerAdminServiceTest {
     private ViewerRepository viewerRepository;
     private ViewerTagMemberRepository memberRepository;
     private ViewerTagRepository tagRepository;
+    private CourseLessonProgressRepository progressRepository;
+    private CourseCatalogNodeRepository catalogNodeRepository;
+    private MaterialRepository materialRepository;
     private ViewerAdminService service;
 
     @BeforeEach
@@ -45,7 +55,16 @@ class ViewerAdminServiceTest {
         viewerRepository = mock(ViewerRepository.class);
         memberRepository = mock(ViewerTagMemberRepository.class);
         tagRepository = mock(ViewerTagRepository.class);
-        service = new ViewerAdminService(viewerRepository, memberRepository, tagRepository);
+        progressRepository = mock(CourseLessonProgressRepository.class);
+        catalogNodeRepository = mock(CourseCatalogNodeRepository.class);
+        materialRepository = mock(MaterialRepository.class);
+        service = new ViewerAdminService(
+                viewerRepository,
+                memberRepository,
+                tagRepository,
+                progressRepository,
+                catalogNodeRepository,
+                materialRepository);
     }
 
     @Test
@@ -118,10 +137,66 @@ class ViewerAdminServiceTest {
     }
 
     @Test
-    void learningCourses_alwaysEmpty() {
-        LearningCourseListResponse res = service.learningCourses(1, 10, "nickname", "x", null, null);
+    void learningCourses_mapsLessonRow() {
+        CourseLessonProgressEntity progress = new CourseLessonProgressEntity();
+        progress.setId(9L);
+        progress.setCourseId("c1");
+        progress.setLessonNodeId(18L);
+        progress.setViewerId(3L);
+        progress.setLearnDurationSec(1800L);
+        progress.setProgressPercent(84);
+        progress.setFirstParticipateTime(LocalDateTime.of(2026, 9, 22, 17, 0, 0));
+        when(progressRepository.findAll(
+                        ArgumentMatchers.<Specification<CourseLessonProgressEntity>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(progress)));
+
+        ViewerEntity viewer = baseViewer(3L);
+        viewer.setNickname("阿坤");
+        viewer.setAvatarUrl("https://cdn/a.jpg");
+        when(viewerRepository.findAllById(ArgumentMatchers.<Iterable<Long>>any())).thenReturn(List.of(viewer));
+        when(memberRepository.findByViewerIdIn(List.of(3L))).thenReturn(List.of());
+
+        CourseCatalogNodeEntity node = new CourseCatalogNodeEntity();
+        node.setId(18L);
+        node.setTitle("第十八节 心态修炼");
+        node.setContentKind(CourseCatalogContentKind.VIDEO);
+        node.setContentId("mat1");
+        when(catalogNodeRepository.findAllById(ArgumentMatchers.<Iterable<Long>>any())).thenReturn(List.of(node));
+
+        MaterialEntity material = new MaterialEntity();
+        material.setId("mat1");
+        material.setMeta("30:00");
+        when(materialRepository.findAllById(ArgumentMatchers.<Iterable<String>>any())).thenReturn(List.of(material));
+
+        LearningCourseListResponse res = service.learningCourses(1, 10, null, null, null, null);
+        assertEquals(1, res.getTotal());
+        assertEquals(9L, res.getList().get(0).getId());
+        assertEquals(3L, res.getList().get(0).getViewerId());
+        assertEquals("阿坤", res.getList().get(0).getNickname());
+        assertEquals(18L, res.getList().get(0).getLessonNodeId());
+        assertEquals("第十八节 心态修炼", res.getList().get(0).getLessonName());
+        assertEquals(1800, res.getList().get(0).getTotalLearnDurationSec());
+        assertEquals(84, res.getList().get(0).getProgressPercent());
+        assertEquals("2026-09-22 17:00:00", res.getList().get(0).getFirstLearnTime());
+        assertEquals("视频", res.getList().get(0).getLessonType());
+        assertEquals(1800, res.getList().get(0).getLessonDurationSec());
+    }
+
+    @Test
+    void learningCourses_keywordNoMatch_empty() {
+        when(viewerRepository.findAll(ArgumentMatchers.<Specification<ViewerEntity>>any()))
+                .thenReturn(List.of());
+        LearningCourseListResponse res = service.learningCourses(1, 10, "nickname", "nobody", null, null);
         assertEquals(0, res.getTotal());
         assertTrue(res.getList().isEmpty());
+    }
+
+    @Test
+    void parseDurationMetaToSec_mmSsAndHms() {
+        assertEquals(1800, ViewerAdminService.parseDurationMetaToSec("30:00"));
+        assertEquals(3723, ViewerAdminService.parseDurationMetaToSec("1:02:03"));
+        assertEquals(0, ViewerAdminService.parseDurationMetaToSec("bad"));
+        assertEquals(0, ViewerAdminService.parseDurationMetaToSec(null));
     }
 
     @Test
