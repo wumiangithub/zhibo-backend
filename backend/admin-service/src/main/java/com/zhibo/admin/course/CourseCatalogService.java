@@ -3,9 +3,7 @@ package com.zhibo.admin.course;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.course.dto.BindLivesRequest;
-import com.zhibo.admin.course.dto.BindLivesResponse;
 import com.zhibo.admin.course.dto.BindMaterialsRequest;
-import com.zhibo.admin.course.dto.BindMaterialsResponse;
 import com.zhibo.admin.course.dto.CatalogListResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CatalogUsedContentsResponse;
@@ -18,6 +16,7 @@ import com.zhibo.admin.course.dto.ReorderCatalogItem;
 import com.zhibo.admin.course.dto.ReorderCatalogRequest;
 import com.zhibo.admin.course.dto.ReorderSubcoursesRequest;
 import com.zhibo.admin.course.dto.UpdateChapterRequest;
+import com.zhibo.admin.course.dto.UpdateLessonRequest;
 import com.zhibo.admin.course.dto.UpdateSubcourseRequest;
 import com.zhibo.common.UuidIds;
 import com.zhibo.course.CatalogSiblingOrder;
@@ -106,7 +105,7 @@ public class CourseCatalogService {
     }
 
     @Transactional
-    public BindLivesResponse bindLives(String courseId, BindLivesRequest request) {
+    public void bindLives(String courseId, BindLivesRequest request) {
         if (request == null || request.getParentId() == null) {
             throw new IllegalArgumentException("parentId 不能为空");
         }
@@ -126,7 +125,6 @@ public class CourseCatalogService {
             throw new IllegalArgumentException("请选择直播");
         }
 
-        List<CourseCatalogNodeEntity> created = new ArrayList<>();
         List<CourseCatalogNodeEntity> siblings = catalogRepository.findActiveByCourseIdAndParentId(
                 course.getId(), parentId);
         int sort = CatalogSiblingOrder.nextSortOrder(siblings);
@@ -148,20 +146,16 @@ public class CourseCatalogService {
             node.setContentKind(CourseCatalogContentKind.LIVE);
             node.setContentId(activityId);
             node.setSortOrder(sort);
-            created.add(catalogRepository.save(node));
+            catalogRepository.save(node);
             if (bump) {
                 sort++;
             }
         }
-        int contentCount = syncContentCount(course);
-        BindLivesResponse response = new BindLivesResponse();
-        response.setList(created.stream().map(this::toView).toList());
-        response.setContentCount(contentCount);
-        return response;
+        syncContentCount(course);
     }
 
     @Transactional
-    public BindMaterialsResponse bindMaterials(String courseId, BindMaterialsRequest request) {
+    public void bindMaterials(String courseId, BindMaterialsRequest request) {
         if (request == null || request.getParentId() == null) {
             throw new IllegalArgumentException("parentId 不能为空");
         }
@@ -181,7 +175,6 @@ public class CourseCatalogService {
             throw new IllegalArgumentException("请选择素材");
         }
 
-        List<CourseCatalogNodeEntity> created = new ArrayList<>();
         List<CourseCatalogNodeEntity> siblings = catalogRepository.findActiveByCourseIdAndParentId(
                 course.getId(), parentId);
         int sort = CatalogSiblingOrder.nextSortOrder(siblings);
@@ -203,16 +196,12 @@ public class CourseCatalogService {
             node.setContentKind(contentKind);
             node.setContentId(materialId);
             node.setSortOrder(sort);
-            created.add(catalogRepository.save(node));
+            catalogRepository.save(node);
             if (bump) {
                 sort++;
             }
         }
-        int contentCount = syncContentCount(course);
-        BindMaterialsResponse response = new BindMaterialsResponse();
-        response.setList(created.stream().map(this::toView).toList());
-        response.setContentCount(contentCount);
-        return response;
+        syncContentCount(course);
     }
 
     @Transactional
@@ -252,6 +241,26 @@ public class CourseCatalogService {
             throw new IllegalArgumentException("不是章节节点");
         }
         String title = requireNodeTitle(request.getTitle(), "请输入章节标题");
+        node.setTitle(title);
+        return toView(catalogRepository.save(node));
+    }
+
+    @Transactional
+    public CatalogNodeView updateLesson(String courseId, UpdateLessonRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        if (request.getId() == null) {
+            throw new IllegalArgumentException("小节 id 不能为空");
+        }
+        CourseEntity course = requireCourse(courseId);
+        CourseCatalogNodeEntity node = catalogRepository
+                .findByIdAndCourseIdAndDeletedTimeIsNull(request.getId(), course.getId())
+                .orElseThrow(() -> new IllegalArgumentException("小节不存在"));
+        if (node.getNodeType() != CourseCatalogNodeType.LESSON) {
+            throw new IllegalArgumentException("不是小节节点");
+        }
+        String title = requireNodeTitle(request.getTitle(), "请输入小节标题");
         node.setTitle(title);
         return toView(catalogRepository.save(node));
     }

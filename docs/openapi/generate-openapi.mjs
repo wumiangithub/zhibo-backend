@@ -466,6 +466,15 @@ const FIELD_DESC_BY_NAME = {
   successCount: '成功条数',
   failCount: '失败条数',
   commentTime: '评论时间',
+  couponId: '订单中心券池主键 id',
+  couponNo: '券编号，如 CPN2401',
+  couponName: '券名称',
+  couponAmount: '金额字符串，如 500.00；前端展示时加人民币符号与两位小数',
+  couponStartDate: '券有效期起',
+  couponEndDate: '券有效期止',
+  allSku: 'true 表示全部商品可用；省略或 false 则按 skuNames 展示',
+  senderName: '发送人昵称快照',
+  employeeId: '员工数字 id（rs_mainkey_id）',
   deleted: '是否已删除',
   phoneMasked: '脱敏手机号',
   banComment: '禁言开关',
@@ -3808,6 +3817,23 @@ function buildAdmin() {
         },
       },
     },
+    CourseCatalogLessonUpdateRequest: {
+      type: 'object',
+      required: ['id', 'title'],
+      properties: {
+        id: {
+          type: 'integer',
+          format: 'int64',
+          description: '本课小节节点 id',
+        },
+        title: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 30,
+          description: '小节标题，1～30 字',
+        },
+      },
+    },
     CourseCatalogChapterDeleteRequest: {
       type: 'object',
       required: ['id', 'keepContents'],
@@ -4109,6 +4135,9 @@ function buildAdmin() {
     ApiResponseActivityUserData: { $ref: '#/components/schemas/ActivityUserData' },
     ApiResponseCourseCatalogList: {
       $ref: '#/components/schemas/CourseCatalogListData',
+    },
+    ApiResponseCourseCatalogNode: {
+      $ref: '#/components/schemas/CourseCatalogNode',
     },
     ApiResponseCourseCatalogUsedContents: {
       $ref: '#/components/schemas/CourseCatalogUsedContentsData',
@@ -5966,6 +5995,7 @@ function buildAdmin() {
         description: [
           '将多场直播批量建成小节（contentKind=1）；小节标题取直播名并截断至 ≤30 字。',
           '课程已有子课程后，小节的 parentId 不可为 0（须挂在章节或子课程下）。同一直播已在本课占用 → 400。',
+          '副作用：写入小节并重算 course.content_count。成功仅返回 code/msg，无 data（前端自行刷新目录与课程详情）。',
         ].join(''),
         operationId: 'bindCourseCatalogLives',
         security: bearer,
@@ -5980,15 +6010,17 @@ function buildAdmin() {
             },
           },
         },
-        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+        responses: ok200('#/components/schemas/ApiResponseBase'),
       },
     },
     '/api/v1/courses/catalog/lessons/bind-materials/{courseId}': {
       post: {
         tags: ['课程'],
         summary: '绑定素材为小节',
-        description:
-          '将多个素材批量建成小节；contentKind 由素材 type 映射。同一素材已在本课占用 → 400。',
+        description: [
+          '将多个素材批量建成小节；contentKind 由素材 type 映射（image→2 / video→3 / document→4 / article→5）。',
+          '同一素材已在本课占用 → 400。副作用与成功回包同 bind-lives：重算 content_count；成功仅 code/msg，无 data。',
+        ].join(''),
         operationId: 'bindCourseCatalogMaterials',
         security: bearer,
         parameters: [courseIdPath],
@@ -6002,7 +6034,29 @@ function buildAdmin() {
             },
           },
         },
-        responses: ok200('#/components/schemas/ApiResponseCourseCatalogList'),
+        responses: ok200('#/components/schemas/ApiResponseBase'),
+      },
+    },
+    '/api/v1/courses/catalog/lessons/update/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '改小节标题',
+        description:
+          '修改指定小节的标题（1～30 字）；小节不存在、已软删或节点不是小节 → 400。成功返回该小节节点。',
+        operationId: 'updateCourseCatalogLesson',
+        security: bearer,
+        parameters: [courseIdPath],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/CourseCatalogLessonUpdateRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseCourseCatalogNode'),
       },
     },
     '/api/v1/courses/catalog/chapters/create/{courseId}': {
@@ -6535,6 +6589,41 @@ function buildAdmin() {
         security: bearer,
         parameters: [activityId],
         responses: ok200('#/components/schemas/ApiResponseConsoleQuestionHistory'),
+      },
+    },
+    '/api/v1/activities/console/coupons/send/{id}': {
+      post: {
+        tags: ['直播中控台'],
+        summary: '中控台发送优惠券',
+        description:
+          '中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，viewer_id 空，nickname 为当前员工昵称）。' +
+          '发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。' +
+          '前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。',
+        operationId: 'sendConsoleCoupon',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ConsoleSendCouponRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseConsoleSendCoupon'),
+      },
+    },
+    '/api/v1/activities/console/coupon-history/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台优惠券聊天历史',
+        description:
+          '读本站 room_comment（comment_type=3、未软删），按 comment_time 旧→新，最多 500 条，与微吼聊天按时间合并展示券卡片。' +
+          '响应形状对齐观看 /watch/coupon-history；admin JWT；无售卖门禁。活动不存在或已软删 → 400。',
+        operationId: 'getConsoleCouponHistory',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseWatchCouponHistory'),
       },
     },
     '/api/v1/live-reports/delete/{id}': {
@@ -7329,6 +7418,167 @@ function buildLive() {
         },
       },
     },
+    ConsoleSendCouponRequest: {
+      type: 'object',
+      required: [
+        'couponId',
+        'couponNo',
+        'couponName',
+        'couponAmount',
+        'couponStartDate',
+        'couponEndDate',
+      ],
+      description:
+        '中控台发券 Body。字段来自订单中心券池列表；couponId≤0 或必填串空白 → 400。',
+      properties: {
+        couponId: {
+          type: 'integer',
+          format: 'int64',
+          description: '订单中心券池主键 id；须为正整数',
+        },
+        couponNo: { type: 'string', maxLength: 64, description: '券编号，如 CPN2401' },
+        couponName: { type: 'string', maxLength: 256, description: '券名称' },
+        couponAmount: {
+          type: 'string',
+          maxLength: 32,
+          description: '金额字符串，如 500.00；前端展示时加人民币符号',
+        },
+        couponStartDate: { type: 'string', maxLength: 32, description: '有效期起' },
+        couponEndDate: { type: 'string', maxLength: 32, description: '有效期止' },
+        allSku: {
+          type: 'boolean',
+          description: 'true 表示全部商品；省略按 false',
+        },
+        deptNames: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '可用事业部名称列表；服务端顿号拼接写入关系表',
+        },
+        skuNames: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '可用商品名称列表；allSku=true 时可空',
+        },
+      },
+    },
+    ConsoleSendCouponResponse: {
+      type: 'object',
+      description: '发券成功后返回；前端用其组 sendCustomEvent data 并本地上屏',
+      properties: {
+        commentId: { type: 'integer', format: 'int64', description: 'room_comment.id' },
+        couponId: { type: 'integer', format: 'int64' },
+        couponNo: { type: 'string' },
+        couponName: { type: 'string' },
+        couponAmount: { type: 'string' },
+        couponStartDate: { type: 'string' },
+        couponEndDate: { type: 'string' },
+        employeeId: { type: 'integer', format: 'int64', description: '发送员工 id' },
+        nickname: { type: 'string', description: '发送昵称快照' },
+        deptId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '发送人部门 id（岗位表 hr_uimsyhgwxx.bmid → sys_uimsbmxx.rs_mainkey_id）；无在职岗位则省略。禁止读 qw_bmxx',
+        },
+        deptName: {
+          type: 'string',
+          description: '发送人部门名（sys_uimsbmxx.bmmc）；与 deptId 同有同无',
+        },
+        commentTime: {
+          type: 'string',
+          description: 'comment_time，格式 yyyy-MM-dd HH:mm:ss',
+        },
+      },
+    },
+    WatchCouponItem: {
+      type: 'object',
+      description: '本场已发券一行（activity_coupon 快照）',
+      properties: {
+        couponId: { type: 'integer', format: 'int64' },
+        couponNo: { type: 'string' },
+        couponName: { type: 'string' },
+        couponAmount: { type: 'string' },
+        couponStartDate: { type: 'string' },
+        couponEndDate: { type: 'string' },
+        allSku: { type: 'boolean' },
+        deptNames: {
+          type: 'string',
+          description: '券可用事业部顿号拼接；可空串（不是发送人部门）',
+        },
+        skuNames: { type: 'string', description: '顿号拼接；可空串' },
+        lastSentTime: {
+          type: 'string',
+          description: '最近发送时间 yyyy-MM-dd HH:mm:ss',
+        },
+        lastSenderEmployeeId: {
+          type: 'integer',
+          format: 'int64',
+          description: '最近发送员工 id；侧栏领取传订单中心',
+        },
+        lastSenderNickname: { type: 'string', description: '最近发送昵称' },
+        lastSenderDeptId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '最近发送人部门 id（岗位表解析）；无岗位则省略',
+        },
+        lastSenderDeptName: {
+          type: 'string',
+          description: '最近发送人部门名；与 lastSenderDeptId 同有同无',
+        },
+      },
+    },
+    WatchCouponListData: {
+      type: 'object',
+      properties: {
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/WatchCouponItem' },
+          description: '按 last_sent_time 新→旧',
+        },
+      },
+    },
+    WatchCouponHistoryItem: {
+      type: 'object',
+      description: '优惠券聊天历史单条（room_comment type=3）',
+      properties: {
+        id: { type: 'integer', format: 'int64', description: 'room_comment.id' },
+        senderName: { type: 'string' },
+        timestamp: {
+          type: 'integer',
+          format: 'int64',
+          description: 'comment_time 毫秒（上海）',
+        },
+        couponId: { type: 'integer', format: 'int64' },
+        couponNo: { type: 'string' },
+        couponName: { type: 'string' },
+        couponAmount: { type: 'string' },
+        couponStartDate: { type: 'string' },
+        couponEndDate: { type: 'string' },
+        employeeId: { type: 'integer', format: 'int64' },
+        deptId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '发送人部门 id（content JSON；岗位表链路）；无则省略',
+        },
+        deptName: {
+          type: 'string',
+          description: '发送人部门名；与 deptId 同有同无',
+        },
+      },
+    },
+    WatchCouponHistoryData: {
+      type: 'object',
+      properties: {
+        total: { type: 'integer', format: 'int64', description: '截断前条数' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/WatchCouponHistoryItem' },
+          description: '旧→新；最多 500 条',
+        },
+      },
+    },
     ChatFilterData: {
       type: 'object',
       required: ['pageUrl'],
@@ -7638,6 +7888,15 @@ function buildLive() {
     ApiResponseConsoleSdkSign: { $ref: '#/components/schemas/ConsoleSdkSignData' },
     ApiResponseConsoleQuestionHistory: {
       $ref: '#/components/schemas/ConsoleQuestionHistoryData',
+    },
+    ApiResponseConsoleSendCoupon: {
+      $ref: '#/components/schemas/ConsoleSendCouponResponse',
+    },
+    ApiResponseWatchCouponHistory: {
+      $ref: '#/components/schemas/WatchCouponHistoryData',
+    },
+    ApiResponseWatchCoupons: {
+      $ref: '#/components/schemas/WatchCouponListData',
     },
     ConsoleSummaryData: {
       type: 'object',
@@ -8091,6 +8350,30 @@ function buildLive() {
         operationId: 'getWatchProducts',
         parameters: [watchId],
         responses: ok200('#/components/schemas/ApiResponseWatchProducts'),
+      },
+    },
+    '/api/v1/watch/coupons/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '本场已发优惠券列表',
+        description:
+          '读本站 activity_coupon。list 非空则观看/回放侧栏显示「券」悬浮图标；点开弹层选券后，前端直连订单中心 POST /order-center/api/live/viewer/coupon/receive 领取（观众 JWT，见订单中心对接）。' +
+          '须过售卖门禁，未过 → 403。活动不存在或已软删 → 400。',
+        operationId: 'getWatchCoupons',
+        parameters: [watchId, activityAccessHeader],
+        responses: ok200('#/components/schemas/ApiResponseWatchCoupons'),
+      },
+    },
+    '/api/v1/watch/coupon-history/{id}': {
+      get: {
+        tags: ['观看'],
+        summary: '观看端优惠券聊天历史',
+        description:
+          '读本站 room_comment（comment_type=3、未软删），按 comment_time 旧→新，最多 500 条；与微吼聊天按时间合并渲染券卡片。' +
+          '须过售卖门禁，未过 → 403。中控台同源见 /activities/console/coupon-history。',
+        operationId: 'getWatchCouponHistory',
+        parameters: [watchId, activityAccessHeader],
+        responses: ok200('#/components/schemas/ApiResponseWatchCouponHistory'),
       },
     },
     '/api/v1/watch/chat-history/{id}': {

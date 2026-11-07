@@ -39,7 +39,8 @@ public class RoomCommentEntity {
     @Column(name = "guest_id", length = 64)
     private String guestId;
 
-    @Column(nullable = false, length = 500)
+    /** 聊天/提问纯文本；优惠券/预留图片为 JSON 字符串（V67 扩至 2000）。 */
+    @Column(nullable = false, length = 2000)
     private String content;
 
     @Column(length = 64)
@@ -48,7 +49,7 @@ public class RoomCommentEntity {
     @Column(name = "role_name")
     private Integer roleName;
 
-    /** 1 聊天 / 2 提问。见 {@link RoomCommentType}。 */
+    /** 1 聊天 / 2 提问 / 3 优惠券 / 4 预留图片。见 {@link RoomCommentType}。 */
     @Column(name = "comment_type", nullable = false)
     private Integer commentType;
 

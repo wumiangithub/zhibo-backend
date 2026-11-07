@@ -3,9 +3,7 @@ package com.zhibo.admin.course;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.course.dto.BindLivesRequest;
-import com.zhibo.admin.course.dto.BindLivesResponse;
 import com.zhibo.admin.course.dto.BindMaterialsRequest;
-import com.zhibo.admin.course.dto.BindMaterialsResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CreateChapterRequest;
 import com.zhibo.admin.course.dto.CatalogNodeIdResponse;
@@ -15,6 +13,7 @@ import com.zhibo.admin.course.dto.DeleteSubcourseRequest;
 import com.zhibo.admin.course.dto.ReorderCatalogItem;
 import com.zhibo.admin.course.dto.ReorderCatalogRequest;
 import com.zhibo.admin.course.dto.UpdateChapterRequest;
+import com.zhibo.admin.course.dto.UpdateLessonRequest;
 import com.zhibo.admin.course.dto.UpdateSubcourseRequest;
 import com.zhibo.common.UuidIds;
 import com.zhibo.course.CourseCatalogContentKind;
@@ -85,13 +84,14 @@ class CourseCatalogServiceTest {
         body.setParentId(0L);
         body.setActivityIds(List.of(actId));
 
-        BindLivesResponse response = catalogService.bindLives(course.getId(), body);
+        catalogService.bindLives(course.getId(), body);
 
-        assertEquals(1, response.getList().size());
-        assertEquals(1, response.getContentCount());
-        assertEquals(30, response.getList().get(0).getTitle().length());
-        assertEquals(CourseCatalogContentKind.LIVE, response.getList().get(0).getContentKind());
-        assertEquals(0, response.getList().get(0).getSortOrder());
+        ArgumentCaptor<CourseCatalogNodeEntity> captor = ArgumentCaptor.forClass(CourseCatalogNodeEntity.class);
+        verify(catalogRepository).save(captor.capture());
+        CourseCatalogNodeEntity saved = captor.getValue();
+        assertEquals(30, saved.getTitle().length());
+        assertEquals(CourseCatalogContentKind.LIVE, saved.getContentKind());
+        assertEquals(0, saved.getSortOrder());
         verify(courseRepository).save(course);
         assertEquals(1, course.getContentCount());
     }
@@ -158,14 +158,15 @@ class CourseCatalogServiceTest {
         body.setParentId(0L);
         body.setMaterialIds(List.of(materialId));
 
-        BindMaterialsResponse response = catalogService.bindMaterials(course.getId(), body);
+        catalogService.bindMaterials(course.getId(), body);
 
-        assertEquals(1, response.getList().size());
-        assertEquals(1, response.getContentCount());
-        assertEquals(30, response.getList().get(0).getTitle().length());
-        assertEquals(CourseCatalogContentKind.DOCUMENT, response.getList().get(0).getContentKind());
-        assertEquals(materialId, response.getList().get(0).getContentId());
-        assertEquals(0, response.getList().get(0).getSortOrder());
+        ArgumentCaptor<CourseCatalogNodeEntity> captor = ArgumentCaptor.forClass(CourseCatalogNodeEntity.class);
+        verify(catalogRepository).save(captor.capture());
+        CourseCatalogNodeEntity saved = captor.getValue();
+        assertEquals(30, saved.getTitle().length());
+        assertEquals(CourseCatalogContentKind.DOCUMENT, saved.getContentKind());
+        assertEquals(materialId, saved.getContentId());
+        assertEquals(0, saved.getSortOrder());
         verify(courseRepository).save(course);
         assertEquals(1, course.getContentCount());
     }
@@ -364,6 +365,51 @@ class CourseCatalogServiceTest {
 
         assertEquals(7L, view.getId());
         assertEquals("新章节", view.getTitle());
+    }
+
+    @Test
+    void updateLesson_updatesTitle() {
+        CourseEntity course = course();
+        CourseCatalogNodeEntity lesson = new CourseCatalogNodeEntity();
+        lesson.setId(9L);
+        lesson.setCourseId(course.getId());
+        lesson.setNodeType(CourseCatalogNodeType.LESSON);
+        lesson.setParentId(0L);
+        lesson.setTitle("旧小节");
+        lesson.setContentKind(CourseCatalogContentKind.LIVE);
+        when(catalogRepository.findByIdAndCourseIdAndDeletedTimeIsNull(9L, course.getId()))
+                .thenReturn(Optional.of(lesson));
+        when(catalogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateLessonRequest body = new UpdateLessonRequest();
+        body.setId(9L);
+        body.setTitle("新小节");
+
+        CatalogNodeView view = catalogService.updateLesson(course.getId(), body);
+
+        assertEquals(9L, view.getId());
+        assertEquals("新小节", view.getTitle());
+        assertEquals(CourseCatalogContentKind.LIVE, view.getContentKind());
+    }
+
+    @Test
+    void updateLesson_rejectsNonLesson() {
+        CourseEntity course = course();
+        CourseCatalogNodeEntity chapter = new CourseCatalogNodeEntity();
+        chapter.setId(7L);
+        chapter.setCourseId(course.getId());
+        chapter.setNodeType(CourseCatalogNodeType.CHAPTER);
+        when(catalogRepository.findByIdAndCourseIdAndDeletedTimeIsNull(7L, course.getId()))
+                .thenReturn(Optional.of(chapter));
+
+        UpdateLessonRequest body = new UpdateLessonRequest();
+        body.setId(7L);
+        body.setTitle("新名");
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> catalogService.updateLesson(course.getId(), body));
+        assertTrue(ex.getMessage().contains("不是小节"));
     }
 
     @Test

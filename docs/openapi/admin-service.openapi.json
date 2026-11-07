@@ -4189,7 +4189,7 @@
           "课程"
         ],
         "summary": "绑定直播为小节",
-        "description": "将多场直播批量建成小节（contentKind=1）；小节标题取直播名并截断至 ≤30 字。课程已有子课程后，小节的 parentId 不可为 0（须挂在章节或子课程下）。同一直播已在本课占用 → 400。",
+        "description": "将多场直播批量建成小节（contentKind=1）；小节标题取直播名并截断至 ≤30 字。课程已有子课程后，小节的 parentId 不可为 0（须挂在章节或子课程下）。同一直播已在本课占用 → 400。副作用：写入小节并重算 course.content_count。成功仅返回 code/msg，无 data（前端自行刷新目录与课程详情）。",
         "operationId": "bindCourseCatalogLives",
         "security": [
           {
@@ -4217,7 +4217,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                  "$ref": "#/components/schemas/ApiResponseBase"
                 }
               }
             }
@@ -4231,7 +4231,7 @@
           "课程"
         ],
         "summary": "绑定素材为小节",
-        "description": "将多个素材批量建成小节；contentKind 由素材 type 映射。同一素材已在本课占用 → 400。",
+        "description": "将多个素材批量建成小节；contentKind 由素材 type 映射（image→2 / video→3 / document→4 / article→5）。同一素材已在本课占用 → 400。副作用与成功回包同 bind-lives：重算 content_count；成功仅 code/msg，无 data。",
         "operationId": "bindCourseCatalogMaterials",
         "security": [
           {
@@ -4259,7 +4259,49 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseCourseCatalogList"
+                  "$ref": "#/components/schemas/ApiResponseBase"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/courses/catalog/lessons/update/{courseId}": {
+      "post": {
+        "tags": [
+          "课程"
+        ],
+        "summary": "改小节标题",
+        "description": "修改指定小节的标题（1～30 字）；小节不存在、已软删或节点不是小节 → 400。成功返回该小节节点。",
+        "operationId": "updateCourseCatalogLesson",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CourseIdPath"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCatalogLessonUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseCourseCatalogNode"
                 }
               }
             }
@@ -5703,6 +5745,80 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseConsoleQuestionHistory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/coupons/send/{id}": {
+      "post": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台发送优惠券",
+        "description": "中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，viewer_id 空，nickname 为当前员工昵称）。发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。",
+        "operationId": "sendConsoleCoupon",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleSendCouponRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseConsoleSendCoupon"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/coupon-history/{id}": {
+      "get": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台优惠券聊天历史",
+        "description": "读本站 room_comment（comment_type=3、未软删），按 comment_time 旧→新，最多 500 条，与微吼聊天按时间合并展示券卡片。响应形状对齐观看 /watch/coupon-history；admin JWT；无售卖门禁。活动不存在或已软删 → 400。",
+        "operationId": "getConsoleCouponHistory",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWatchCouponHistory"
                 }
               }
             }
@@ -13753,6 +13869,26 @@
           }
         }
       },
+      "CourseCatalogLessonUpdateRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "本课小节节点 id；库：BIGINT"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "description": "小节标题，1～30 字；库：VARCHAR(30)"
+          }
+        }
+      },
       "CourseCatalogChapterDeleteRequest": {
         "type": "object",
         "required": [
@@ -15224,6 +15360,22 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/CourseCatalogListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseCourseCatalogNode": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/CourseCatalogNode"
               }
             }
           }

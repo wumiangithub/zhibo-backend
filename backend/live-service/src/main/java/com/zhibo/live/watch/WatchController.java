@@ -3,6 +3,8 @@ package com.zhibo.live.watch;
 import com.zhibo.live.viewer.ViewerJwtTokenService;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchChatHistoryResponse;
+import com.zhibo.live.watch.dto.WatchCouponHistoryResponse;
+import com.zhibo.live.watch.dto.WatchCouponListResponse;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchQuestionHistoryResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
@@ -29,6 +31,7 @@ public class WatchController {
     private final WatchAccessService watchAccessService;
     private final WatchChatHistoryService watchChatHistoryService;
     private final WatchQuestionHistoryService watchQuestionHistoryService;
+    private final WatchCouponService watchCouponService;
     private final ViewerJwtTokenService viewerJwtTokenService;
 
     @GetMapping("/activities")
@@ -105,5 +108,25 @@ public class WatchController {
         Long viewerId = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
         watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchQuestionHistoryService.list(id));
+    }
+
+    /** 本场已发券列表（侧栏「券」图标）；须过售卖门禁（D113）。 */
+    @GetMapping("/coupons/{id}")
+    public ApiResponse<WatchCouponListResponse> coupons(
+            @PathVariable String id,
+            HttpServletRequest request) {
+        Long viewerId = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        return ApiResponse.ok(watchCouponService.listCoupons(id));
+    }
+
+    /** 优惠券聊天历史（本站 room_comment type=3）；须过售卖门禁（D113）。 */
+    @GetMapping("/coupon-history/{id}")
+    public ApiResponse<WatchCouponHistoryResponse> couponHistory(
+            @PathVariable String id,
+            HttpServletRequest request) {
+        Long viewerId = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        return ApiResponse.ok(watchCouponService.history(id));
     }
 }

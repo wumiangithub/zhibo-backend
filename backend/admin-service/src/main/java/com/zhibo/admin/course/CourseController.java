@@ -3,9 +3,8 @@ package com.zhibo.admin.course;
 import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
 import com.zhibo.admin.course.dto.BindLivesRequest;
-import com.zhibo.admin.course.dto.BindLivesResponse;
 import com.zhibo.admin.course.dto.BindMaterialsRequest;
-import com.zhibo.admin.course.dto.BindMaterialsResponse;
+import com.zhibo.admin.course.dto.UpdateLessonRequest;
 import com.zhibo.admin.course.dto.CatalogListResponse;
 import com.zhibo.admin.course.dto.CatalogNodeView;
 import com.zhibo.admin.course.dto.CatalogUsedContentsResponse;
@@ -299,17 +298,26 @@ public class CourseController {
     }
 
     @PostMapping("/catalog/lessons/bind-lives/{courseId}")
-    public ApiResponse<BindLivesResponse> bindLives(
+    public ApiResponse<Void> bindLives(
             @PathVariable String courseId,
             @Valid @RequestBody BindLivesRequest request) {
-        return ApiResponse.ok(courseCatalogService.bindLives(courseId, request));
+        courseCatalogService.bindLives(courseId, request);
+        return ApiResponse.ok();
     }
 
     @PostMapping("/catalog/lessons/bind-materials/{courseId}")
-    public ApiResponse<BindMaterialsResponse> bindMaterials(
+    public ApiResponse<Void> bindMaterials(
             @PathVariable String courseId,
             @Valid @RequestBody BindMaterialsRequest request) {
-        return ApiResponse.ok(courseCatalogService.bindMaterials(courseId, request));
+        courseCatalogService.bindMaterials(courseId, request);
+        return ApiResponse.ok();
+    }
+
+    @PostMapping("/catalog/lessons/update/{courseId}")
+    public ApiResponse<CatalogNodeView> updateLesson(
+            @PathVariable String courseId,
+            @Valid @RequestBody UpdateLessonRequest request) {
+        return ApiResponse.ok(courseCatalogService.updateLesson(courseId, request));
     }
 
     @PostMapping("/catalog/chapters/create/{courseId}")
