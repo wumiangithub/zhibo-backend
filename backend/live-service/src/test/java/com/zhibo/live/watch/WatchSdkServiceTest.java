@@ -1,6 +1,7 @@
 package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.live.viewer.ViewerAuthException;
 import com.zhibo.live.watch.dto.WatchSdkResponse;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -117,8 +118,8 @@ class WatchSdkServiceTest {
 
     @Test
     void sdk_requiresViewerId() {
-        assertThrows(IllegalArgumentException.class, () -> watchSdkService.sdk(ID, null, null));
-        assertThrows(IllegalArgumentException.class, () -> watchSdkService.sdk(ID, null, 0L));
+        assertThrows(ViewerAuthException.class, () -> watchSdkService.sdk(ID, null, null));
+        assertThrows(ViewerAuthException.class, () -> watchSdkService.sdk(ID, null, 0L));
     }
 
     @Test

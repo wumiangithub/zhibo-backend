@@ -46,6 +46,7 @@ class AccessRulesTest {
 
     @Test
     void requiresGate_onlyEncryptedOrSpecifiedWhenSellAlone() {
+        // free / paid / sellAlone=false 仍不走售卖附加门禁；观众登录由 WatchAccessService 统一强制（D115）
         ActivityEntity a = new ActivityEntity();
         a.setSellAlone(true);
         a.setSellType("encrypted");

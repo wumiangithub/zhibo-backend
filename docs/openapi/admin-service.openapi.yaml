@@ -2051,7 +2051,7 @@ paths:
       tags:
         - 课程
       summary: 课程用户列表
-      description: "分页查询本课学员（course_user）。可按昵称/用户ID/手机号关键词筛选。Query entitlementState 可选：valid（有效）/ expired（已到期）/ invalid（已失效）；省略则不过滤。计算态：entitlement_status=0 → invalid；否则当课程售卖为 days 或 fixed、且行上 entitlement_expire_time 非空且已过当前时间 → expired；其余为 valid（售卖长期不算已到期）。响应含课程当前 accessValidityType，供前端到期列展示。"
+      description: "分页查询本课学员（course_user）。可按昵称/用户ID/手机号关键词筛选。Query entitlementState 可选：valid（有效）/ expired（已到期）/ invalid（已失效）；省略则不过滤。计算态：entitlement_status=0 → invalid；否则当课程售卖为 days 或 fixed、且行上 entitlement_expire_time 非空且已过当前时间 → expired；其余为 valid（售卖长期不算已到期）。到期列展示用响应字段 expireDisplay（售卖长期为「长期」）。"
       operationId: listCourseUsers
       security:
         - BearerAuth:
@@ -2408,7 +2408,7 @@ paths:
       tags:
         - 课程
       summary: 导出课程学员 CSV
-      description: 按与用户列表相同的筛选条件导出本课全部学员 CSV（UTF-8 BOM），不分页（不含 page/pageSize）。列：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间。
+      description: 按与用户列表相同的筛选条件导出本课全部学员 CSV（UTF-8 BOM），不分页（不含 page/pageSize）。列：学员、用户ID、手机号、标签、小节完成率、权益状态、权益获取方式、权益首次获取时间、权益到期时间。
       operationId: exportCourseUsers
       security:
         - BearerAuth:
@@ -2465,7 +2465,7 @@ paths:
           description: "可选；省略=全部"
       responses:
         200:
-          description: 学员 CSV：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间
+          description: 学员 CSV：学员、用户ID、手机号、标签、小节完成率、权益状态、权益获取方式、权益首次获取时间、权益到期时间
           content:
             text/csv:
               schema:
@@ -4473,19 +4473,6 @@ components:
         - value: invalid
           name: 已失效
           description: 已失效
-    CourseAcquireWay:
-      type: string
-      enum:
-        - purchase
-        - import
-      description: purchase 购买 / import 导入；库：VARCHAR(16)
-      x-apifox-enum:
-        - value: purchase
-          name: 购买
-          description: 购买
-        - value: import
-          name: 导入
-          description: 导入
     MaterialAccessPermission:
       type: integer
       enum:
@@ -7474,10 +7461,6 @@ components:
           type: integer
           format: int64
           description: course_user.id；库：BIGINT
-        viewerId:
-          type: integer
-          format: int64
-          description: 观众 id；库：BIGINT
         nickname:
           type: string
           description: 展示昵称（必有非空串）；落在「学员」列；库：VARCHAR(64)
@@ -7489,20 +7472,14 @@ components:
         phoneMasked:
           type: string
           description: 脱敏手机号，可空则省略
-        tagIds:
-          type: array
-          items:
-            type: integer
-            format: int64
-          description: "观众全局标签 id（未软删）；无则 []"
         tagLabels:
           type: array
           items:
             type: string
-          description: "与 tagIds 对齐的标签名；无则 []"
+          description: "观众全局标签名（未软删）；无则 []"
         chapterCompletionRate:
           type: number
-          description: "小节完成率；本轮恒 0；库：DECIMAL(10,2)"
+          description: "小节完成率：已完成小节数 / 当前总小节数，百分数一位小数；无进度为 0；库：DECIMAL(10,2)"
         entitlementStatus:
           type: integer
           enum:
@@ -7532,42 +7509,12 @@ components:
         entitlementStateLabel:
           type: string
           description: 有效 / 已到期 / 已失效
-        acquireWay:
-          $ref: "#/components/schemas/CourseAcquireWay"
-          description: purchase 购买 / import 导入
-          x-apifox-enum:
-            - value: purchase
-              name: 购买
-              description: 购买
-            - value: import
-              name: 导入
-              description: 导入
         acquireWayLabel:
           type: string
           description: 购买 / 导入
         firstAcquireTime:
           type: string
           description: "权益首次获取时间（created_time），yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
-        employeeInviterId:
-          type: integer
-          format: int64
-          description: 员工邀请人 id；无则省略；库：BIGINT
-        inviterDisplayName:
-          type: string
-          description: 所属邀请人展示名；无则省略
-        inviteTime:
-          type: string
-          description: "有邀请人时 = created_time；库：DATETIME(3)"
-        importerId:
-          type: integer
-          format: int64
-          description: 添加/导入人 id；无则省略；库：BIGINT
-        importerName:
-          type: string
-          description: 导入人姓名；无则省略
-        importTime:
-          type: string
-          description: "有导入人时 = created_time；库：DATETIME(3)"
         expireTime:
           type: string
           description: 库内到期，可空；售卖长期时前端展示「长期」勿当已过期；库：DATETIME(3)
@@ -7580,7 +7527,6 @@ components:
         - page
         - pageSize
         - total
-        - accessValidityType
         - list
       properties:
         page:
@@ -7593,19 +7539,6 @@ components:
           type: integer
           format: int64
           description: 总条数；库：BIGINT
-        accessValidityType:
-          $ref: "#/components/schemas/AccessValidityType"
-          description: 课程当前售卖有效期类型，供前端到期列展示
-          x-apifox-enum:
-            - value: long
-              name: 长期有效
-              description: 长期有效
-            - value: days
-              name: N 天有效
-              description: N 天有效
-            - value: fixed
-              name: 固定时刻到期（仅课程）
-              description: 固定时刻到期（仅课程）
         list:
           type: array
           items:

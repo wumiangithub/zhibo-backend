@@ -2,6 +2,7 @@ package com.zhibo.live.watch;
 
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.common.SdkAvatarHeads;
+import com.zhibo.live.viewer.ViewerAuthException;
 import com.zhibo.live.watch.dto.SdkPayload;
 import com.zhibo.live.watch.dto.WatchSdkResponse;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -36,8 +37,9 @@ public class WatchSdkService {
     private String defaultAvatarUrl = SdkAvatarHeads.PLACEHOLDER_BASE_URL;
 
     public WatchSdkResponse sdk(String activityId, String nickname, Long viewerId) {
+        // 正常应由 Controller assertAllowed 先拦；此处兜底用 401，避免再打成业务 400
         if (viewerId == null || viewerId <= 0) {
-            throw new IllegalArgumentException("请先登录");
+            throw new ViewerAuthException(401, "未登录");
         }
         ActivityEntity entity = watchService.requireActivity(activityId);
         watchService.requireReadyForWatch(entity);

@@ -101,6 +101,41 @@ class AudienceAttributeServiceTest {
         assertEquals("inviterKind 须为 employee 或 audience", ex.getMessage());
     }
 
+    @Test
+    void resolveSalesman_prefersInviterOverImporter() {
+        stubActivityOnly();
+        ActivityAudienceEntity row = new ActivityAudienceEntity();
+        row.setEmployeeInviterId(10001L);
+        row.setImporterId(20002L);
+        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.of(row));
+
+        assertEquals(10001L, service.resolveSalesman(AID, 12L).getSalesmanId());
+    }
+
+    @Test
+    void resolveSalesman_fallsBackToImporter() {
+        stubActivityOnly();
+        ActivityAudienceEntity row = new ActivityAudienceEntity();
+        row.setImporterId(20002L);
+        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.of(row));
+
+        assertEquals(20002L, service.resolveSalesman(AID, 12L).getSalesmanId());
+    }
+
+    @Test
+    void resolveSalesman_nullWhenNoRow() {
+        stubActivityOnly();
+        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.empty());
+
+        assertEquals(null, service.resolveSalesman(AID, 12L).getSalesmanId());
+    }
+
+    private void stubActivityOnly() {
+        ActivityEntity activity = new ActivityEntity();
+        activity.setId(AID);
+        when(activityRepository.findById(AID)).thenReturn(Optional.of(activity));
+    }
+
     private void stubActivityAndViewer() {
         ActivityEntity activity = new ActivityEntity();
         activity.setId(AID);

@@ -15,7 +15,8 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 /**
- * 观看售卖门禁（D90）。
+ * 观看售卖门禁（D90 / D115）。
+ * 任意直播/回放内容接口：先要有效观众 JWT；加密再验密码；指定用户再验权益。
  */
 @Service
 @RequiredArgsConstructor
@@ -43,7 +44,13 @@ public class WatchAccessService {
         return buildResponse(entity, resolveState(entity, viewerId, activityAccessToken));
     }
 
-    public VerifyPasswordResponse verifyPassword(String activityId, String password) {
+    /**
+     * 校验观看密码并发本场访问 JWT。须已登录（D115）；未登录 → 403「请先登录」。
+     */
+    public VerifyPasswordResponse verifyPassword(String activityId, Long viewerId, String password) {
+        if (viewerId == null || viewerId <= 0) {
+            throw new WatchAccessException("请先登录");
+        }
         ActivityEntity entity = watchService.requireActivity(activityId);
         watchService.requireReadyForWatch(entity);
         if (!Boolean.TRUE.equals(entity.getSellAlone()) || !"encrypted".equals(entity.getSellType())) {
@@ -75,7 +82,7 @@ public class WatchAccessService {
         return new VerifyPasswordResponse(token, expiresIn);
     }
 
-    /** sdk / records / replay 硬拦；未放行抛 403。 */
+    /** summary / sdk / records / products / history / replay 硬拦；未放行抛 403。 */
     public void assertAllowed(ActivityEntity entity, Long viewerId, String activityAccessToken) {
         String state = resolveState(entity, viewerId, activityAccessToken);
         if (STATE_OK.equals(state)) {
@@ -90,11 +97,18 @@ public class WatchAccessService {
         assertAllowed(entity, viewerId, activityAccessToken);
     }
 
+    /**
+     * 门禁状态（探态与硬拦共用）。
+     * 顺序：先登录 →（售卖附加门禁时）过期 → 加密密码 / 指定用户权益。
+     */
     String resolveState(ActivityEntity entity, Long viewerId, String activityAccessToken) {
-        LocalDateTime now = now();
+        if (viewerId == null || viewerId <= 0) {
+            return STATE_NEED_LOGIN;
+        }
         if (!AccessRules.requiresGate(entity)) {
             return STATE_OK;
         }
+        LocalDateTime now = now();
         if (AccessRules.isAccessExpired(entity, now)) {
             return STATE_EXPIRED;
         }
@@ -106,9 +120,6 @@ public class WatchAccessService {
             return STATE_NEED_PASSWORD;
         }
         if ("specified".equals(sellType)) {
-            if (viewerId == null || viewerId <= 0) {
-                return STATE_NEED_LOGIN;
-            }
             return audienceRepository.findByActivityIdAndViewerId(entity.getId(), viewerId)
                     .filter(row -> row.getEntitlementStatus() == 1)
                     .map(row -> STATE_OK)

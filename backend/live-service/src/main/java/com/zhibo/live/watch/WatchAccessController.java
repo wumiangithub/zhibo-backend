@@ -38,8 +38,10 @@ public class WatchAccessController {
     @PostMapping("/verify-password/{id}")
     public ApiResponse<VerifyPasswordResponse> verifyPassword(
             @PathVariable String id,
-            @Valid @RequestBody VerifyPasswordRequest body) {
-        return ApiResponse.ok(watchAccessService.verifyPassword(id, body.getPassword()));
+            @Valid @RequestBody VerifyPasswordRequest body,
+            HttpServletRequest request) {
+        Long viewerId = tryParseViewerId(request);
+        return ApiResponse.ok(watchAccessService.verifyPassword(id, viewerId, body.getPassword()));
     }
 
     private Long tryParseViewerId(HttpServletRequest request) {

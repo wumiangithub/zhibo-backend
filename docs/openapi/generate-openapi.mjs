@@ -580,7 +580,7 @@ const FIELD_DESC_BY_PATH = {
   'WatchSdkData.nickname': '与 sdk.username 同值（身份回显）',
   'WatchSdkData.sdk': '该服务商签名与 init 鉴权参数（不含脚本 CDN，D93）',
   'WatchAccessData.accessState':
-    'ok 已放行 / need_password 需观看密码 / need_login 需登录 / forbidden 无观看权限 / expired 访问已过期',
+    'ok 已放行 / need_password 已登录但缺观看密码 / need_login 需登录（含免费场） / forbidden 无观看权限 / expired 访问已过期',
   'WatchAccessData.accessExpired': '访问是否已过期（days 起算：仅 liveActualEndTime）',
   'WatchAccessData.sellType':
     'free 免费 / paid 付费（存量） / encrypted 加密 / specified 指定学员',
@@ -1250,11 +1250,6 @@ function buildAdmin() {
       type: 'string',
       enum: ['valid', 'expired', 'invalid'],
       description: 'valid 有效 / expired 已到期 / invalid 已失效',
-    },
-    CourseAcquireWay: {
-      type: 'string',
-      enum: ['purchase', 'import'],
-      description: 'purchase 购买 / import 导入',
     },
     MaterialAccessPermission: {
       type: 'integer',
@@ -2869,30 +2864,21 @@ function buildAdmin() {
           format: 'int64',
           description: 'course_user.id；库：BIGINT',
         },
-        viewerId: {
-          type: 'integer',
-          format: 'int64',
-          description: '观众 id；库：BIGINT',
-        },
         nickname: {
           type: 'string',
           description: '展示昵称（必有非空串）；落在「学员」列',
         },
         avatar: { type: 'string', description: '头像 URL，可空则省略' },
         phoneMasked: { type: 'string', description: '脱敏手机号，可空则省略' },
-        tagIds: {
-          type: 'array',
-          items: { type: 'integer', format: 'int64' },
-          description: '观众全局标签 id（未软删）；无则 []',
-        },
         tagLabels: {
           type: 'array',
           items: { type: 'string' },
-          description: '与 tagIds 对齐的标签名；无则 []',
+          description: '观众全局标签名（未软删）；无则 []',
         },
         chapterCompletionRate: {
           type: 'number',
-          description: '小节完成率；本轮恒 0',
+          description:
+            '小节完成率：已完成小节数 / 当前总小节数，百分数一位小数；无进度为 0',
         },
         entitlementStatus: {
           type: 'integer',
@@ -2906,34 +2892,10 @@ function buildAdmin() {
           type: 'string',
           description: '有效 / 已到期 / 已失效',
         },
-        acquireWay: { $ref: '#/components/schemas/CourseAcquireWay' },
         acquireWayLabel: { type: 'string', description: '购买 / 导入' },
         firstAcquireTime: {
           type: 'string',
           description: '权益首次获取时间（created_time），yyyy-MM-dd HH:mm:ss',
-        },
-        employeeInviterId: {
-          type: 'integer',
-          format: 'int64',
-          description: '员工邀请人 id；无则省略',
-        },
-        inviterDisplayName: {
-          type: 'string',
-          description: '所属邀请人展示名；无则省略',
-        },
-        inviteTime: {
-          type: 'string',
-          description: '有邀请人时 = created_time',
-        },
-        importerId: {
-          type: 'integer',
-          format: 'int64',
-          description: '添加/导入人 id；无则省略',
-        },
-        importerName: { type: 'string', description: '导入人姓名；无则省略' },
-        importTime: {
-          type: 'string',
-          description: '有导入人时 = created_time',
         },
         expireTime: {
           type: 'string',
@@ -2948,15 +2910,11 @@ function buildAdmin() {
     },
     CourseUserListData: {
       type: 'object',
-      required: ['page', 'pageSize', 'total', 'accessValidityType', 'list'],
+      required: ['page', 'pageSize', 'total', 'list'],
       properties: {
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
         total: { type: 'integer', format: 'int64' },
-        accessValidityType: {
-          $ref: '#/components/schemas/AccessValidityType',
-          description: '课程当前售卖有效期类型，供前端到期列展示',
-        },
         list: {
           type: 'array',
           items: { $ref: '#/components/schemas/CourseUserListItem' },
@@ -5558,7 +5516,7 @@ function buildAdmin() {
           '分页查询本课学员（course_user）。可按昵称/用户ID/手机号关键词筛选。',
           'Query entitlementState 可选：valid（有效）/ expired（已到期）/ invalid（已失效）；省略则不过滤。',
           '计算态：entitlement_status=0 → invalid；否则当课程售卖为 days 或 fixed、且行上 entitlement_expire_time 非空且已过当前时间 → expired；其余为 valid（售卖长期不算已到期）。',
-          '响应含课程当前 accessValidityType，供前端到期列展示。',
+          '到期列展示用响应字段 expireDisplay（售卖长期为「长期」）。',
         ].join(''),
         operationId: 'listCourseUsers',
         security: bearer,
@@ -5861,7 +5819,7 @@ function buildAdmin() {
         summary: '导出课程学员 CSV',
         description: [
           '按与用户列表相同的筛选条件导出本课全部学员 CSV（UTF-8 BOM），不分页（不含 page/pageSize）。',
-          '列：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间。',
+          '列：学员、用户ID、手机号、标签、小节完成率、权益状态、权益获取方式、权益首次获取时间、权益到期时间。',
         ].join(''),
         operationId: 'exportCourseUsers',
         security: bearer,
@@ -5897,7 +5855,7 @@ function buildAdmin() {
           },
         ],
         responses: csvOk200(
-          '学员 CSV：学员、用户ID、手机号、标签、小节完成率、权益状态、所属邀请人、导入人、权益获取方式、权益首次获取时间、权益到期时间',
+          '学员 CSV：学员、用户ID、手机号、标签、小节完成率、权益状态、权益获取方式、权益首次获取时间、权益到期时间',
         ),
       },
     },
@@ -7320,7 +7278,7 @@ function buildLive() {
     },
     WatchAccessData: {
       type: 'object',
-      description: '观看售卖门禁状态（D90）',
+      description: '观看售卖门禁状态（D90/D115）。任意场次须先登录；加密再密码；指定用户再权益。',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         sellAlone: { type: 'boolean' },
@@ -7329,7 +7287,7 @@ function buildLive() {
           type: 'string',
           enum: ['ok', 'need_password', 'need_login', 'forbidden', 'expired'],
           description:
-            'ok 已放行 / need_password 需观看密码 / need_login 需登录 / forbidden 无观看权限 / expired 访问已过期',
+            'ok 已放行 / need_password 已登录但缺观看密码 / need_login 需登录（含免费场） / forbidden 无观看权限 / expired 访问已过期',
         },
         accessExpired: { type: 'boolean' },
         accessValidityType: { $ref: '#/components/schemas/AccessValidityType' },
@@ -7811,6 +7769,20 @@ function buildLive() {
         viewerId: { type: 'integer', format: 'int64' },
       },
     },
+    WatchAudienceSalesmanData: {
+      type: 'object',
+      description:
+        '本场业务员。读 activity_audience：优先 employee_inviter_id（员工邀请人），否则 importer_id（导入人）；无本场行或两字段皆空则 salesmanId 为 null。供观看页创建订单传订单中心 salesmanId。',
+      properties: {
+        salesmanId: {
+          type: 'integer',
+          format: 'int64',
+          nullable: true,
+          description:
+            '员工 sys_useraccount.rs_mainkey_id。有有效邀请人用邀请人；否则用导入人；皆无则为 null（前端创建订单时不传 salesmanId）。',
+        },
+      },
+    },
     WatchCourseEnrollRequest: {
       type: 'object',
       properties: {
@@ -7959,6 +7931,7 @@ function buildLive() {
     ApiResponseWatchReplayStart: { $ref: '#/components/schemas/WatchReplayStartData' },
     ApiResponseWatchReplayHeartbeat: { $ref: '#/components/schemas/WatchReplayHeartbeatData' },
     ApiResponseWatchAudienceAttribute: { $ref: '#/components/schemas/WatchAudienceAttributeData' },
+    ApiResponseWatchAudienceSalesman: { $ref: '#/components/schemas/WatchAudienceSalesmanData' },
     ApiResponseWatchCourseEnroll: { $ref: '#/components/schemas/WatchCourseEnrollData' },
     ApiResponseIntId: { $ref: '#/components/schemas/IdDataInt' },
 
@@ -8271,7 +8244,7 @@ function buildLive() {
         tags: ['观看'],
         summary: '观看售卖门禁状态',
         description:
-          '可匿名。可选观众 Authorization；加密已解锁则带 X-Activity-Access。返回 accessState（D90）。',
+          '可匿名探态。可选观众 Authorization；加密已解锁则带 X-Activity-Access。返回 accessState（D90/D115）。未登录含免费场亦为 need_login；真正拿 summary/records/tos 须登录。',
         operationId: 'getWatchAccess',
         security: [],
         parameters: [watchId, activityAccessHeader],
@@ -8283,9 +8256,9 @@ function buildLive() {
         tags: ['观看'],
         summary: '校验观看密码并发本场访问 JWT',
         description:
-          '仅 sellAlone=true 且 sellType=encrypted；密码错 → 400；已过期 → 403（D90）。',
+          '须已登录（观众 Authorization）；未登录 → 403「请先登录」。仅 sellAlone=true 且 sellType=encrypted；密码错 → 400；已过期 → 403（D90/D115）。',
         operationId: 'verifyWatchAccessPassword',
-        security: [],
+        security: viewerBearer,
         parameters: [watchId],
         requestBody: {
           required: true,
@@ -8347,8 +8320,10 @@ function buildLive() {
       get: {
         tags: ['观看'],
         summary: '本场商品元数据',
+        description:
+          '本场绑定 spu 快照（小黄车）。须过售卖门禁（含免费场须登录，D115），未过 → 403。活动不存在或已软删 → 400。',
         operationId: 'getWatchProducts',
-        parameters: [watchId],
+        parameters: [watchId, activityAccessHeader],
         responses: ok200('#/components/schemas/ApiResponseWatchProducts'),
       },
     },
@@ -8470,6 +8445,21 @@ function buildLive() {
           },
         },
         responses: ok200('#/components/schemas/ApiResponseIntId'),
+      },
+    },
+    '/api/v1/watch/audience/salesman/{id}': {
+      get: {
+        tags: ['用户运营'],
+        summary: '本场业务员查询',
+        description: [
+          '须观众 Authorization；观众 id 只从 JWT 取；无票 → 401。路径 {id}=活动 UUID；活动不存在/已软删 → 400。',
+          '读本场 activity_audience 当前观众行：优先 employee_inviter_id（员工邀请人），否则 importer_id（导入人）；无行或两字段皆空 → salesmanId=null。',
+          '观看页创建订单前调用，有值则把 salesmanId 字符串写入订单中心 POST …/viewer/order/create。',
+        ].join('\n'),
+        operationId: 'watchAudienceSalesman',
+        security: viewerBearer,
+        parameters: [watchId],
+        responses: ok200('#/components/schemas/ApiResponseWatchAudienceSalesman'),
       },
     },
     '/api/v1/watch/audience/attribute/{id}': {

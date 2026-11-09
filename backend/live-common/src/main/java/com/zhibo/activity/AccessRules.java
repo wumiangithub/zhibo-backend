@@ -3,8 +3,9 @@ package com.zhibo.activity;
 import java.time.LocalDateTime;
 
 /**
- * 售卖访问有效期（D90）。
+ * 观看访问规则（D90 / D115）。
  * {@code days} 仅在有 {@code liveActualEndTime} 后起算；未实际结束不卡天数。
+ * 观众登录一律由 {@code WatchAccessService} 强制；本类只管「售卖附加门禁」与有效期。
  */
 public final class AccessRules {
 
@@ -31,8 +32,8 @@ public final class AccessRules {
     }
 
     /**
-     * 本轮是否强制售卖门禁：单独售卖且类型为加密 / 指定用户。
-     * {@code free} / 存量 {@code paid} / {@code sellAlone=false} → 不拦。
+     * 登录之后是否还要过售卖附加门禁：单独售卖且类型为加密 / 指定用户。
+     * {@code free} / 存量 {@code paid} / {@code sellAlone=false} → 仅需观众登录（D115）。
      */
     public static boolean requiresGate(ActivityEntity activity) {
         if (activity == null || !Boolean.TRUE.equals(activity.getSellAlone())) {

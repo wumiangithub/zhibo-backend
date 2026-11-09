@@ -73,9 +73,13 @@ public class WatchController {
         return ApiResponse.ok(watchSdkService.sdk(id, nickname, resolvedViewer));
     }
 
-    /** 本场关联商品快照（小黄车）；无绑定 → 空 list。 */
+    /** 本场关联商品快照（小黄车）；须过售卖门禁；无绑定 → 空 list。 */
     @GetMapping("/products/{id}")
-    public ApiResponse<WatchProductListResponse> products(@PathVariable String id) {
+    public ApiResponse<WatchProductListResponse> products(
+            @PathVariable String id,
+            HttpServletRequest request) {
+        Long viewerId = WatchAccessHeaders.tryViewerId(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchService.listProducts(id));
     }
 

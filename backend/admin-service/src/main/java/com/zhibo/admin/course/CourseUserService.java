@@ -101,7 +101,6 @@ public class CourseUserService {
         List<CourseUserEntity> pageRows = filtered.subList(from, to);
 
         Map<Long, ViewerEntity> viewers = loadViewers(pageRows);
-        Map<Long, String> employeeNames = loadEmployeeNames(pageRows);
         Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(pageRows);
         long totalLessons = catalogNodeRepository.countActiveByCourseIdAndNodeType(
                 prepared.courseId(), CourseCatalogNodeType.LESSON);
@@ -110,13 +109,11 @@ public class CourseUserService {
         response.setPage(p);
         response.setPageSize(size);
         response.setTotal(total);
-        response.setAccessValidityType(prepared.accessType());
         for (CourseUserEntity row : pageRows) {
             long completed = completedByViewer.getOrDefault(row.getViewerId(), 0L);
             response.getList().add(toItem(
                     row,
                     viewers.get(row.getViewerId()),
-                    employeeNames,
                     tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
                     prepared.accessType(),
                     prepared.now(),
@@ -132,20 +129,18 @@ public class CourseUserService {
         PreparedList prepared = prepareList(courseId, keywordType, keyword, entitlementState);
         List<CourseUserEntity> rows = prepared.rows();
         Map<Long, ViewerEntity> viewers = loadViewers(rows);
-        Map<Long, String> employeeNames = loadEmployeeNames(rows);
         Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(rows);
         long totalLessons = catalogNodeRepository.countActiveByCourseIdAndNodeType(
                 prepared.courseId(), CourseCatalogNodeType.LESSON);
         Map<Long, Long> completedByViewer = loadCompletedLessonCounts(prepared.courseId(), rows);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("学员,用户ID,手机号,标签,小节完成率,权益状态,所属邀请人,导入人,权益获取方式,权益首次获取时间,权益到期时间\n");
+        sb.append("学员,用户ID,手机号,标签,小节完成率,权益状态,权益获取方式,权益首次获取时间,权益到期时间\n");
         for (CourseUserEntity row : rows) {
             long completed = completedByViewer.getOrDefault(row.getViewerId(), 0L);
             CourseUserListItem item = toItem(
                     row,
                     viewers.get(row.getViewerId()),
-                    employeeNames,
                     tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
                     prepared.accessType(),
                     prepared.now(),
@@ -154,7 +149,7 @@ public class CourseUserService {
             String phone = viewer != null && viewer.getPhone() != null ? viewer.getPhone() : "";
             sb.append(csvCell(item.getNickname()))
                     .append(',')
-                    .append(item.getViewerId() == null ? "" : item.getViewerId())
+                    .append(row.getViewerId() == null ? "" : row.getViewerId())
                     .append(',')
                     .append(csvCell(phone))
                     .append(',')
@@ -163,10 +158,6 @@ public class CourseUserService {
                     .append(String.format(Locale.ROOT, "%.1f%%", item.getChapterCompletionRate()))
                     .append(',')
                     .append(csvCell(item.getEntitlementStateLabel()))
-                    .append(',')
-                    .append(csvCell(item.getInviterDisplayName()))
-                    .append(',')
-                    .append(csvCell(item.getImporterName()))
                     .append(',')
                     .append(csvCell(item.getAcquireWayLabel()))
                     .append(',')
@@ -585,7 +576,6 @@ public class CourseUserService {
     private CourseUserListItem toItem(
             CourseUserEntity row,
             ViewerEntity viewer,
-            Map<Long, String> employeeNames,
             List<TagRef> tags,
             String accessType,
             LocalDateTime now,
@@ -597,7 +587,6 @@ public class CourseUserService {
         String created = row.getCreatedTime() == null ? null : TIME.format(row.getCreatedTime());
         CourseUserListItem item = new CourseUserListItem();
         item.setId(row.getId());
-        item.setViewerId(row.getViewerId());
         if (viewer != null) {
             item.setNickname(ViewerAdminService.displayNickname(viewer));
         } else {
@@ -607,7 +596,6 @@ public class CourseUserService {
         item.setPhoneMasked(
                 viewer == null ? null : ViewerAdminService.maskPhone(viewer.getPhone()));
         for (TagRef ref : tags) {
-            item.getTagIds().add(ref.tagId());
             item.getTagLabels().add(ref.name());
         }
         item.setChapterCompletionRate(chapterCompletionRate);
@@ -615,23 +603,8 @@ public class CourseUserService {
         item.setEntitlementState(state);
         item.setEntitlementStateLabel(CourseEntitlementSupport.stateLabel(state));
         String way = row.getAcquireWay() == null ? "purchase" : row.getAcquireWay();
-        item.setAcquireWay(way);
         item.setAcquireWayLabel(CourseEntitlementSupport.acquireWayLabel(way));
         item.setFirstAcquireTime(created);
-        item.setEmployeeInviterId(row.getEmployeeInviterId());
-        if (row.getEmployeeInviterId() != null) {
-            item.setInviterDisplayName(employeeNames.getOrDefault(
-                    row.getEmployeeInviterId(), "员工" + row.getEmployeeInviterId()));
-            // 邀请加入时间 = created_time
-            item.setInviteTime(created);
-        }
-        item.setImporterId(row.getImporterId());
-        if (row.getImporterId() != null) {
-            item.setImporterName(employeeNames.getOrDefault(
-                    row.getImporterId(), "员工" + row.getImporterId()));
-            // 导入时间 = created_time
-            item.setImportTime(created);
-        }
         item.setExpireTime(formattedExpire);
         item.setExpireDisplay(CourseEntitlementSupport.expireDisplay(accessType, formattedExpire));
         return item;
@@ -645,26 +618,6 @@ public class CourseUserService {
         Map<Long, ViewerEntity> map = new HashMap<>();
         for (ViewerEntity v : viewerRepository.findAllById(ids)) {
             map.put(v.getId(), v);
-        }
-        return map;
-    }
-
-    private Map<Long, String> loadEmployeeNames(List<CourseUserEntity> rows) {
-        Set<Long> ids = new HashSet<>();
-        for (CourseUserEntity row : rows) {
-            if (row.getEmployeeInviterId() != null) {
-                ids.add(row.getEmployeeInviterId());
-            }
-            if (row.getImporterId() != null) {
-                ids.add(row.getImporterId());
-            }
-        }
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, String> map = new HashMap<>();
-        for (SysUserAccountEntity u : userRepository.findAllById(ids)) {
-            map.put(u.getId(), u.getUserName());
         }
         return map;
     }
@@ -838,15 +791,6 @@ public class CourseUserService {
             throw new IllegalArgumentException("entitlementState 无效");
         }
         return s;
-    }
-
-    private static CourseUserListResponse emptyResponse(int page, int pageSize, String accessType) {
-        CourseUserListResponse response = new CourseUserListResponse();
-        response.setPage(page);
-        response.setPageSize(pageSize);
-        response.setTotal(0);
-        response.setAccessValidityType(accessType == null ? "long" : accessType);
-        return response;
     }
 
     private Map<Long, List<TagRef>> loadTagsByViewer(List<CourseUserEntity> rows) {
