@@ -7592,7 +7592,8 @@ function buildLive() {
         type: {
           type: 'string',
           enum: ['phone', 'pc'],
-          description: '设备类型，传给用户中心。小程序与手机网页填 phone；电脑网页填 pc。',
+          description:
+            'phone 小程序与手机网页 / pc 电脑网页。传给用户中心的设备类型。',
         },
         agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意用户协议和隐私协议。' },
       },
@@ -7606,7 +7607,8 @@ function buildLive() {
         type: {
           type: 'string',
           enum: ['phone', 'pc'],
-          description: '设备类型，传给用户中心。小程序与手机网页填 phone；电脑网页填 pc。',
+          description:
+            'phone 小程序与手机网页 / pc 电脑网页。传给用户中心的设备类型。',
         },
         agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意用户协议和隐私协议。' },
       },

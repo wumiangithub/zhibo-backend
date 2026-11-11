@@ -30,7 +30,7 @@ class ViewerAuthControllerTest {
     void setUp() {
         viewerAuthService = mock(ViewerAuthService.class);
         environment = mock(Environment.class);
-        when(environment.acceptsProfiles(Profiles.of("local"))).thenReturn(true);
+        when(environment.acceptsProfiles(Profiles.of("local", "test"))).thenReturn(true);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders.standaloneSetup(new ViewerAuthController(viewerAuthService, environment))
@@ -75,8 +75,8 @@ class ViewerAuthControllerTest {
     }
 
     @Test
-    void devPhoneLogin_nonLocal_returns404WithoutCallingService() throws Exception {
-        when(environment.acceptsProfiles(Profiles.of("local"))).thenReturn(false);
+    void devPhoneLogin_prod_returns404WithoutCallingService() throws Exception {
+        when(environment.acceptsProfiles(Profiles.of("local", "test"))).thenReturn(false);
 
         mockMvc.perform(post("/api/v1/viewer/auth/dev-phone-login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -88,7 +88,7 @@ class ViewerAuthControllerTest {
     }
 
     @Test
-    void devPhoneLogin_local_ok() throws Exception {
+    void devPhoneLogin_localOrTest_ok() throws Exception {
         ViewerUserResponse user = new ViewerUserResponse();
         user.setUid(9L);
         user.setHasPhone(true);

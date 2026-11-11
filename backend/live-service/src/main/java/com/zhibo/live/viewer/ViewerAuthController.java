@@ -41,12 +41,12 @@ public class ViewerAuthController {
     }
 
     /**
-     * 仅 spring profile=local：明文手机号登录 / 自动注册，给开发造号。
-     * test / prod 一律业务 404，不暴露能力。
+     * spring profile=local / test：明文手机号登录 / 自动注册，给开发与测试造号。
+     * prod 一律业务 404，不暴露能力。
      */
     @PostMapping("/dev-phone-login")
     public ApiResponse<ViewerAuthResponse> devPhoneLogin(@Valid @RequestBody DevPhoneLoginRequest request) {
-        if (!environment.acceptsProfiles(Profiles.of("local"))) {
+        if (!environment.acceptsProfiles(Profiles.of("local", "test"))) {
             throw new ViewerAuthException(404, "接口不存在");
         }
         return ApiResponse.ok(viewerAuthService.devPhoneLogin(request));

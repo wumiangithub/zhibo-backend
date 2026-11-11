@@ -59,7 +59,7 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
                 || path.startsWith("/api/v1/watch/comments/"));
     }
 
-    /** 白名单 POST：微信一键、手机号授权、local 明文手机号、刷新。{@code /user-info} 不在里面。 */
+    /** 白名单 POST：微信一键、手机号授权、local/test 明文手机号、刷新。{@code /user-info} 不在里面。 */
     static boolean isWhitelisted(HttpServletRequest request) {
         if (request == null || !"POST".equalsIgnoreCase(request.getMethod())) {
             return false;

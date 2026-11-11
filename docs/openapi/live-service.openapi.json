@@ -793,7 +793,7 @@
           "观看"
         ],
         "summary": "观看售卖门禁状态",
-        "description": "可匿名。可选观众 Authorization；加密已解锁则带 X-Activity-Access。返回 accessState（D90）。",
+        "description": "可匿名探态。可选观众 Authorization；加密已解锁则带 X-Activity-Access。返回 accessState（D90/D115）。未登录含免费场亦为 need_login；真正拿 summary/records/tos 须登录。",
         "operationId": "getWatchAccess",
         "security": [],
         "parameters": [
@@ -830,9 +830,13 @@
           "观看"
         ],
         "summary": "校验观看密码并发本场访问 JWT",
-        "description": "仅 sellAlone=true 且 sellType=encrypted；密码错 → 400；已过期 → 403（D90）。",
+        "description": "须已登录（观众 Authorization）；未登录 → 403「请先登录」。仅 sellAlone=true 且 sellType=encrypted；密码错 → 400；已过期 → 403（D90/D115）。",
         "operationId": "verifyWatchAccessPassword",
-        "security": [],
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/WatchActivityId"
@@ -893,13 +897,13 @@
             "description": "默认「观众」"
           },
           {
-            "name": "viewerId",
+            "name": "uid",
             "in": "query",
             "schema": {
               "type": "integer",
               "format": "int64"
             },
-            "description": "观众数字 id；有则 email 为 {id}@qkzb.com"
+            "description": "用户中心 uid；有则 email 为 {uid}@qkzb.com"
           }
         ],
         "responses": {
@@ -958,7 +962,7 @@
           "观看"
         ],
         "summary": "观看 SDK 签名与初始化载荷",
-        "description": "旧路径 GET /api/v1/watch/sdk/{id} 已删除。\nQuery 仅 id + 可选 nickname；viewerId 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。\n仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。\n不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。\n签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。\n头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={viewerId}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。",
+        "description": "旧路径 GET /api/v1/watch/sdk/{id} 已删除。\nQuery 仅 id + 可选 nickname；uid 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。\n仅返回 id / provider / uid / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。\n不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。\n签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。\n头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={uid}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。",
         "operationId": "getWatchSdkSign",
         "security": [
           {
@@ -986,7 +990,7 @@
               "type": "string",
               "maxLength": 50
             },
-            "description": "默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；viewerId 只从 Authorization 解析（D96）"
+            "description": "默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；uid 只从 Authorization 解析（D96）"
           },
           {
             "name": "X-Activity-Access",
@@ -1018,10 +1022,20 @@
           "观看"
         ],
         "summary": "本场商品元数据",
+        "description": "本场绑定 spu 快照（小黄车）。须过售卖门禁（含免费场须登录，D115），未过 → 403。活动不存在或已软删 → 400。",
         "operationId": "getWatchProducts",
         "parameters": [
           {
             "$ref": "#/components/parameters/WatchActivityId"
+          },
+          {
+            "name": "X-Activity-Access",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）"
           }
         ],
         "responses": {
@@ -1352,13 +1366,80 @@
         }
       }
     },
+    "/api/v1/dicts/data/{dictDm}": {
+      "get": {
+        "tags": [
+          "系统"
+        ],
+        "summary": "按字典代码查询字典项",
+        "description": "公开，不需观众 JWT。先查本库 sys_dict_type（dict_dm=路径参数且 rs_status=1）取类型主键，再查 sys_dict_data（dict_id=类型主键且 rs_status=1），按 rs_dispindex、主键升序返回。\n类型不存在或已软删 → 400「字典不存在」。\n观看支付页每次进入应拉 dictDm=pay_channel，用 list[].label→list[].value 映射订单中心 prepay 的 payChannel（如 wx_wap→4、wx_lite→6、alipay_wap→2）。",
+        "operationId": "getDictData",
+        "parameters": [
+          {
+            "name": "dictDm",
+            "in": "path",
+            "required": true,
+            "description": "字典代码，对应 sys_dict_type.dict_dm。例：pay_channel",
+            "schema": {
+              "type": "string",
+              "maxLength": 50,
+              "example": "pay_channel"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseDictData"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/watch/audience/salesman/{id}": {
+      "get": {
+        "tags": [
+          "用户运营"
+        ],
+        "summary": "本场业务员查询",
+        "description": "须观众 Authorization；观众 id 只从 JWT 取；无票 → 401。路径 {id}=活动 UUID；活动不存在/已软删 → 400。\n读本场 activity_audience 当前观众行：仅 employee_inviter_id → sys_useraccount.yhid → hr_uimsyhxx.identifier + 在职岗位最小 id 的 bmid；无邀请人或档案缺失 → salesmanId=null。不回退 importer_id。\n观看页创建订单前调用，有值则把 salesmanId / salesmanDeptId 写入订单中心 POST …/viewer/order/create。",
+        "operationId": "watchAudienceSalesman",
+        "security": [
+          {
+            "BearerViewer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WatchActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWatchAudienceSalesman"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/watch/audience/attribute/{id}": {
       "post": {
         "tags": [
           "用户运营"
         ],
         "summary": "邀请归因",
-        "description": "须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 viewerId；无票 → 401。\n区分邀请人类型 inviterKind：employee 员工 / audience 观众。\nemployee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。\naudience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。\n缺省 inviterKind=employee。",
+        "description": "须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 uid；无票 → 401。\n区分邀请人类型 inviterKind：employee 员工 / audience 观众。\nemployee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。\naudience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。\n缺省 inviterKind=employee。",
         "operationId": "watchAudienceAttribute",
         "security": [
           {
@@ -1400,7 +1481,7 @@
           "用户运营"
         ],
         "summary": "课程分享链进房 enroll",
-        "description": "路径 {id}=课程 UUID。须观众 JWT；viewerId 只从 JWT 取，Body 不接受 viewerId。无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。课程不存在/已软删或观众不存在 → 400；无票 → 401。",
+        "description": "路径 {id}=课程 UUID。须观众 JWT；uid 只从 JWT 取，Body 不接受 uid。无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。课程不存在/已软删或观众不存在 → 400；无票 → 401。",
         "operationId": "watchCourseEnroll",
         "security": [
           {
@@ -2344,11 +2425,11 @@
         "properties": {
           "account": {
             "type": "string",
-            "description": "第三方用户唯一标识（观众=数字 viewerId）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）"
+            "description": "第三方用户唯一标识（观众=数字 uid）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）"
           },
           "email": {
             "type": "string",
-            "description": "{viewerId}@qkzb.com，参与签名；new VhallSDK 必须用这份；库：VARCHAR(128)",
+            "description": "{uid}@qkzb.com，参与签名；new VhallSDK 必须用这份；库：VARCHAR(128)",
             "maxLength": 128
           },
           "username": {
@@ -2358,7 +2439,7 @@
           },
           "head": {
             "type": "string",
-            "description": "对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 viewerId（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）"
+            "description": "对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 uid（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）"
           },
           "webinarId": {
             "type": "string",
@@ -2385,7 +2466,7 @@
       },
       "WatchSummaryData": {
         "type": "object",
-        "description": "观看页活动摘要 / 页面壳（D95）：标题、态、时间、回放开关与有效期；全部取本库 Activity，不含 SDK 签名",
+        "description": "观看页活动摘要 / 页面壳（D95）：标题、封面、态、时间、回放开关与有效期；全部取本库 Activity，不含 SDK 签名",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/BusinessUuid",
@@ -2416,6 +2497,12 @@
             "type": "string",
             "description": "本库活动标题；库：VARCHAR(64)",
             "maxLength": 64
+          },
+          "coverUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "活动详情封面，本库 activity.cover_url；无封面时不输出。结束页可展示；库：VARCHAR(2048)",
+            "maxLength": 2048
           },
           "state": {
             "$ref": "#/components/schemas/ActivityState",
@@ -2515,7 +2602,7 @@
       },
       "WatchSdkData": {
         "type": "object",
-        "description": "观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / viewerId / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 viewerId 来自观众 JWT",
+        "description": "观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / uid / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 uid 来自观众 JWT",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/BusinessUuid",
@@ -2547,10 +2634,10 @@
             "description": "与 sdk.username 同值（身份回显）；库：VARCHAR(64)",
             "maxLength": 64
           },
-          "viewerId": {
+          "uid": {
             "type": "integer",
             "format": "int64",
-            "description": "观众数字 id（与 sdk.email 一致）；库：BIGINT"
+            "description": "用户中心 uid（与 sdk.email 本地部分一致）；库：BIGINT"
           },
           "sdk": {
             "$ref": "#/components/schemas/VhallSdkPayload",
@@ -2560,7 +2647,7 @@
       },
       "WatchAccessData": {
         "type": "object",
-        "description": "观看售卖门禁状态（D90）",
+        "description": "观看售卖门禁状态（D90/D115）。任意场次须先登录；加密再密码；指定用户再权益。",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/BusinessUuid",
@@ -2583,7 +2670,7 @@
               "forbidden",
               "expired"
             ],
-            "description": "ok 已放行 / need_password 需观看密码 / need_login 需登录 / forbidden 无观看权限 / expired 访问已过期",
+            "description": "ok 已放行 / need_password 已登录但缺观看密码 / need_login 需登录（含免费场） / forbidden 无观看权限 / expired 访问已过期",
             "x-apifox-enum": [
               {
                 "value": "ok",
@@ -2592,13 +2679,13 @@
               },
               {
                 "value": "need_password",
-                "name": "需观看密码",
-                "description": "需观看密码"
+                "name": "已登录但缺观看密码",
+                "description": "已登录但缺观看密码"
               },
               {
                 "value": "need_login",
-                "name": "需登录",
-                "description": "需登录"
+                "name": "需登录（含免费场）",
+                "description": "需登录（含免费场）"
               },
               {
                 "value": "forbidden",
@@ -3090,10 +3177,19 @@
       "ViewerUserInfo": {
         "type": "object",
         "properties": {
-          "id": {
+          "uid": {
             "type": "integer",
             "format": "int64",
-            "description": "主键 id；库：BIGINT"
+            "description": "用户中心 uid（业务用户主键）。JWT sub、业务表 uid、订单中心 third_user_id 均取此值。未同步（如仅 local 明文手机号登录）时省略。本站自增 viewer.id 不对外。；库：BIGINT"
+          },
+          "username": {
+            "type": "string",
+            "description": "同步自用户中心 LoginVo.username。订单中心 JWT claim username 取此值。本站展示昵称仍用 nickname。未同步时省略。；库：VARCHAR(50)",
+            "maxLength": 50
+          },
+          "miniOpenid": {
+            "type": "string",
+            "description": "微信小程序 openid（库列 mini_openid）。有则返回，供小程序收银台 wx_lite prepay 的 body.openId；local 明文造号等无凭证时省略。不是展示字段，勿当昵称。"
           },
           "hasPhone": {
             "type": "boolean",
@@ -3148,24 +3244,45 @@
         "type": "object",
         "required": [
           "code",
+          "type",
           "agreed"
         ],
         "properties": {
           "code": {
             "type": "string",
-            "description": "业务码：0 成功；400/401/403/500/501/502…"
+            "description": "wx.login 返回的一次性 code。"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "pc"
+            ],
+            "description": "phone 小程序与手机网页 / pc 电脑网页。传给用户中心的设备类型。",
+            "x-apifox-enum": [
+              {
+                "value": "phone",
+                "name": "小程序与手机网页",
+                "description": "小程序与手机网页"
+              },
+              {
+                "value": "pc",
+                "name": "电脑网页",
+                "description": "电脑网页"
+              }
+            ]
           },
           "agreed": {
             "type": "boolean",
             "enum": [
               true
             ],
-            "description": "true 已勾选同意；库：TINYINT(1)",
+            "description": "true 已勾选同意用户协议和隐私协议。；库：TINYINT(1)",
             "x-apifox-enum": [
               {
                 "value": true,
-                "name": "已勾选同意",
-                "description": "已勾选同意"
+                "name": "已勾选同意用户协议和隐私协议",
+                "description": "已勾选同意用户协议和隐私协议"
               }
             ]
           }
@@ -3176,28 +3293,49 @@
         "required": [
           "loginCode",
           "phoneCode",
+          "type",
           "agreed"
         ],
         "properties": {
           "loginCode": {
             "type": "string",
-            "description": "wx.login 临时 code"
+            "description": "wx.login 的 code，用来换 openid/unionid。"
           },
           "phoneCode": {
             "type": "string",
-            "description": "getPhoneNumber 返回 code"
+            "description": "getPhoneNumber 的 detail.code。"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "phone",
+              "pc"
+            ],
+            "description": "phone 小程序与手机网页 / pc 电脑网页。传给用户中心的设备类型。",
+            "x-apifox-enum": [
+              {
+                "value": "phone",
+                "name": "小程序与手机网页",
+                "description": "小程序与手机网页"
+              },
+              {
+                "value": "pc",
+                "name": "电脑网页",
+                "description": "电脑网页"
+              }
+            ]
           },
           "agreed": {
             "type": "boolean",
             "enum": [
               true
             ],
-            "description": "true 已勾选同意；库：TINYINT(1)",
+            "description": "true 已勾选同意用户协议和隐私协议。；库：TINYINT(1)",
             "x-apifox-enum": [
               {
                 "value": true,
-                "name": "已勾选同意",
-                "description": "已勾选同意"
+                "name": "已勾选同意用户协议和隐私协议",
+                "description": "已勾选同意用户协议和隐私协议"
               }
             ]
           }
@@ -3620,12 +3758,12 @@
         "required": [
           "inviterId"
         ],
-        "description": "邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 viewerId。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）",
+        "description": "邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 uid。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）",
         "properties": {
           "inviterId": {
             "type": "integer",
             "format": "int64",
-            "description": "邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 viewer.id（当前不落库）；库：BIGINT"
+            "description": "邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 uid（当前不落库）；库：BIGINT"
           },
           "inviterKind": {
             "type": "string",
@@ -3657,10 +3795,72 @@
             "format": "int64",
             "description": "主键 id；库：BIGINT"
           },
-          "viewerId": {
+          "uid": {
             "type": "integer",
             "format": "int64",
-            "description": "观众 id（viewer 表主键）；库：BIGINT"
+            "description": "用户中心 uid（业务用户主键）；库：BIGINT"
+          }
+        }
+      },
+      "WatchAudienceSalesmanData": {
+        "type": "object",
+        "description": "本场业务员。读 activity_audience：仅 employee_inviter_id（员工邀请人）经账号 yhid 查 hr_uimsyhxx.identifier，并取在职岗位 id 最小一条的 hr_uimsyhgwxx.bmid 作 salesmanDeptId；无邀请人或档案缺失则 salesmanId 为 null。不回退 importer_id。供观看页创建订单传订单中心。",
+        "properties": {
+          "salesmanId": {
+            "type": "string",
+            "nullable": true,
+            "description": "hr_uimsyhxx.identifier（UUID 字符串）。有有效员工邀请人且档案存在时返回；无邀请人或查不到则为 null（前端创建订单时不传 salesmanId）。不是 sys_useraccount.rs_mainkey_id。",
+            "example": "a0d9a8a1-a6d8-4978-8cb4-e7e86fba9c39"
+          },
+          "salesmanDeptId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "hr_uimsyhgwxx.bmid（在职岗位取岗位主键最小一条）。有 identifier 但无岗位时可为 null；前端仅在有正整数时写入订单中心 salesmanDeptId。；库：BIGINT",
+            "example": 94
+          }
+        }
+      },
+      "DictDataItem": {
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "字典标签，对应 sys_dict_data.dict_label。例：wx_wap"
+          },
+          "value": {
+            "type": "integer",
+            "description": "字典键值，对应 sys_dict_data.dict_value。例：4；库：INT"
+          }
+        }
+      },
+      "DictData": {
+        "type": "object",
+        "description": "系统字典。先查 sys_dict_type（dict_dm + rs_status=1），再查 sys_dict_data（dict_id + rs_status=1），按 rs_dispindex、主键升序",
+        "required": [
+          "dictDm",
+          "dictName",
+          "list"
+        ],
+        "properties": {
+          "dictDm": {
+            "type": "string",
+            "description": "字典代码，回显路径参数。例：pay_channel"
+          },
+          "dictName": {
+            "type": "string",
+            "description": "字典名称，对应 sys_dict_type.dict_name。例：支付渠道"
+          },
+          "list": {
+            "type": "array",
+            "description": "启用中的字典项；无项时为空数组",
+            "items": {
+              "$ref": "#/components/schemas/DictDataItem"
+            }
           }
         }
       },
@@ -3682,7 +3882,7 @@
             "format": "int64",
             "description": "course_user 行 id；库：BIGINT"
           },
-          "viewerId": {
+          "uid": {
             "type": "integer",
             "format": "int64",
             "description": "观众 id；库：BIGINT"
@@ -4033,6 +4233,12 @@
                     "description": "标题；库：VARCHAR(64)",
                     "maxLength": 64
                   },
+                  "coverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "封面图 URL；库：VARCHAR(2048)",
+                    "maxLength": 2048
+                  },
                   "state": {
                     "$ref": "#/components/schemas/ActivityState",
                     "description": "0 全部(列表筛) / 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放",
@@ -4142,7 +4348,7 @@
             "type": "object",
             "properties": {
               "data": {
-                "description": "中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 viewerId；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签",
+                "description": "中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 uid；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签",
                 "type": "object",
                 "properties": {
                   "id": {
@@ -4526,6 +4732,22 @@
           }
         ]
       },
+      "ApiResponseWatchAudienceSalesman": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/WatchAudienceSalesmanData"
+              }
+            }
+          }
+        ]
+      },
       "ApiResponseWatchCourseEnroll": {
         "allOf": [
           {
@@ -4537,6 +4759,22 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/WatchCourseEnrollData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseDictData": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/DictData"
               }
             }
           }

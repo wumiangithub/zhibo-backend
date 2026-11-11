@@ -99,9 +99,9 @@ public class ViewerAuthService {
     }
 
     /**
-     * 仅 local 环境调用：按明文手机号登录；无账号则自动注册（无 mini_openid）。
+     * local / test 环境调用：按明文手机号登录；无账号则自动注册（无 mini_openid）。
      * 不调用户中心：可登录观看，但 JWT 无订单中心可用的 uid/username。
-     * Controller 须先按 spring profile=local 拦掉 test/prod。
+     * Controller 须先按 spring profile=local|test 拦掉 prod。
      */
     @Transactional
     public ViewerAuthResponse devPhoneLogin(DevPhoneLoginRequest request) {

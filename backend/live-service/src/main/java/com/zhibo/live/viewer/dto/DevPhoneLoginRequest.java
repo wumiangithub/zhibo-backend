@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
- * 仅 local 环境：明文手机号登录 / 自动注册。
+ * local / test 环境：明文手机号登录 / 自动注册。
  * 不要在 test / prod 暴露对应接口。
  */
 @Data

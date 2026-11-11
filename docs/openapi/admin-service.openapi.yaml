@@ -2195,7 +2195,7 @@ paths:
       tags:
         - 课程
       summary: 单个添加学员
-      description: "向本课添加一名学员。Body 须二选一提供 phone 或 viewerId；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。"
+      description: "向本课添加一名学员。Body 须二选一提供 phone 或 uid；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。"
       operationId: createCourseUser
       security:
         - BearerAuth:
@@ -3547,7 +3547,7 @@ paths:
       tags:
         - 直播中控台
       summary: 中控台发送优惠券
-      description: "中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，viewer_id 空，nickname 为当前员工昵称）。发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。"
+      description: "中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，uid 空，nickname 为当前员工昵称）。发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。"
       operationId: sendConsoleCoupon
       security:
         - BearerAuth:
@@ -3717,7 +3717,7 @@ paths:
           schema:
             type: integer
             format: int64
-          description: viewer.id
+          description: 用户中心 uid
       requestBody:
         required: true
         content:
@@ -3747,7 +3747,7 @@ paths:
           schema:
             type: integer
             format: int64
-          description: viewer.id
+          description: 用户中心 uid
       requestBody:
         required: true
         content:
@@ -7605,8 +7605,8 @@ components:
       properties:
         phone:
           type: string
-          description: 与 viewerId 二选一
-        viewerId:
+          description: 与 uid 二选一
+        uid:
           type: integer
           format: int64
           description: 与 phone 二选一；库：BIGINT
@@ -7620,10 +7620,10 @@ components:
           type: integer
           format: int64
           description: 主键 id；库：BIGINT
-        viewerId:
+        uid:
           type: integer
           format: int64
-          description: 观众 id（viewer 表主键）；库：BIGINT
+          description: 用户中心 uid（业务用户主键）；库：BIGINT
         created:
           type: boolean
           description: true 新建；false 已有行；库：TINYINT(1)
@@ -7914,10 +7914,10 @@ components:
           type: integer
           format: int64
           description: 名单行 id；库：BIGINT
-        viewerId:
+        uid:
           type: integer
           format: int64
-          description: 观众 id（viewer 表主键）；库：BIGINT
+          description: 用户中心 uid（业务用户主键）；库：BIGINT
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -8004,8 +8004,8 @@ components:
       properties:
         phone:
           type: string
-          description: 与 viewerId 二选一
-        viewerId:
+          description: 与 uid 二选一
+        uid:
           type: integer
           format: int64
           description: 与 phone 二选一；库：BIGINT
@@ -8016,10 +8016,10 @@ components:
           type: integer
           format: int64
           description: 主键 id；库：BIGINT
-        viewerId:
+        uid:
           type: integer
           format: int64
-          description: 观众 id（viewer 表主键）；库：BIGINT
+          description: 用户中心 uid（业务用户主键）；库：BIGINT
         created:
           type: boolean
           description: 是否新建；库：TINYINT(1)
@@ -8138,10 +8138,10 @@ components:
           type: integer
           format: int64
           description: 主键 id；库：BIGINT
-        viewerId:
+        uid:
           type: integer
           format: int64
-          description: 观众 id（viewer 表主键）；库：BIGINT
+          description: 用户中心 uid（业务用户主键）；库：BIGINT
         guestId:
           type: string
           description: 本站生成的游客 id；库：VARCHAR(64)
@@ -8194,10 +8194,10 @@ components:
     ViewerListItem:
       type: object
       properties:
-        id:
+        uid:
           type: integer
           format: int64
-          description: 主键 id；库：BIGINT
+          description: 用户中心 uid（业务用户主键）；库：BIGINT
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -8373,10 +8373,10 @@ components:
     ViewerBlacklistUpdateData:
       type: object
       properties:
-        id:
+        uid:
           type: integer
           format: int64
-          description: 主键 id；库：BIGINT
+          description: 用户中心 uid；库：BIGINT
         banComment:
           type: integer
           enum:
@@ -8443,10 +8443,10 @@ components:
     ViewerTagsUpdateData:
       type: object
       properties:
-        id:
+        uid:
           type: integer
           format: int64
-          description: 主键 id；库：BIGINT
+          description: 用户中心 uid；库：BIGINT
         tagIds:
           type: array
           items:
@@ -8461,10 +8461,10 @@ components:
     ViewerLearnStatsSummaryItem:
       type: object
       properties:
-        id:
+        uid:
           type: integer
           format: int64
-          description: 主键 id；库：BIGINT
+          description: 用户中心 uid；库：BIGINT
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -8518,7 +8518,7 @@ components:
       type: object
       required:
         - id
-        - viewerId
+        - uid
         - nickname
         - tagIds
         - tagLabels
@@ -8531,10 +8531,10 @@ components:
           type: integer
           format: int64
           description: course_lesson_progress.id；库：BIGINT
-        viewerId:
+        uid:
           type: integer
           format: int64
-          description: viewer.id；库：BIGINT
+          description: 用户中心 uid；库：BIGINT
         nickname:
           type: string
           description: 观众展示昵称；库：VARCHAR(64)
