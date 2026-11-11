@@ -7,8 +7,9 @@ info:
     - admin-service：`http://127.0.0.1:8081`
     - live-service：`http://127.0.0.1:8082`
     
-    契约：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。
+    契约：`zhibo-shared/docs/API约定.md`；业务码与枚举见 `zhibo-shared/docs/错误码与枚举.md`（D58/D61）。
     本文件亦是正式后端按文档反向实现接口与建表/校验的权威输入之一。
+    响应信封业务码 schema：`BusinessResponseCode`。
     分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。
     
     导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。
@@ -5311,6 +5312,44 @@ components:
       maxLength: 32
       pattern: "^[0-9a-f]{32}$"
       description: 本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)
+    BusinessResponseCode:
+      type: integer
+      enum:
+        - 0
+        - 400
+        - 401
+        - 403
+        - 404
+        - 500
+        - 501
+        - 502
+      description: JSON 响应信封的业务结果码。HTTP 多为 200，以 body.code 判断成败；仅 0 为成功。调用微吼等云服务失败时还可能透传对方整型业务码（不在本 enum 内，见 zhibo-shared/docs/错误码与枚举.md）。
+      example: 0
+      x-apifox-enum:
+        - value: 0
+          name: 成功
+          description: "请求成功；仅当 code===0 时 data 有效"
+        - value: 400
+          name: 参数或校验失败
+          description: 缺参、格式错误、业务规则不允许、验证码或第三方授权失败等
+        - value: 401
+          name: 未登录或令牌无效
+          description: 缺 Bearer、access 过期或验签失败、误用 refresh 作为 access
+        - value: 403
+          name: 无权限或账号/门禁拒绝
+          description: 员工或观众停用；观看售卖门禁未放行
+        - value: 404
+          name: 不存在或未开放
+          description: 资源不存在；仅 local/test 的接口在其它环境返回接口不存在
+        - value: 500
+          name: 服务器错误
+          description: 未处理异常；登录或 JWT 组件未配置导致暂不可用
+        - value: 501
+          name: 服务商未接入
+          description: provider 非 vhall 或该能力要求的服务商尚未接入
+        - value: 502
+          name: 上游云失败
+          description: 火山 STS/TOS 等失败；微吼调用无对方业务码时的兜底
     ApiResponseBase:
       type: object
       required:
@@ -5318,13 +5357,37 @@ components:
         - msg
       properties:
         code:
-          type: integer
-          description: "0 成功；400/401/403/500/501/502…；库：INT"
-          example: 0
+          $ref: "#/components/schemas/BusinessResponseCode"
+          description: JSON 响应信封的业务结果码。HTTP 多为 200，以 body.code 判断成败；仅 0 为成功。调用微吼等云服务失败时还可能透传对方整型业务码（不在本 enum 内，见 zhibo-shared/docs/错误码与枚举.md）。
+          x-apifox-enum:
+            - value: 0
+              name: 成功
+              description: "请求成功；仅当 code===0 时 data 有效"
+            - value: 400
+              name: 参数或校验失败
+              description: 缺参、格式错误、业务规则不允许、验证码或第三方授权失败等
+            - value: 401
+              name: 未登录或令牌无效
+              description: 缺 Bearer、access 过期或验签失败、误用 refresh 作为 access
+            - value: 403
+              name: 无权限或账号/门禁拒绝
+              description: 员工或观众停用；观看售卖门禁未放行
+            - value: 404
+              name: 不存在或未开放
+              description: 资源不存在；仅 local/test 的接口在其它环境返回接口不存在
+            - value: 500
+              name: 服务器错误
+              description: 未处理异常；登录或 JWT 组件未配置导致暂不可用
+            - value: 501
+              name: 服务商未接入
+              description: provider 非 vhall 或该能力要求的服务商尚未接入
+            - value: 502
+              name: 上游云失败
+              description: 火山 STS/TOS 等失败；微吼调用无对方业务码时的兜底
         msg:
           type: string
+          description: 提示文案；成功时一般为 ok；库：VARCHAR(256)
           example: ok
-          description: 提示文案；成功一般为 ok；库：VARCHAR(256)
           maxLength: 256
     Provider:
       type: string

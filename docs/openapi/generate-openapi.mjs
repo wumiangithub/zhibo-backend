@@ -1,8 +1,8 @@
 /**
- * 按 zhibo-shared/docs/API约定.md 生成 OpenAPI 3.0.3
+ * 按 zhibo-shared/docs/API约定.md 与 错误码与枚举.md 生成 OpenAPI 3.0.3
  * 用法：node generate-openapi.mjs
  *
- * D65：改接口时须同步改本脚本（与 API约定 + 代码一致）；平时禁止跑导出、禁止手改 *.openapi.yaml/json。
+ * D65：改接口时须同步改本脚本（与 API约定、错误码与枚举.md、代码一致）；平时禁止跑导出、禁止手改 *.openapi.yaml/json。
  * 仅用户明确要求「重新生成 / 导出 OpenAPI」时：先删旧产物再跑本脚本；不要在旧 yaml 上打补丁。
  *
  * 文案对外可读（D58，红线）：summary / description / 字段 description 写给 Apifox 读者与
@@ -272,7 +272,7 @@ function wrapData(dataSchema) {
  * 生成时对缺注释字段按「字段名默认文案 + 路径特例」补齐；补不齐则抛错，避免再漏进 Apifox。
  */
 const FIELD_DESC_BY_NAME = {
-  code: '业务码：0 成功；400/401/403/500/501/502…',
+  code: '响应信封业务码；固定取值见 components.schemas.BusinessResponseCode 与 错误码与枚举.md',
   msg: '提示文案；成功一般为 ok',
   id: '主键 id',
   title: '标题',
@@ -1051,7 +1051,9 @@ function annotateDbConstraints(schemas) {
       typeof schema === 'object' &&
       !schema.properties &&
       schema.description &&
-      !/库[：:]/.test(schema.description)
+      !/库[：:]/.test(schema.description) &&
+      name !== 'BusinessResponseCode' &&
+      !schema['x-apifox-enum']
     ) {
       let db = null
       if (schema.format === 'int64') db = 'BIGINT'
@@ -1128,14 +1130,29 @@ function attachApifoxEnums(doc) {
     if (seen.has(node)) return
     seen.add(node)
     if (Array.isArray(node.enum) && node.enum.length) {
-      const items = parseEnumLabels(node.enum, node.description)
-      if (!items) {
-        failures.push(
-          `${path} enum=${JSON.stringify(node.enum)} desc=${JSON.stringify(node.description || '')}`,
+      const existing = node['x-apifox-enum']
+      if (
+        Array.isArray(existing) &&
+        existing.length === node.enum.length &&
+        existing.every(
+          (item, i) =>
+            item &&
+            typeof item === 'object' &&
+            item.value === node.enum[i] &&
+            item.name,
         )
-      } else {
-        node['x-apifox-enum'] = items
+      ) {
         count += 1
+      } else {
+        const items = parseEnumLabels(node.enum, node.description)
+        if (!items) {
+          failures.push(
+            `${path} enum=${JSON.stringify(node.enum)} desc=${JSON.stringify(node.description || '')}`,
+          )
+        } else {
+          node['x-apifox-enum'] = items
+          count += 1
+        }
       }
     }
     if (Array.isArray(node)) {
@@ -1180,21 +1197,81 @@ function attachApifoxEnums(doc) {
   console.log(`x-apifox-enum: ${count}`)
 }
 
-function buildAdmin() {
-  const schemas = {
-    BusinessUuid: { ...BUSINESS_UUID },
+/** 与 zhibo-shared/docs/错误码与枚举.md §2 同步 */
+const BUSINESS_RESPONSE_CODE_X_APIFOX = [
+  {
+    value: 0,
+    name: '成功',
+    description: '请求成功；仅当 code===0 时 data 有效',
+  },
+  {
+    value: 400,
+    name: '参数或校验失败',
+    description: '缺参、格式错误、业务规则不允许、验证码或第三方授权失败等',
+  },
+  {
+    value: 401,
+    name: '未登录或令牌无效',
+    description: '缺 Bearer、access 过期或验签失败、误用 refresh 作为 access',
+  },
+  {
+    value: 403,
+    name: '无权限或账号/门禁拒绝',
+    description: '员工或观众停用；观看售卖门禁未放行',
+  },
+  {
+    value: 404,
+    name: '不存在或未开放',
+    description: '资源不存在；仅 local/test 的接口在其它环境返回接口不存在',
+  },
+  {
+    value: 500,
+    name: '服务器错误',
+    description: '未处理异常；登录或 JWT 组件未配置导致暂不可用',
+  },
+  {
+    value: 501,
+    name: '服务商未接入',
+    description: 'provider 非 vhall 或该能力要求的服务商尚未接入',
+  },
+  {
+    value: 502,
+    name: '上游云失败',
+    description: '火山 STS/TOS 等失败；微吼调用无对方业务码时的兜底',
+  },
+]
+
+const BUSINESS_RESPONSE_CODE_SCHEMA = {
+  type: 'integer',
+  enum: BUSINESS_RESPONSE_CODE_X_APIFOX.map((e) => e.value),
+  description:
+    'JSON 响应信封的业务结果码。HTTP 多为 200，以 body.code 判断成败；仅 0 为成功。调用微吼等云服务失败时还可能透传对方整型业务码（不在本 enum 内，见 zhibo-shared/docs/错误码与枚举.md）。',
+  example: 0,
+  'x-apifox-enum': BUSINESS_RESPONSE_CODE_X_APIFOX,
+}
+
+function sharedApiEnvelopeSchemas() {
+  return {
+    BusinessResponseCode: { ...BUSINESS_RESPONSE_CODE_SCHEMA },
     ApiResponseBase: {
       type: 'object',
       required: ['code', 'msg'],
       properties: {
-        code: {
-          type: 'integer',
-          description: '0 成功；400/401/403/500/501/502…',
-          example: 0,
+        code: { $ref: '#/components/schemas/BusinessResponseCode' },
+        msg: {
+          type: 'string',
+          description: '提示文案；成功时一般为 ok',
+          example: 'ok',
         },
-        msg: { type: 'string', example: 'ok' },
       },
     },
+  }
+}
+
+function buildAdmin() {
+  const schemas = {
+    BusinessUuid: { ...BUSINESS_UUID },
+    ...sharedApiEnvelopeSchemas(),
     Provider: {
       type: 'string',
       enum: ['vhall', 'aliyun', 'tencent'],
@@ -6886,12 +6963,12 @@ function buildAdmin() {
       description: [
         '钱坤直播管理端 API（admin-service :8081）。',
         '',
-        '契约来源：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。',
+        '契约来源：`zhibo-shared/docs/API约定.md`；业务码与枚举汇总见 `zhibo-shared/docs/错误码与枚举.md`（D58/D61）。',
         '本文件供 Apifox 导入，也是正式后端按文档反向实现接口/建表校验的权威输入之一。',
         '',
         '**通则**',
         '- 成功：`code === 0`（HTTP 仍多为 200）',
-        '- 失败：业务 `code` —— `400` 参数、`401` 未登录、`403` 停用、`500` 服务器、`501` 服务商未接入、云侧失败透传或 `502`',
+        '- 失败：固定业务码见 `components.schemas.BusinessResponseCode`；微吼等上游失败还可透传对方整型 code',
         '- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**',
         '- 时间：`yyyy-MM-dd HH:mm:ss`',
         '- JSON 不输出 `null` 字段',
@@ -6975,14 +7052,7 @@ function buildAdmin() {
 function buildLive() {
   const schemas = {
     BusinessUuid: { ...BUSINESS_UUID },
-    ApiResponseBase: {
-      type: 'object',
-      required: ['code', 'msg'],
-      properties: {
-        code: { type: 'integer', example: 0 },
-        msg: { type: 'string', example: 'ok' },
-      },
-    },
+    ...sharedApiEnvelopeSchemas(),
     Provider: {
       type: 'string',
       enum: ['vhall', 'aliyun', 'tencent'],
@@ -8689,11 +8759,12 @@ function buildLive() {
       description: [
         '钱坤直播观看端 API（live-service :8082）。中控台已迁 admin-service（D110）。',
         '',
-        '契约来源：`zhibo-shared/docs/API约定.md`（D58/D61）。',
+        '契约来源：`zhibo-shared/docs/API约定.md`；业务码与枚举汇总见 `zhibo-shared/docs/错误码与枚举.md`（D58/D61）。',
         '本文件供 Apifox 导入，也是正式后端按文档反向实现的权威输入之一。',
         '',
         '**通则**',
         '- 成功：`code === 0`（HTTP 仍多为 200）',
+        '- 失败：固定业务码见 `components.schemas.BusinessResponseCode`；微吼等上游失败还可透传对方整型 code',
         '- 活动路径 `{id}` 均为本站 **32 位业务 UUID（D74）**',
         '- 时间：`yyyy-MM-dd HH:mm:ss`',
         '- JSON 不输出 `null` 字段',
@@ -8785,8 +8856,9 @@ function mergeDocs(admin, live) {
         '- admin-service：`http://127.0.0.1:8081`',
         '- live-service：`http://127.0.0.1:8082`',
         '',
-        '契约：`zhibo-shared/docs/API约定.md`（D58 中文注释/枚举；D61 落库类型与长度）。',
+        '契约：`zhibo-shared/docs/API约定.md`；业务码与枚举见 `zhibo-shared/docs/错误码与枚举.md`（D58/D61）。',
         '本文件亦是正式后端按文档反向实现接口与建表/校验的权威输入之一。',
+        '响应信封业务码 schema：`BusinessResponseCode`。',
         '分服务文件：`admin-service.openapi.yaml` / `live-service.openapi.yaml`。',
         '',
         '导入后请在 Apifox 按 Tag 前缀区分服务；调试时切换对应 Server。',
