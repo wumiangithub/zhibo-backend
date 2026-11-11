@@ -5,11 +5,11 @@ import lombok.Data;
 @Data
 public class CreateCourseUserRequest {
 
-    /** 与 viewerId 二选一 */
+    /** 与 uid 二选一 */
     private String phone;
 
     /** 与 phone 二选一 */
-    private Long viewerId;
+    private Long uid;
 
     /**
      * 选填。仅新建行时生效；已有行不改 expire。

@@ -37,7 +37,7 @@ public class ReplayWatchService {
         LocalDateTime now = now();
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
         row.setRoomId(activity.getId());
-        row.setViewerId(viewerId);
+        row.setUid(viewerId);
         row.setRecordId(recordId);
         row.setSocketId(UuidIds.newId());
         row.setStartTime(now);
@@ -55,7 +55,7 @@ public class ReplayWatchService {
         ActivityEntity activity = watchService.requireActivity(activityId);
         RoomReplayWatchEntity row = replayWatchRepository.findBySocketId(sid)
                 .orElseThrow(() -> new IllegalArgumentException("回放观看记录不存在"));
-        if (!activity.getId().equals(row.getRoomId()) || !Long.valueOf(viewerId).equals(row.getViewerId())) {
+        if (!activity.getId().equals(row.getRoomId()) || !Long.valueOf(viewerId).equals(row.getUid())) {
             throw new IllegalArgumentException("回放观看记录不存在");
         }
         LocalDateTime now = now();

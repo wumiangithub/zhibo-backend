@@ -78,7 +78,7 @@ class WatchDurationCalculatorTest {
     @Test
     void replay_usesLastReportMinusStart() {
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
-        row.setViewerId(12L);
+        row.setUid(12L);
         row.setStartTime(LocalDateTime.of(2026, 10, 29, 10, 0));
         row.setLastReportTime(LocalDateTime.of(2026, 10, 29, 10, 3));
 

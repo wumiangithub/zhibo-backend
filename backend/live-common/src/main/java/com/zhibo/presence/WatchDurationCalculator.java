@@ -97,14 +97,14 @@ public final class WatchDurationCalculator {
             return seconds;
         }
         for (RoomReplayWatchEntity row : replays) {
-            if (row == null || row.getViewerId() == null || row.getStartTime() == null || row.getLastReportTime() == null) {
+            if (row == null || row.getUid() == null || row.getStartTime() == null || row.getLastReportTime() == null) {
                 continue;
             }
             long sec = Duration.between(row.getStartTime(), row.getLastReportTime()).getSeconds();
             if (sec < 0) {
                 sec = 0;
             }
-            add(seconds, row.getViewerId(), sec);
+            add(seconds, row.getUid(), sec);
         }
         return seconds;
     }

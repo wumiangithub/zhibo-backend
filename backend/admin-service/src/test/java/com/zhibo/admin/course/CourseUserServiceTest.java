@@ -67,7 +67,7 @@ class CourseUserServiceTest {
         CourseUserEntity row = new CourseUserEntity();
         row.setId(1L);
         row.setCourseId(CID);
-        row.setViewerId(9L);
+        row.setUid(9L);
         row.setEntitlementStatus(1);
         row.setAcquireWay("purchase");
         row.setCreatedTime(LocalDateTime.of(2026, 1, 1, 0, 0));
@@ -79,13 +79,13 @@ class CourseUserServiceTest {
         viewer.setId(9L);
         viewer.setNickname("张三");
         viewer.setPhone("13812345678");
-        when(viewerRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+        when(viewerRepository.findByUidIn(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of(viewer));
         when(catalogNodeRepository.countActiveByCourseIdAndNodeType(
                         org.mockito.ArgumentMatchers.eq(CID), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(10L);
         when(progressRepository.findByCourseId(CID)).thenReturn(List.of());
-        when(viewerTagMemberRepository.findByViewerIdIn(org.mockito.ArgumentMatchers.any()))
+        when(viewerTagMemberRepository.findByUidIn(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of());
 
         CourseUserListResponse res = courseUserService.list(CID, 1, 20, null, null, null);
@@ -105,7 +105,7 @@ class CourseUserServiceTest {
         CourseUserEntity row = new CourseUserEntity();
         row.setId(1L);
         row.setCourseId(CID);
-        row.setViewerId(9L);
+        row.setUid(9L);
         row.setEntitlementStatus(1);
         row.setAcquireWay("import");
         row.setCreatedTime(LocalDateTime.of(2026, 1, 1, 0, 0));
@@ -116,13 +116,13 @@ class CourseUserServiceTest {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(9L);
         viewer.setNickname("李四");
-        when(viewerRepository.findAllById(org.mockito.ArgumentMatchers.any()))
+        when(viewerRepository.findByUidIn(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of(viewer));
         when(catalogNodeRepository.countActiveByCourseIdAndNodeType(
                         org.mockito.ArgumentMatchers.eq(CID), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(10L);
         when(progressRepository.findByCourseId(CID)).thenReturn(List.of());
-        when(viewerTagMemberRepository.findByViewerIdIn(org.mockito.ArgumentMatchers.any()))
+        when(viewerTagMemberRepository.findByUidIn(org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of());
 
         CourseUserListResponse res = courseUserService.list(CID, 1, 20, null, null, "valid");

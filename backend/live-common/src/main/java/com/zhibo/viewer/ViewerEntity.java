@@ -19,6 +19,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Setter
 public class ViewerEntity {
 
+    /** 仅库内自增主键，非业务用户 id（D117）。 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -30,6 +31,20 @@ public class ViewerEntity {
     /** 微信 unionid。有则写；没带回不清空。接口不回。 */
     @Column(length = 64)
     private String unionid;
+
+    /**
+     * 同步自用户中心 {@code LoginVo.uid}（钱坤云 /oauth/wechat/register）。
+     * 业务用户主键：JWT {@code sub}、业务表 {@code uid}、订单中心 {@code third_user_id}（D117）。
+     */
+    @Column
+    private Long uid;
+
+    /**
+     * 同步自用户中心 {@code LoginVo.username}。
+     * 跨系统账号名与订单中心 JWT {@code username}；本站展示昵称仍用 {@link #nickname}。
+     */
+    @Column(length = 64)
+    private String username;
 
     /**
      * 首次注册渠道。{@link ViewerRegisterChannel#WECHAT} / {@link ViewerRegisterChannel#IMPORT}。

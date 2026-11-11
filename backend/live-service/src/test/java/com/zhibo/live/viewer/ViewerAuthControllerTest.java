@@ -43,7 +43,7 @@ class ViewerAuthControllerTest {
     void wechatLogin_notAgreed_http200Business400() throws Exception {
         mockMvc.perform(post("/api/v1/viewer/auth/wechat-login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"abc\",\"agreed\":false}"))
+                        .content("{\"code\":\"abc\",\"type\":\"phone\",\"agreed\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(400))
                 .andExpect(jsonPath("$.msg").value("请先阅读并同意用户协议和隐私协议"));
@@ -53,7 +53,7 @@ class ViewerAuthControllerTest {
     @Test
     void wechatLogin_withoutPhone_omitsPhoneMasked() throws Exception {
         ViewerUserResponse user = new ViewerUserResponse();
-        user.setId(1L);
+        user.setUid(1L);
         user.setHasPhone(false);
         ViewerAuthResponse response = new ViewerAuthResponse();
         response.setAccessToken("access");
@@ -65,10 +65,10 @@ class ViewerAuthControllerTest {
 
         mockMvc.perform(post("/api/v1/viewer/auth/wechat-login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"abc\",\"agreed\":true}"))
+                        .content("{\"code\":\"abc\",\"type\":\"phone\",\"agreed\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.user.id").value(1))
+                .andExpect(jsonPath("$.data.user.uid").value(1))
                 .andExpect(jsonPath("$.data.user.hasPhone").value(false))
                 .andExpect(jsonPath("$.data.user.phoneMasked").doesNotExist())
                 .andExpect(jsonPath("$.data.expiresIn").value(7200));
@@ -80,7 +80,7 @@ class ViewerAuthControllerTest {
 
         mockMvc.perform(post("/api/v1/viewer/auth/dev-phone-login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phone\":\"13800138000\",\"agreed\":true}"))
+                        .content("{\"phone\":\"13800138000\",\"agreed\":true,\"clientType\":\"phone\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(404))
                 .andExpect(jsonPath("$.msg").value("接口不存在"));
@@ -90,7 +90,7 @@ class ViewerAuthControllerTest {
     @Test
     void devPhoneLogin_local_ok() throws Exception {
         ViewerUserResponse user = new ViewerUserResponse();
-        user.setId(9L);
+        user.setUid(9L);
         user.setHasPhone(true);
         user.setPhoneMasked("138****8000");
         ViewerAuthResponse response = new ViewerAuthResponse();
@@ -103,10 +103,10 @@ class ViewerAuthControllerTest {
 
         mockMvc.perform(post("/api/v1/viewer/auth/dev-phone-login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phone\":\"13800138000\",\"agreed\":true}"))
+                        .content("{\"phone\":\"13800138000\",\"agreed\":true,\"clientType\":\"phone\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.user.id").value(9))
+                .andExpect(jsonPath("$.data.user.uid").value(9))
                 .andExpect(jsonPath("$.data.user.phoneMasked").value("138****8000"));
     }
 }

@@ -40,10 +40,28 @@ public class ViewerAuthProperties {
     /** 微信小程序这一个渠道的 AppID / AppSecret。 */
     private Wechat wechat = new Wechat();
 
+    /** 用户中心（钱坤云）微信注册/登录；按环境配 Base URL（D116）。 */
+    private Oauth oauth = new Oauth();
+
     @Data
     public static class Wechat {
         private String mpAppId = "";
         private String mpAppSecret = "";
+    }
+
+    @Data
+    public static class Oauth {
+        /** 用户中心根地址，如 {@code http://119.3.31.54:8410/acctClientManagement/}（无票代理）。缺则正式微信登录不可用。 */
+        private String baseUrl = "";
+
+        /** 注册渠道文案；默认「钱坤云私域直播用户注册」。 */
+        private String channel = "钱坤云私域直播用户注册";
+
+        /** 项目名称；默认「钱坤云私域直播」。 */
+        private String projectName = "钱坤云私域直播";
+
+        /** 项目编码；默认 {@code qkysyzb}。 */
+        private String projectCode = "qkysyzb";
     }
 
     public boolean jwtSecretMissing() {
@@ -53,6 +71,10 @@ public class ViewerAuthProperties {
     public boolean wechatCredentialsMissing() {
         Wechat wx = wechat == null ? null : wechat;
         return wx == null || isBlank(wx.mpAppId) || isBlank(wx.mpAppSecret);
+    }
+
+    public boolean oauthBaseUrlMissing() {
+        return oauth == null || isBlank(oauth.baseUrl);
     }
 
     private static boolean isBlank(String value) {

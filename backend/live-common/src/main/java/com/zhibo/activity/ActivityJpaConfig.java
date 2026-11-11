@@ -13,10 +13,16 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  */
 @AutoConfiguration
 @EnableConfigurationProperties(SellPasswordProperties.class)
-@EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer"})
-@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer"})
+@EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer", "com.zhibo.dict"})
+@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer", "com.zhibo.dict"})
 @ComponentScan(
-        basePackages = {"com.zhibo.liveprovider", "com.zhibo.attendance", "com.zhibo.presence", "com.zhibo.activity"},
+        basePackages = {
+            "com.zhibo.liveprovider",
+            "com.zhibo.attendance",
+            "com.zhibo.presence",
+            "com.zhibo.activity",
+            "com.zhibo.dict"
+        },
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
                 classes = ActivityJpaConfig.class))

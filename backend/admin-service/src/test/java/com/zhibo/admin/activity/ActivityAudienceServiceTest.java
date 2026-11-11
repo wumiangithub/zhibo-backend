@@ -102,12 +102,13 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(1L);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(10L);
+        row.setUid(10L);
         row.setEntitlementStatus(1);
         row.setEmployeeInviterId(100L);
 
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(10L);
+        viewer.setUid(10L);
         viewer.setNickname("wyh");
 
         SysUserAccountEntity emp = new SysUserAccountEntity();
@@ -117,9 +118,9 @@ class ActivityAudienceServiceTest {
 
         when(audienceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(row));
-        when(commentRepository.countActiveByViewerIds(any(), any())).thenReturn(List.of());
-        when(viewerRepository.findByIdIn(any())).thenReturn(List.of(viewer));
-        when(viewerTagMemberRepository.findByViewerIdIn(any())).thenReturn(List.of());
+        when(commentRepository.countActiveByUids(any(), any())).thenReturn(List.of());
+        when(viewerRepository.findByUidIn(any())).thenReturn(List.of(viewer));
+        when(viewerTagMemberRepository.findByUidIn(any())).thenReturn(List.of());
         when(userRepository.findAllById(any())).thenReturn(List.of(emp));
 
         var resp = service.list(ACTIVITY_ID, 1, 20, null, null, null, null, null, null, null, null, null, null, null);
@@ -135,12 +136,13 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(2L);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(10L);
+        row.setUid(10L);
         row.setEntitlementStatus(1);
         row.setImporterId(200L);
 
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(10L);
+        viewer.setUid(10L);
         viewer.setNickname("wyh");
 
         SysUserAccountEntity importer = new SysUserAccountEntity();
@@ -150,9 +152,9 @@ class ActivityAudienceServiceTest {
 
         when(audienceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(row));
-        when(commentRepository.countActiveByViewerIds(any(), any())).thenReturn(List.of());
-        when(viewerRepository.findByIdIn(any())).thenReturn(List.of(viewer));
-        when(viewerTagMemberRepository.findByViewerIdIn(any())).thenReturn(List.of());
+        when(commentRepository.countActiveByUids(any(), any())).thenReturn(List.of());
+        when(viewerRepository.findByUidIn(any())).thenReturn(List.of(viewer));
+        when(viewerTagMemberRepository.findByUidIn(any())).thenReturn(List.of());
         when(userRepository.findAllById(any())).thenReturn(List.of(importer));
 
         var resp = service.list(ACTIVITY_ID, 1, 20, null, null, null, null, null, null, null, null, null, null, null);
@@ -166,16 +168,17 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(3L);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(10L);
+        row.setUid(10L);
         row.setEntitlementStatus(1);
 
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(10L);
+        viewer.setUid(10L);
         viewer.setNickname("wyh");
 
         ViewerTagMemberEntity member = new ViewerTagMemberEntity();
         member.setId(1L);
-        member.setViewerId(10L);
+        member.setUid(10L);
         member.setTagId(7L);
 
         ViewerTagEntity tag = new ViewerTagEntity();
@@ -184,9 +187,9 @@ class ActivityAudienceServiceTest {
 
         when(audienceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(row));
-        when(commentRepository.countActiveByViewerIds(any(), any())).thenReturn(List.of());
-        when(viewerRepository.findByIdIn(any())).thenReturn(List.of(viewer));
-        when(viewerTagMemberRepository.findByViewerIdIn(any())).thenReturn(List.of(member));
+        when(commentRepository.countActiveByUids(any(), any())).thenReturn(List.of());
+        when(viewerRepository.findByUidIn(any())).thenReturn(List.of(viewer));
+        when(viewerTagMemberRepository.findByUidIn(any())).thenReturn(List.of(member));
         when(viewerTagRepository.findAllById(any())).thenReturn(List.of(tag));
 
         var resp = service.list(ACTIVITY_ID, 1, 20, null, null, null, null, null, null, null, null, null, null, null);
@@ -206,7 +209,7 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(4L);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(10L);
+        row.setUid(10L);
         row.setEntitlementStatus(1);
 
         when(audienceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
@@ -223,18 +226,19 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(5L);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(10L);
+        row.setUid(10L);
         row.setEntitlementStatus(1);
 
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(10L);
+        viewer.setUid(10L);
         viewer.setNickname("wyh");
 
         when(audienceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(row));
-        when(commentRepository.countActiveByViewerIds(any(), any())).thenReturn(List.of());
-        when(viewerRepository.findByIdIn(any())).thenReturn(List.of(viewer));
-        when(viewerTagMemberRepository.findByViewerIdIn(any())).thenReturn(List.of());
+        when(commentRepository.countActiveByUids(any(), any())).thenReturn(List.of());
+        when(viewerRepository.findByUidIn(any())).thenReturn(List.of(viewer));
+        when(viewerTagMemberRepository.findByUidIn(any())).thenReturn(List.of());
 
         var resp = service.list(
                 ACTIVITY_ID, 1, 20, null, null, null, null, null, "lte", 0L, null, null, null, null);
@@ -246,6 +250,7 @@ class ActivityAudienceServiceTest {
     void create_byPhone_insertsRow() {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(10L);
+        viewer.setUid(10L);
         viewer.setPhone("13800138000");
 
         SysUserAccountEntity op = new SysUserAccountEntity();
@@ -254,7 +259,7 @@ class ActivityAudienceServiceTest {
 
         when(viewerRepository.findByPhone("13800138000")).thenReturn(Optional.of(viewer));
         when(userRepository.findById(99L)).thenReturn(Optional.of(op));
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
         when(audienceRepository.save(any(ActivityAudienceEntity.class))).thenAnswer(inv -> {
             ActivityAudienceEntity row = inv.getArgument(0);
             row.setId(501L);
@@ -265,7 +270,7 @@ class ActivityAudienceServiceTest {
         req.setPhone("13800138000");
         var resp = service.create(ACTIVITY_ID, req, 99L);
         assertEquals(501L, resp.getId());
-        assertEquals(10L, resp.getViewerId());
+        assertEquals(10L, resp.getUid());
         assertTrue(resp.isCreated());
 
         ArgumentCaptor<ActivityAudienceEntity> cap = ArgumentCaptor.forClass(ActivityAudienceEntity.class);
@@ -278,6 +283,7 @@ class ActivityAudienceServiceTest {
     void create_alreadyInAudience_returnsCreatedFalse() {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(10L);
+        viewer.setUid(10L);
         viewer.setPhone("13800138000");
 
         SysUserAccountEntity op = new SysUserAccountEntity();
@@ -287,20 +293,20 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity existing = new ActivityAudienceEntity();
         existing.setId(501L);
         existing.setActivityId(ACTIVITY_ID);
-        existing.setViewerId(10L);
+        existing.setUid(10L);
         existing.setEntitlementStatus(1);
         existing.setImporterId(88L);
 
         when(viewerRepository.findByPhone("13800138000")).thenReturn(Optional.of(viewer));
         when(userRepository.findById(99L)).thenReturn(Optional.of(op));
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 10L))
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 10L))
                 .thenReturn(Optional.of(existing));
 
         CreateAudienceRequest req = new CreateAudienceRequest();
         req.setPhone("13800138000");
         var resp = service.create(ACTIVITY_ID, req, 99L);
         assertEquals(501L, resp.getId());
-        assertEquals(10L, resp.getViewerId());
+        assertEquals(10L, resp.getUid());
         assertFalse(resp.isCreated());
         verify(audienceRepository, never()).save(any());
     }
@@ -309,14 +315,15 @@ class ActivityAudienceServiceTest {
     void create_byViewerId_insertsRow() {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(12L);
+        viewer.setUid(12L);
 
         SysUserAccountEntity op = new SysUserAccountEntity();
         op.setId(99L);
         op.setRsStatus(1);
 
-        when(viewerRepository.findById(12L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUid(12L)).thenReturn(Optional.of(viewer));
         when(userRepository.findById(99L)).thenReturn(Optional.of(op));
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 12L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 12L)).thenReturn(Optional.empty());
         when(audienceRepository.save(any(ActivityAudienceEntity.class))).thenAnswer(inv -> {
             ActivityAudienceEntity row = inv.getArgument(0);
             row.setId(502L);
@@ -324,10 +331,10 @@ class ActivityAudienceServiceTest {
         });
 
         CreateAudienceRequest req = new CreateAudienceRequest();
-        req.setViewerId(12L);
+        req.setUid(12L);
         var resp = service.create(ACTIVITY_ID, req, 99L);
         assertEquals(502L, resp.getId());
-        assertEquals(12L, resp.getViewerId());
+        assertEquals(12L, resp.getUid());
         assertTrue(resp.isCreated());
     }
 
@@ -335,15 +342,15 @@ class ActivityAudienceServiceTest {
     void create_bothPhoneAndViewerId_rejects() {
         CreateAudienceRequest req = new CreateAudienceRequest();
         req.setPhone("13800138000");
-        req.setViewerId(12L);
+        req.setUid(12L);
         assertThrows(IllegalArgumentException.class, () -> service.create(ACTIVITY_ID, req, 99L));
     }
 
     @Test
     void create_viewerIdNotFound_rejects() {
-        when(viewerRepository.findById(eq(999L))).thenReturn(Optional.empty());
+        when(viewerRepository.findByUid(eq(999L))).thenReturn(Optional.empty());
         CreateAudienceRequest req = new CreateAudienceRequest();
-        req.setViewerId(999L);
+        req.setUid(999L);
         assertThrows(IllegalArgumentException.class, () -> service.create(ACTIVITY_ID, req, 99L));
     }
 
@@ -357,12 +364,12 @@ class ActivityAudienceServiceTest {
         ViewerEntity skipped = viewer(12L, "13800000003");
         when(viewerRepository.findByPhoneIn(any())).thenReturn(List.of(created, updated, skipped));
 
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
         ActivityAudienceEntity existingNoImporter = audienceRow(201L, 11L, null);
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 11L))
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 11L))
                 .thenReturn(Optional.of(existingNoImporter));
         ActivityAudienceEntity existingWithImporter = audienceRow(202L, 12L, 88L);
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 12L))
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 12L))
                 .thenReturn(Optional.of(existingWithImporter));
         when(audienceRepository.save(any(ActivityAudienceEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -439,7 +446,7 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(1L);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(10L);
+        row.setUid(10L);
         row.setEntitlementStatus(1);
         row.setEmployeeInviterId(100L);
 
@@ -452,9 +459,9 @@ class ActivityAudienceServiceTest {
 
         when(audienceRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
                 .thenReturn(List.of(row));
-        when(commentRepository.countActiveByViewerIds(any(), any())).thenReturn(List.of());
-        when(viewerRepository.findByIdIn(any())).thenReturn(List.of(viewer));
-        when(viewerTagMemberRepository.findByViewerIdIn(any())).thenReturn(List.of());
+        when(commentRepository.countActiveByUids(any(), any())).thenReturn(List.of());
+        when(viewerRepository.findByUidIn(any())).thenReturn(List.of(viewer));
+        when(viewerTagMemberRepository.findByUidIn(any())).thenReturn(List.of());
         when(userRepository.findAllById(any())).thenReturn(List.of(emp));
 
         String csv = stripBom(service.exportCsv(
@@ -476,24 +483,24 @@ class ActivityAudienceServiceTest {
         when(viewerTagRepository.findByIdAndDeletedTimeIsNull(7L)).thenReturn(Optional.of(tag));
 
         ViewerTagMemberEntity m1 = new ViewerTagMemberEntity();
-        m1.setViewerId(10L);
+        m1.setUid(10L);
         m1.setTagId(7L);
         ViewerTagMemberEntity m2 = new ViewerTagMemberEntity();
-        m2.setViewerId(11L);
+        m2.setUid(11L);
         m2.setTagId(7L);
         ViewerTagMemberEntity m3 = new ViewerTagMemberEntity();
-        m3.setViewerId(12L);
+        m3.setUid(12L);
         m3.setTagId(7L);
         // duplicate viewer under same tag set → still one
         ViewerTagMemberEntity m1Dup = new ViewerTagMemberEntity();
-        m1Dup.setViewerId(10L);
+        m1Dup.setUid(10L);
         m1Dup.setTagId(7L);
         when(viewerTagMemberRepository.findByTagIdIn(List.of(7L))).thenReturn(List.of(m1, m2, m3, m1Dup));
 
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 11L))
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 10L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 11L))
                 .thenReturn(Optional.of(audienceRow(201L, 11L, null)));
-        when(audienceRepository.findByActivityIdAndViewerId(ACTIVITY_ID, 12L))
+        when(audienceRepository.findByActivityIdAndUid(ACTIVITY_ID, 12L))
                 .thenReturn(Optional.of(audienceRow(202L, 12L, 88L)));
         when(audienceRepository.save(any(ActivityAudienceEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -557,6 +564,7 @@ class ActivityAudienceServiceTest {
     private static ViewerEntity viewer(long id, String phone) {
         ViewerEntity v = new ViewerEntity();
         v.setId(id);
+        v.setUid(id);
         v.setPhone(phone);
         return v;
     }
@@ -565,7 +573,7 @@ class ActivityAudienceServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setId(id);
         row.setActivityId(ACTIVITY_ID);
-        row.setViewerId(viewerId);
+        row.setUid(viewerId);
         row.setEntitlementStatus(1);
         row.setImporterId(importerId);
         return row;

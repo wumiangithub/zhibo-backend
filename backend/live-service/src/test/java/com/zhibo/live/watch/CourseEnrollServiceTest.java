@@ -49,8 +49,8 @@ class CourseEnrollServiceTest {
         course.setTitle("演示课");
         course.setTotalUserCount(0);
         when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
-        when(viewerRepository.existsById(12L)).thenReturn(true);
-        when(courseUserRepository.findByCourseIdAndViewerId(CID, 12L)).thenReturn(Optional.empty());
+        when(viewerRepository.existsByUid(12L)).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUid(CID, 12L)).thenReturn(Optional.empty());
         when(courseUserRepository.save(any())).thenAnswer(inv -> {
             CourseUserEntity row = inv.getArgument(0);
             row.setId(7L);
@@ -62,7 +62,7 @@ class CourseEnrollServiceTest {
 
         var res = service.enroll(CID, 12L, req);
         assertEquals(7L, res.getId());
-        assertEquals(12L, res.getViewerId());
+        assertEquals(12L, res.getUid());
         assertTrue(res.isCreated());
         assertEquals("演示课", res.getTitle());
         assertEquals(1, course.getTotalUserCount());
@@ -83,8 +83,8 @@ class CourseEnrollServiceTest {
         course.setAccessValidityType("days");
         course.setAccessValidityDays(7);
         when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
-        when(viewerRepository.existsById(12L)).thenReturn(true);
-        when(courseUserRepository.findByCourseIdAndViewerId(CID, 12L)).thenReturn(Optional.empty());
+        when(viewerRepository.existsByUid(12L)).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUid(CID, 12L)).thenReturn(Optional.empty());
         when(courseUserRepository.save(any())).thenAnswer(inv -> {
             CourseUserEntity row = inv.getArgument(0);
             row.setId(7L);
@@ -106,14 +106,14 @@ class CourseEnrollServiceTest {
         course.setTitle("演示课");
         course.setTotalUserCount(3);
         when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
-        when(viewerRepository.existsById(12L)).thenReturn(true);
+        when(viewerRepository.existsByUid(12L)).thenReturn(true);
 
         CourseUserEntity existing = new CourseUserEntity();
         existing.setId(7L);
         existing.setCourseId(CID);
-        existing.setViewerId(12L);
+        existing.setUid(12L);
         existing.setEmployeeInviterId(90001L);
-        when(courseUserRepository.findByCourseIdAndViewerId(CID, 12L)).thenReturn(Optional.of(existing));
+        when(courseUserRepository.findByCourseIdAndUid(CID, 12L)).thenReturn(Optional.of(existing));
         when(courseUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         EnrollCourseRequest req = new EnrollCourseRequest();

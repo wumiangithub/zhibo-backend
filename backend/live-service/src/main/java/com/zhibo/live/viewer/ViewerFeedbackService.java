@@ -81,7 +81,7 @@ public class ViewerFeedbackService {
         List<ViewerFeedbackImageItem> images = normalizeImages(request.getImages());
 
         ViewerFeedbackEntity row = new ViewerFeedbackEntity();
-        row.setViewerId(viewerId);
+        row.setUid(viewerId);
         row.setCategory(request.getCategory());
         row.setContent(content);
         row.setContactPhone(phone);
@@ -102,7 +102,7 @@ public class ViewerFeedbackService {
             throw new ViewerAuthException(400, "每页条数无效");
         }
         Page<ViewerFeedbackEntity> result =
-                feedbackRepository.findByViewerIdOrderByCreatedTimeDesc(
+                feedbackRepository.findByUidOrderByCreatedTimeDesc(
                         viewerId, PageRequest.of(p - 1, size));
         List<ViewerFeedbackListItem> list = new ArrayList<>(result.getContent().size());
         for (ViewerFeedbackEntity e : result.getContent()) {
@@ -116,13 +116,13 @@ public class ViewerFeedbackService {
         requireViewer(viewerId);
         ViewerFeedbackEntity row =
                 feedbackRepository
-                        .findByIdAndViewerId(id, viewerId)
+                        .findByIdAndUid(id, viewerId)
                         .orElseThrow(() -> new ViewerAuthException(404, "反馈不存在"));
         return toDetail(row);
     }
 
     private ViewerEntity requireViewer(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findById(viewerId).orElse(null);
+        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
         if (viewer == null) {
             throw new ViewerAuthException(401, "未登录");
         }

@@ -159,7 +159,7 @@ class WatchAccessServiceTest {
     void specified_forbidden() {
         ActivityEntity a = base("specified", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
-        when(audienceRepository.findByActivityIdAndViewerId("aid", 9L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid("aid", 9L)).thenReturn(Optional.empty());
         WatchAccessResponse r = service.access("aid", 9L, null);
         assertEquals(WatchAccessService.STATE_FORBIDDEN, r.getAccessState());
     }
@@ -170,7 +170,7 @@ class WatchAccessServiceTest {
         when(watchService.requireActivity("aid")).thenReturn(a);
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setEntitlementStatus(1);
-        when(audienceRepository.findByActivityIdAndViewerId("aid", 9L)).thenReturn(Optional.of(row));
+        when(audienceRepository.findByActivityIdAndUid("aid", 9L)).thenReturn(Optional.of(row));
         WatchAccessResponse r = service.access("aid", 9L, null);
         assertEquals(WatchAccessService.STATE_OK, r.getAccessState());
     }

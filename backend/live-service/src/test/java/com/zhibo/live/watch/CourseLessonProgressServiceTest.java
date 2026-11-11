@@ -49,7 +49,7 @@ class CourseLessonProgressServiceTest {
     @Test
     void openImage_completes() {
         stubCourseAndLesson(12L, CourseCatalogContentKind.IMAGE);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 12L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 12L, 7L))
                 .thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -69,10 +69,10 @@ class CourseLessonProgressServiceTest {
         CourseLessonProgressEntity existing = new CourseLessonProgressEntity();
         existing.setCourseId(COURSE_ID);
         existing.setLessonNodeId(3L);
-        existing.setViewerId(7L);
+        existing.setUid(7L);
         existing.setParticipateStatus(CourseLessonParticipateStatus.IN_PROGRESS);
         existing.setProgressPercent(80);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 3L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 3L, 7L))
                 .thenReturn(Optional.of(existing));
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -97,7 +97,7 @@ class CourseLessonProgressServiceTest {
     @Test
     void liveEnded_completesLive() {
         stubCourseAndLesson(9L, CourseCatalogContentKind.LIVE);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 9L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 9L, 7L))
                 .thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -111,7 +111,7 @@ class CourseLessonProgressServiceTest {
     @Test
     void scrollBottom_completesArticle() {
         stubCourseAndLesson(5L, CourseCatalogContentKind.ARTICLE);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 5L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 5L, 7L))
                 .thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

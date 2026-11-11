@@ -9,9 +9,9 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 public interface ActivityAudienceRepository
         extends JpaRepository<ActivityAudienceEntity, Long>, JpaSpecificationExecutor<ActivityAudienceEntity> {
 
-    Optional<ActivityAudienceEntity> findByActivityIdAndViewerId(String activityId, Long viewerId);
+    Optional<ActivityAudienceEntity> findByActivityIdAndUid(String activityId, Long uid);
 
-    List<ActivityAudienceEntity> findByActivityIdAndViewerIdIn(String activityId, Collection<Long> viewerIds);
+    List<ActivityAudienceEntity> findByActivityIdAndUidIn(String activityId, Collection<Long> uids);
 
     long countByActivityId(String activityId);
 }

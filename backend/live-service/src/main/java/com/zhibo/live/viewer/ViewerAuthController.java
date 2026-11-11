@@ -59,10 +59,10 @@ public class ViewerAuthController {
 
     @GetMapping("/user-info")
     public ApiResponse<ViewerUserResponse> userInfo(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
-        if (viewerId == null) {
+        Long uid = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
+        if (uid == null) {
             throw new ViewerAuthException(401, "未登录");
         }
-        return ApiResponse.ok(viewerAuthService.userInfo(viewerId));
+        return ApiResponse.ok(viewerAuthService.userInfo(uid));
     }
 }

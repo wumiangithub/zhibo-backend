@@ -143,7 +143,7 @@ public class ViewerLearningService {
         }
 
         Map<Long, CourseLessonProgressEntity> progressByLesson = new HashMap<>();
-        for (CourseLessonProgressEntity p : progressRepository.findByCourseIdAndViewerId(courseId, viewerId)) {
+        for (CourseLessonProgressEntity p : progressRepository.findByCourseIdAndUid(courseId, viewerId)) {
             progressByLesson.put(p.getLessonNodeId(), p);
         }
 
@@ -207,7 +207,7 @@ public class ViewerLearningService {
         resp.setContentId(contentId);
 
         progressRepository
-                .findByCourseIdAndLessonNodeIdAndViewerId(courseId, lesson.getId(), viewerId)
+                .findByCourseIdAndLessonNodeIdAndUid(courseId, lesson.getId(), viewerId)
                 .ifPresentOrElse(
                         p -> {
                             resp.setParticipateStatus(p.getParticipateStatus());
@@ -250,7 +250,7 @@ public class ViewerLearningService {
                 .filter(c -> c.getDeletedTime() == null)
                 .orElseThrow(() -> new IllegalArgumentException("课程不存在"));
         CourseUserEntity row = courseUserRepository
-                .findByCourseIdAndViewerIdAndEntitlementStatus(courseId, viewerId, 1)
+                .findByCourseIdAndUidAndEntitlementStatus(courseId, viewerId, 1)
                 .orElseThrow(() -> new IllegalArgumentException("无观看权限"));
         LocalDateTime now = LocalDateTime.now();
         String state = CourseEntitlementSupport.resolveState(
@@ -348,7 +348,7 @@ public class ViewerLearningService {
                         catalogNodeRepository.countActiveByCourseIdAndNodeType(
                                 course.getId(), CourseCatalogNodeType.SUBCOURSE));
         courseUserRepository
-                .findByCourseIdAndViewerIdAndEntitlementStatus(course.getId(), viewerId, 1)
+                .findByCourseIdAndUidAndEntitlementStatus(course.getId(), viewerId, 1)
                 .map(CourseUserEntity::getCreatedTime)
                 .ifPresent(t -> item.setAcquiredTime(t.format(TIME_FMT)));
         return item;

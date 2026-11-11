@@ -53,7 +53,7 @@ public class WatchCommentController {
     }
 
     private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
+        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
         if (viewerId == null || viewerId <= 0) {
             throw new ViewerAuthException(401, "未登录");
         }

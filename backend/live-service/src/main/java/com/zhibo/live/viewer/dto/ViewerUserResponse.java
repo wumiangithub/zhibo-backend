@@ -8,8 +8,21 @@ import lombok.Data;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ViewerUserResponse {
 
-    /** viewer.id，JSON 数字。 */
-    private Long id;
+    /**
+     * 用户中心 uid（业务用户主键 / JWT sub）。未同步（local 明文登录）则省略。
+     */
+    private Long uid;
+
+    /**
+     * 同步自用户中心的 username。未同步则省略。本站展示昵称仍用 nickname。
+     */
+    private String username;
+
+    /**
+     * 微信小程序 openid（库列 mini_openid）。有则回，供小程序 wx_lite prepay 的 openId；
+     * local 明文造号等无凭证时省略。勿当展示字段。
+     */
+    private String miniOpenid;
 
     private boolean hasPhone;
 

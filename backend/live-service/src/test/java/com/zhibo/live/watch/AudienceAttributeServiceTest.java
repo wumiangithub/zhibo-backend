@@ -1,6 +1,7 @@
 package com.zhibo.live.watch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -11,8 +12,15 @@ import com.zhibo.activity.ActivityAudienceEntity;
 import com.zhibo.activity.ActivityAudienceRepository;
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityRepository;
+import com.zhibo.live.org.EmployeeAccountEntity;
+import com.zhibo.live.org.EmployeeAccountRepository;
+import com.zhibo.live.org.HrEmployeeEntity;
+import com.zhibo.live.org.HrEmployeePostEntity;
+import com.zhibo.live.org.HrEmployeePostRepository;
+import com.zhibo.live.org.HrEmployeeRepository;
 import com.zhibo.live.watch.dto.AttributeAudienceRequest;
 import com.zhibo.viewer.ViewerRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AudienceAttributeServiceTest {
 
     private static final String AID = "a1b2c3d4e5f67890abcdef1234567890";
+    private static final String HR_IDENTIFIER = "a0d9a8a1-a6d8-4978-8cb4-e7e86fba9c39";
 
     @Mock
     private ActivityRepository activityRepository;
@@ -32,13 +41,24 @@ class AudienceAttributeServiceTest {
     private ActivityAudienceRepository audienceRepository;
     @Mock
     private ViewerRepository viewerRepository;
+    @Mock
+    private EmployeeAccountRepository employeeAccountRepository;
+    @Mock
+    private HrEmployeeRepository hrEmployeeRepository;
+    @Mock
+    private HrEmployeePostRepository hrEmployeePostRepository;
 
     private AudienceAttributeService service;
 
     @BeforeEach
     void setUp() {
         service = new AudienceAttributeService(
-                activityRepository, audienceRepository, viewerRepository);
+                activityRepository,
+                audienceRepository,
+                viewerRepository,
+                employeeAccountRepository,
+                hrEmployeeRepository,
+                hrEmployeePostRepository);
     }
 
     @Test
@@ -51,7 +71,7 @@ class AudienceAttributeServiceTest {
     @Test
     void attribute_employee_writesInviterWhenEmpty() {
         stubActivityAndViewer();
-        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.empty());
         when(audienceRepository.save(any())).thenAnswer(inv -> {
             ActivityAudienceEntity row = inv.getArgument(0);
             row.setId(99L);
@@ -64,7 +84,7 @@ class AudienceAttributeServiceTest {
 
         var res = service.attribute(AID, 12L, req);
         assertEquals(99L, res.getId());
-        assertEquals(12L, res.getViewerId());
+        assertEquals(12L, res.getUid());
 
         ArgumentCaptor<ActivityAudienceEntity> cap =
                 ArgumentCaptor.forClass(ActivityAudienceEntity.class);
@@ -102,32 +122,78 @@ class AudienceAttributeServiceTest {
     }
 
     @Test
-    void resolveSalesman_prefersInviterOverImporter() {
+    void resolveSalesman_usesInviterIdentifierAndDept() {
         stubActivityOnly();
         ActivityAudienceEntity row = new ActivityAudienceEntity();
-        row.setEmployeeInviterId(10001L);
+        row.setEmployeeInviterId(277L);
         row.setImporterId(20002L);
-        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.of(row));
+        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.of(row));
+        stubInviter(277L, 12476L, HR_IDENTIFIER, 94L);
 
-        assertEquals(10001L, service.resolveSalesman(AID, 12L).getSalesmanId());
+        var res = service.resolveSalesman(AID, 12L);
+        assertEquals(HR_IDENTIFIER, res.getSalesmanId());
+        assertEquals(94L, res.getSalesmanDeptId());
     }
 
     @Test
-    void resolveSalesman_fallsBackToImporter() {
+    void resolveSalesman_ignoresImporterOnly() {
         stubActivityOnly();
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setImporterId(20002L);
-        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.of(row));
+        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.of(row));
 
-        assertEquals(20002L, service.resolveSalesman(AID, 12L).getSalesmanId());
+        var res = service.resolveSalesman(AID, 12L);
+        assertNull(res.getSalesmanId());
+        assertNull(res.getSalesmanDeptId());
+        verify(employeeAccountRepository, never()).findById(any());
     }
 
     @Test
     void resolveSalesman_nullWhenNoRow() {
         stubActivityOnly();
-        when(audienceRepository.findByActivityIdAndViewerId(AID, 12L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.empty());
 
-        assertEquals(null, service.resolveSalesman(AID, 12L).getSalesmanId());
+        var res = service.resolveSalesman(AID, 12L);
+        assertNull(res.getSalesmanId());
+        assertNull(res.getSalesmanDeptId());
+    }
+
+    @Test
+    void resolveSalesman_identifierWithoutDept() {
+        stubActivityOnly();
+        ActivityAudienceEntity row = new ActivityAudienceEntity();
+        row.setEmployeeInviterId(277L);
+        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.of(row));
+        EmployeeAccountEntity acc = new EmployeeAccountEntity();
+        acc.setId(277L);
+        acc.setYhid(12476L);
+        when(employeeAccountRepository.findById(277L)).thenReturn(Optional.of(acc));
+        HrEmployeeEntity hr = new HrEmployeeEntity();
+        hr.setId(12476L);
+        hr.setIdentifier(HR_IDENTIFIER);
+        when(hrEmployeeRepository.findById(12476L)).thenReturn(Optional.of(hr));
+        when(hrEmployeePostRepository.findActiveWithDeptByYhid(12476L)).thenReturn(List.of());
+
+        var res = service.resolveSalesman(AID, 12L);
+        assertEquals(HR_IDENTIFIER, res.getSalesmanId());
+        assertNull(res.getSalesmanDeptId());
+    }
+
+    private void stubInviter(long accountId, long yhid, String identifier, long bmid) {
+        EmployeeAccountEntity acc = new EmployeeAccountEntity();
+        acc.setId(accountId);
+        acc.setYhid(yhid);
+        when(employeeAccountRepository.findById(accountId)).thenReturn(Optional.of(acc));
+        HrEmployeeEntity hr = new HrEmployeeEntity();
+        hr.setId(yhid);
+        hr.setIdentifier(identifier);
+        when(hrEmployeeRepository.findById(yhid)).thenReturn(Optional.of(hr));
+        HrEmployeePostEntity post = new HrEmployeePostEntity();
+        post.setId(1L);
+        post.setYhid(yhid);
+        post.setBmid(bmid);
+        post.setRsStatus(1);
+        when(hrEmployeePostRepository.findActiveWithDeptByYhid(yhid)).thenReturn(List.of(post));
     }
 
     private void stubActivityOnly() {
@@ -140,6 +206,6 @@ class AudienceAttributeServiceTest {
         ActivityEntity activity = new ActivityEntity();
         activity.setId(AID);
         when(activityRepository.findById(AID)).thenReturn(Optional.of(activity));
-        when(viewerRepository.existsById(12L)).thenReturn(true);
+        when(viewerRepository.existsByUid(12L)).thenReturn(true);
     }
 }

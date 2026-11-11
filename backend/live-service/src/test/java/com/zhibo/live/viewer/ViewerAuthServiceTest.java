@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -43,6 +44,7 @@ class ViewerAuthServiceTest {
     private ViewerAuthProperties properties;
     private ViewerRepository viewerRepository;
     private WechatMpClient wechatMpClient;
+    private ViewerOauthClient oauthClient;
     private ViewerJwtTokenService jwtTokenService;
     private ViewerAuthService service;
     private Store store;
@@ -59,24 +61,30 @@ class ViewerAuthServiceTest {
         properties.setJwtRefreshAudience("viewer-refresh");
         properties.getWechat().setMpAppId("wx8ba0027c2c9e839c");
         properties.getWechat().setMpAppSecret("test-mp-secret");
+        properties.getOauth().setBaseUrl("http://oauth.test/backend/");
 
         viewerRepository = mock(ViewerRepository.class);
         wechatMpClient = mock(WechatMpClient.class);
+        oauthClient = mock(ViewerOauthClient.class);
         jwtTokenService = new ViewerJwtTokenService(properties, clock);
         service = new ViewerAuthService(
                 viewerRepository,
                 wechatMpClient,
+                oauthClient,
                 jwtTokenService,
                 properties,
                 clock);
         store = new Store();
         stubStore();
+        when(oauthClient.registerByUnionId(anyString(), anyString()))
+                .thenAnswer(invocation -> new ViewerOauthClient.OauthIdentity(90001L, "qk_u_" + invocation.getArgument(0)));
     }
 
     @Test
     void notAgreed_returns400() {
         WechatLoginRequest wechat = new WechatLoginRequest();
         wechat.setCode("c1");
+        wechat.setType("phone");
         wechat.setAgreed(false);
         ViewerAuthException wechatEx = assertThrows(ViewerAuthException.class, () -> service.wechatLogin(wechat));
         assertEquals(400, wechatEx.getCode());
@@ -85,49 +93,77 @@ class ViewerAuthServiceTest {
         PhoneLoginRequest phone = new PhoneLoginRequest();
         phone.setLoginCode("login");
         phone.setPhoneCode("phone");
+        phone.setType("phone");
         phone.setAgreed(false);
         ViewerAuthException phoneEx = assertThrows(ViewerAuthException.class, () -> service.phoneLogin(phone));
         assertEquals(400, phoneEx.getCode());
         assertEquals("请先阅读并同意用户协议和隐私协议", phoneEx.getMessage());
         verifyNoInteractions(wechatMpClient);
+        verifyNoInteractions(oauthClient);
     }
 
     @Test
-    void wechatLogin_sameOpenidKeepsViewerAndOmitsPhone() throws Exception {
+    void wechatLogin_sameOpenidKeepsViewerAndSyncsOauth() throws Exception {
         when(wechatMpClient.code2Session("c1"))
                 .thenReturn(new WechatMpClient.WechatSession("oid-1", "union-1"));
         when(wechatMpClient.code2Session("c2"))
-                .thenReturn(new WechatMpClient.WechatSession("oid-1", null));
+                .thenReturn(new WechatMpClient.WechatSession("oid-1", "union-1"));
 
         ViewerAuthResponse first = service.wechatLogin(wechat("c1"));
         ViewerAuthResponse second = service.wechatLogin(wechat("c2"));
 
-        assertEquals(first.getUser().getId(), second.getUser().getId());
-        assertEquals(1L, second.getUser().getId());
+        assertEquals(90001L, first.getUser().getUid());
+        assertEquals(90001L, second.getUser().getUid());
+        assertEquals("qk_u_union-1", second.getUser().getUsername());
         assertFalse(second.getUser().isHasPhone());
         assertNull(second.getUser().getPhoneMasked());
         assertEquals("oid-1", store.viewer.getMiniOpenid());
+        assertEquals("oid-1", second.getUser().getMiniOpenid());
         assertEquals("union-1", store.viewer.getUnionid());
+        assertEquals(Long.valueOf(90001L), store.viewer.getUid());
+        assertEquals("qk_u_union-1", store.viewer.getUsername());
         assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
         assertNull(store.viewer.getPhone());
 
         String json = new ObjectMapper().writeValueAsString(second.getUser());
         assertTrue(json.contains("\"hasPhone\":false"));
-        assertTrue(json.contains("\"id\":1"));
+        assertTrue(json.contains("\"uid\":90001"));
+        assertTrue(json.contains("\"miniOpenid\":\"oid-1\""));
+        assertFalse(json.contains("\"id\""));
         assertFalse(json.contains("phoneMasked"));
         assertFalse(json.contains("nickname"));
+
+        Claims claims = parseAccess(second.getAccessToken());
+        assertEquals("90001", claims.getSubject());
+        assertEquals("qk_u_union-1", claims.get("username", String.class));
+        assertEquals("90001", claims.get("third_user_id", String.class));
     }
 
     @Test
-    void phoneLogin_masksElevenDigitPhone() throws Exception {
+    void wechatLogin_missingUnionid_fails() {
+        when(wechatMpClient.code2Session("c-no-union"))
+                .thenReturn(new WechatMpClient.WechatSession("oid-x", null));
+
+        ViewerAuthException ex =
+                assertThrows(ViewerAuthException.class, () -> service.wechatLogin(wechat("c-no-union")));
+        assertEquals(400, ex.getCode());
+        assertEquals("微信授权失败，请重试", ex.getMessage());
+        verifyNoInteractions(oauthClient);
+    }
+
+    @Test
+    void phoneLogin_masksElevenDigitPhoneAndUsesOauthClaims() throws Exception {
         when(wechatMpClient.code2Session("login-1"))
-                .thenReturn(new WechatMpClient.WechatSession("oid-phone", null));
+                .thenReturn(new WechatMpClient.WechatSession("oid-phone", "union-phone"));
         when(wechatMpClient.getPhoneNumber("phone-1"))
                 .thenReturn(new WechatMpClient.WechatPhone("13612348079", "86"));
+        when(oauthClient.registerByUnionId(eq("union-phone"), eq("phone")))
+                .thenReturn(new ViewerOauthClient.OauthIdentity(80002L, "oms_name_2"));
 
         PhoneLoginRequest request = new PhoneLoginRequest();
         request.setLoginCode("login-1");
         request.setPhoneCode("phone-1");
+        request.setType("phone");
         request.setAgreed(true);
         ViewerAuthResponse response = service.phoneLogin(request);
 
@@ -135,28 +171,17 @@ class ViewerAuthServiceTest {
         assertEquals("136****8079", response.getUser().getPhoneMasked());
         assertEquals("86", store.viewer.getPhoneCountryCode());
         assertEquals("13612348079", store.viewer.getPhone());
+        assertEquals(Long.valueOf(80002L), store.viewer.getUid());
+        assertEquals("oms_name_2", store.viewer.getUsername());
         assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
 
         String json = new ObjectMapper().writeValueAsString(response);
         assertTrue(json.contains("136****8079"));
         assertFalse(json.contains("13612348079"));
 
-        // oms-go SignViewersToken：username=手机号，third_user_id=viewer.id
         Claims accessClaims = parseAccess(response.getAccessToken());
-        assertEquals("13612348079", accessClaims.get("username", String.class));
-        assertEquals(String.valueOf(response.getUser().getId()), accessClaims.get("third_user_id", String.class));
-    }
-
-    @Test
-    void omsUsername_prefersPhoneThenOpenidThenId() {
-        ViewerEntity withPhone = viewer(9L, ViewerStatus.NORMAL, "13800138000", "oid-x");
-        assertEquals("13800138000", ViewerAuthService.omsUsername(withPhone));
-
-        ViewerEntity openidOnly = viewer(9L, ViewerStatus.NORMAL, null, "oid-only");
-        assertEquals("oid-only", ViewerAuthService.omsUsername(openidOnly));
-
-        ViewerEntity idOnly = viewer(9L, ViewerStatus.NORMAL, null, null);
-        assertEquals("9", ViewerAuthService.omsUsername(idOnly));
+        assertEquals("oms_name_2", accessClaims.get("username", String.class));
+        assertEquals("80002", accessClaims.get("third_user_id", String.class));
     }
 
     @Test
@@ -168,13 +193,14 @@ class ViewerAuthServiceTest {
         ViewerEntity other = viewer(2L, ViewerStatus.DISABLED, "13612348079", "oid-other");
         store.other = other;
         when(wechatMpClient.code2Session("login-1"))
-                .thenReturn(new WechatMpClient.WechatSession("oid-self", null));
+                .thenReturn(new WechatMpClient.WechatSession("oid-self", "union-self"));
         when(wechatMpClient.getPhoneNumber("phone-1"))
                 .thenReturn(new WechatMpClient.WechatPhone("13612348079", "86"));
 
         PhoneLoginRequest request = new PhoneLoginRequest();
         request.setLoginCode("login-1");
         request.setPhoneCode("phone-1");
+        request.setType("phone");
         request.setAgreed(true);
         ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.phoneLogin(request));
 
@@ -183,29 +209,32 @@ class ViewerAuthServiceTest {
         assertNull(store.viewer.getPhone());
         assertEquals(original, store.viewer.getLastLoginTime());
         assertEquals("13612348079", store.other.getPhone());
+        verifyNoInteractions(oauthClient);
     }
 
     @Test
     void disabledViewer_returns403OnLoginMeAndRefresh() {
         ViewerEntity viewer = viewer(5L, ViewerStatus.DISABLED, null, "oid-off");
+        viewer.setUid(55L);
         LocalDateTime original = LocalDateTime.of(2020, 1, 1, 0, 0);
         viewer.setLastLoginTime(original);
         store.viewer = viewer;
         when(wechatMpClient.code2Session("c-off"))
-                .thenReturn(new WechatMpClient.WechatSession("oid-off", null));
+                .thenReturn(new WechatMpClient.WechatSession("oid-off", "union-off"));
 
         ViewerAuthException login = assertThrows(ViewerAuthException.class, () -> service.wechatLogin(wechat("c-off")));
         assertEquals(403, login.getCode());
         assertEquals("账号已停用", login.getMessage());
         assertEquals(original, store.viewer.getLastLoginTime());
+        verifyNoInteractions(oauthClient);
 
-        ViewerAuthException me = assertThrows(ViewerAuthException.class, () -> service.userInfo(5L));
+        ViewerAuthException me = assertThrows(ViewerAuthException.class, () -> service.userInfo(55L));
         assertEquals(403, me.getCode());
         assertEquals("账号已停用", me.getMessage());
 
         ViewerRefreshRequest refresh = new ViewerRefreshRequest();
-        refresh.setAccessToken(jwtTokenService.issueAccess(5L));
-        refresh.setRefreshToken(jwtTokenService.issueRefresh(5L));
+        refresh.setAccessToken(jwtTokenService.issueAccess(55L));
+        refresh.setRefreshToken(jwtTokenService.issueRefresh(55L));
         ViewerAuthException refreshed = assertThrows(ViewerAuthException.class, () -> service.refresh(refresh));
         assertEquals(403, refreshed.getCode());
         assertEquals("账号已停用", refreshed.getMessage());
@@ -214,22 +243,28 @@ class ViewerAuthServiceTest {
     @Test
     void refresh_expiredAccessWithValidRefresh_issuesNewPair() {
         store.viewer = viewer(1L, ViewerStatus.NORMAL, "13612348079", "oid-1");
-        String access = jwtTokenService.issueAccess(1L);
-        String refreshToken = jwtTokenService.issueRefresh(1L);
+        store.viewer.setUid(700L);
+        store.viewer.setUsername("oms_refresh");
+        String access = jwtTokenService.issueAccess(700L, "oms_refresh");
+        String refreshToken = jwtTokenService.issueRefresh(700L, "oms_refresh");
         clock.advanceSeconds(7201);
 
-        assertThrows(ViewerAuthException.class, () -> jwtTokenService.parseUserId(access));
+        assertThrows(ViewerAuthException.class, () -> jwtTokenService.parseUid(access));
 
         ViewerRefreshRequest request = new ViewerRefreshRequest();
         request.setAccessToken(access);
         request.setRefreshToken(refreshToken);
         ViewerAuthResponse response = service.refresh(request);
 
-        assertEquals(1L, response.getUser().getId());
+        assertEquals(700L, response.getUser().getUid());
         assertEquals("136****8079", response.getUser().getPhoneMasked());
-        assertEquals(1L, jwtTokenService.parseUserId(response.getAccessToken()));
-        assertEquals(1L, jwtTokenService.parseRefreshUserId(refreshToken));
+        assertEquals(700L, jwtTokenService.parseUid(response.getAccessToken()));
+        assertEquals(700L, jwtTokenService.parseRefreshUid(refreshToken));
         assertTrue(!access.equals(response.getAccessToken()));
+        Claims claims = parseAccess(response.getAccessToken());
+        assertEquals("oms_refresh", claims.get("username", String.class));
+        assertEquals("700", claims.get("third_user_id", String.class));
+        assertEquals("700", claims.getSubject());
     }
 
     @Test
@@ -252,10 +287,23 @@ class ViewerAuthServiceTest {
         assertFalse(ex.getMessage().contains("SECRET"));
         assertFalse(ex.getMessage().contains("VIEWER"));
         verifyNoInteractions(wechatMpClient);
+        verifyNoInteractions(oauthClient);
     }
 
     @Test
-    void devPhoneLogin_registersThenReusesSamePhone() {
+    void oauthFailure_blocksLogin() {
+        when(wechatMpClient.code2Session("c-fail"))
+                .thenReturn(new WechatMpClient.WechatSession("oid-f", "union-f"));
+        when(oauthClient.registerByUnionId(eq("union-f"), eq("phone")))
+                .thenThrow(new ViewerAuthException(400, "登录失败，请重试"));
+
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.wechatLogin(wechat("c-fail")));
+        assertEquals(400, ex.getCode());
+        assertEquals("登录失败，请重试", ex.getMessage());
+    }
+
+    @Test
+    void devPhoneLogin_registersThenReusesSamePhone_withoutOauth() {
         DevPhoneLoginRequest request = new DevPhoneLoginRequest();
         request.setPhone("13800138000");
         request.setAgreed(true);
@@ -263,13 +311,20 @@ class ViewerAuthServiceTest {
         ViewerAuthResponse first = service.devPhoneLogin(request);
         ViewerAuthResponse second = service.devPhoneLogin(request);
 
-        assertEquals(first.getUser().getId(), second.getUser().getId());
+        assertNull(first.getUser().getUid());
+        assertNull(second.getUser().getUid());
         assertTrue(second.getUser().isHasPhone());
         assertEquals("138****8000", second.getUser().getPhoneMasked());
+        assertNull(second.getUser().getUsername());
         assertEquals("13800138000", store.viewer.getPhone());
         assertNull(store.viewer.getMiniOpenid());
         assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
         verifyNoInteractions(wechatMpClient);
+        verifyNoInteractions(oauthClient);
+
+        Claims claims = parseAccess(second.getAccessToken());
+        assertEquals("", claims.get("username", String.class));
+        assertEquals("", claims.get("third_user_id", String.class));
     }
 
     @Test
@@ -281,6 +336,7 @@ class ViewerAuthServiceTest {
         assertEquals(400, ex.getCode());
         assertEquals("请输入正确的手机号", ex.getMessage());
         verifyNoInteractions(wechatMpClient);
+        verifyNoInteractions(oauthClient);
     }
 
     private void stubStore() {
@@ -296,12 +352,12 @@ class ViewerAuthServiceTest {
             }
             return entity;
         });
-        when(viewerRepository.findById(anyLong())).thenAnswer(invocation -> {
-            Long id = invocation.getArgument(0);
-            if (store.viewer != null && id.equals(store.viewer.getId())) {
+        when(viewerRepository.findByUid(anyLong())).thenAnswer(invocation -> {
+            Long uid = invocation.getArgument(0);
+            if (store.viewer != null && uid.equals(store.viewer.getUid())) {
                 return Optional.of(store.viewer);
             }
-            if (store.other != null && id.equals(store.other.getId())) {
+            if (store.other != null && uid.equals(store.other.getUid())) {
                 return Optional.of(store.other);
             }
             return Optional.empty();
@@ -349,6 +405,7 @@ class ViewerAuthServiceTest {
     private static WechatLoginRequest wechat(String code) {
         WechatLoginRequest request = new WechatLoginRequest();
         request.setCode(code);
+        request.setType("phone");
         request.setAgreed(true);
         return request;
     }

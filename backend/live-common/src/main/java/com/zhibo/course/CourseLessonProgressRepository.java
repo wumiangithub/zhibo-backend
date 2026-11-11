@@ -12,10 +12,10 @@ public interface CourseLessonProgressRepository
         extends JpaRepository<CourseLessonProgressEntity, Long>,
                 JpaSpecificationExecutor<CourseLessonProgressEntity> {
 
-    Optional<CourseLessonProgressEntity> findByCourseIdAndLessonNodeIdAndViewerId(
-            String courseId, Long lessonNodeId, Long viewerId);
+    Optional<CourseLessonProgressEntity> findByCourseIdAndLessonNodeIdAndUid(
+            String courseId, Long lessonNodeId, Long uid);
 
-    List<CourseLessonProgressEntity> findByCourseIdAndViewerId(String courseId, Long viewerId);
+    List<CourseLessonProgressEntity> findByCourseIdAndUid(String courseId, Long uid);
 
     List<CourseLessonProgressEntity> findByCourseId(String courseId);
 
@@ -30,9 +30,9 @@ public interface CourseLessonProgressRepository
             @Param("minStatus") int minStatus);
 
     @Query("SELECT COUNT(p) FROM CourseLessonProgressEntity p WHERE p.courseId = :courseId "
-            + "AND p.viewerId = :viewerId AND p.participateStatus = :status")
-    long countByCourseViewerAndStatus(
+            + "AND p.uid = :uid AND p.participateStatus = :status")
+    long countByCourseUidAndStatus(
             @Param("courseId") String courseId,
-            @Param("viewerId") Long viewerId,
+            @Param("uid") Long uid,
             @Param("status") int status);
 }

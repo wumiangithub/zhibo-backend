@@ -10,7 +10,7 @@ public class LearningCourseListItem {
 
     /** {@code course_lesson_progress.id} */
     private long id;
-    private long viewerId;
+    private long uid;
     private String nickname;
     private String avatarUrl;
     private List<Long> tagIds = new ArrayList<>();

@@ -15,9 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 观众 JWT。本站鉴权用 iss/aud/sub + token_type；同时写入 oms-go 观众头所需的
- * {@code username}/{@code third_user_id}（见对方「登录例子.go」SignViewersToken），
- * 否则订单中心会报登录过期/登录态异常。
+ * 观众 JWT。本站鉴权用 iss/aud/sub + token_type；{@code sub} = 用户中心 uid（D117）。
+ * 同时写入 oms-go 的 {@code username}/{@code third_user_id}（=uid）。
  * access 的 aud 是 viewer，refresh 的 aud 是 viewer-refresh。
  */
 @Slf4j
@@ -36,27 +35,36 @@ public class ViewerJwtTokenService {
         this.clock = clock;
     }
 
-    /** @param username oms-go 必带；对齐下单客户账号（有手机号用手机号，否则 openid / id） */
-    public String issueAccess(long viewerId, String username) {
-        return issue(viewerId, username, accessAudience(), expireSeconds(), TOKEN_TYPE_ACCESS);
+    /**
+     * @param uid 用户中心 uid；正式登录必有。local 无 uid 时传 null → sub 写空（不可写业务表）
+     * @param omsUsername 用户中心 username；无则可空
+     */
+    public String issueAccess(Long uid, String omsUsername) {
+        return issue(uid, omsUsername, accessAudience(), expireSeconds(), TOKEN_TYPE_ACCESS);
     }
 
-    /** 单测便捷：username 默认 {@code String(viewerId)}。 */
-    public String issueAccess(long viewerId) {
-        return issueAccess(viewerId, String.valueOf(viewerId));
+    /** 单测便捷：username 空。 */
+    public String issueAccess(long uid) {
+        return issueAccess(uid, "");
     }
 
-    public String issueRefresh(long viewerId, String username) {
-        return issue(viewerId, username, refreshAudience(), refreshExpireSeconds(), TOKEN_TYPE_REFRESH);
+    public String issueRefresh(Long uid, String omsUsername) {
+        return issue(uid, omsUsername, refreshAudience(), refreshExpireSeconds(), TOKEN_TYPE_REFRESH);
     }
 
-    public String issueRefresh(long viewerId) {
-        return issueRefresh(viewerId, String.valueOf(viewerId));
+    public String issueRefresh(long uid) {
+        return issueRefresh(uid, "");
     }
 
-    /** 业务接口：必须是未过期的 access。refresh 或过期 access 都是 401。 */
-    public long parseUserId(String token) {
+    /** 业务接口：必须是未过期的 access。返回 uid（JWT sub）。 */
+    public long parseUid(String token) {
         return subject(parse(token, accessAudience(), false, TOKEN_TYPE_ACCESS, "未登录"));
+    }
+
+    /** @deprecated 用 {@link #parseUid}；保留旧名避免漏改编译失败。 */
+    @Deprecated
+    public long parseUserId(String token) {
+        return parseUid(token);
     }
 
     /** 刷新：access 过期放行，签名或 aud 不对不行。 */
@@ -65,8 +73,14 @@ public class ViewerJwtTokenService {
     }
 
     /** 刷新：refresh 必须未过期，且 aud 为 viewer-refresh。 */
-    public long parseRefreshUserId(String token) {
+    public long parseRefreshUid(String token) {
         return subject(parse(token, refreshAudience(), false, TOKEN_TYPE_REFRESH, "刷新凭证无效或已过期"));
+    }
+
+    /** @deprecated 用 {@link #parseRefreshUid}。 */
+    @Deprecated
+    public long parseRefreshUserId(String token) {
+        return parseRefreshUid(token);
     }
 
     public int expireSeconds() {
@@ -78,24 +92,24 @@ public class ViewerJwtTokenService {
     }
 
     private String issue(
-            long viewerId, String username, String audience, int expireSeconds, String tokenType) {
+            Long uid, String omsUsername, String audience, int expireSeconds, String tokenType) {
         if (properties.jwtSecretMissing()) {
             log.warn("观众登录配置缺失: VIEWER_JWT_SECRET");
             throw new ViewerAuthException(500, "观众登录暂不可用");
         }
         Instant now = clock.instant();
         Instant exp = now.plusSeconds(expireSeconds);
-        String nameClaim =
-                username == null || username.isBlank() ? String.valueOf(viewerId) : username.trim();
+        String nameClaim = omsUsername == null ? "" : omsUsername.trim();
+        String subject = uid == null ? "" : String.valueOf(uid);
+        String thirdUserId = uid == null ? "" : String.valueOf(uid);
         return Jwts.builder()
                 .issuer(issuer())
                 .audience().add(audience).and()
-                .subject(String.valueOf(viewerId))
+                .subject(subject)
                 .id(randomJti())
                 .claim("token_type", tokenType)
-                // oms-go Authorization-Live-Viewers（登录例子.go SignViewersToken）
                 .claim("username", nameClaim)
-                .claim("third_user_id", String.valueOf(viewerId))
+                .claim("third_user_id", thirdUserId)
                 .issuedAt(Date.from(now))
                 .notBefore(Date.from(now))
                 .expiration(Date.from(exp))
@@ -153,7 +167,13 @@ public class ViewerJwtTokenService {
 
     private static long subject(Claims claims) {
         try {
-            return Long.parseLong(claims.getSubject());
+            String sub = claims.getSubject();
+            if (sub == null || sub.isBlank()) {
+                throw new ViewerAuthException(401, "未登录");
+            }
+            return Long.parseLong(sub);
+        } catch (ViewerAuthException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
             throw new ViewerAuthException(401, "未登录");
         }

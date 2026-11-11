@@ -10,7 +10,7 @@ import lombok.Data;
 public class AudienceListItem {
 
     private Long id;
-    private Long viewerId;
+    private Long uid;
     private String nickname;
     private String avatarUrl;
     private int entitlementStatus;

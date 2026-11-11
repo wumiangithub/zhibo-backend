@@ -70,7 +70,7 @@ class WatchCommentServiceTest {
         ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
         assertEquals("hello", cap.getValue().getContent());
-        assertEquals(12L, cap.getValue().getViewerId());
+        assertEquals(12L, cap.getValue().getUid());
         assertNull(cap.getValue().getMsgId());
         assertNull(cap.getValue().getQuestionId());
         assertEquals(PROVIDER, cap.getValue().getProvider());
@@ -147,7 +147,7 @@ class WatchCommentServiceTest {
         ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
         assertEquals("hello", cap.getValue().getContent());
-        assertEquals(12L, cap.getValue().getViewerId());
+        assertEquals(12L, cap.getValue().getUid());
         assertNull(cap.getValue().getGuestId());
         assertEquals("msg-1", cap.getValue().getMsgId());
         assertEquals(PROVIDER, cap.getValue().getProvider());
@@ -159,7 +159,7 @@ class WatchCommentServiceTest {
         stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
-        existing.setViewerId(12L);
+        existing.setUid(12L);
         existing.setProvider(PROVIDER);
         existing.setRoomId(ROOM_ID);
         when(commentRepository.findByActivityIdAndMsgId(ACTIVITY_ID, "msg-1"))
@@ -177,7 +177,7 @@ class WatchCommentServiceTest {
         stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
-        existing.setViewerId(12L);
+        existing.setUid(12L);
         existing.setQuestionId("2397558");
         when(commentRepository.findByActivityIdAndQuestionId(ACTIVITY_ID, "2397558"))
                 .thenReturn(Optional.of(existing));
@@ -201,7 +201,7 @@ class WatchCommentServiceTest {
         stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
-        existing.setViewerId(null);
+        existing.setUid(null);
         when(commentRepository.findByActivityIdAndMsgId(ACTIVITY_ID, "msg-1"))
                 .thenReturn(Optional.of(existing));
         when(commentRepository.save(any(RoomCommentEntity.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -211,7 +211,7 @@ class WatchCommentServiceTest {
         request.setMsgId("msg-1");
 
         assertEquals(3L, service.report(ACTIVITY_ID, 12L, request).getId());
-        assertEquals(12L, existing.getViewerId());
+        assertEquals(12L, existing.getUid());
         assertEquals(PROVIDER, existing.getProvider());
         assertEquals(ROOM_ID, existing.getRoomId());
         verify(commentRepository).save(existing);
@@ -259,7 +259,7 @@ class WatchCommentServiceTest {
         assertEquals(1, saved.getAnswerRoleName());
         assertEquals(PROVIDER, saved.getProvider());
         assertEquals(ROOM_ID, saved.getRoomId());
-        assertNull(saved.getViewerId());
+        assertNull(saved.getUid());
     }
 
     @Test

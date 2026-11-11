@@ -50,7 +50,7 @@ public class ReplayWatchController {
     }
 
     private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
+        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
         if (viewerId == null) {
             throw new ViewerAuthException(401, "未登录");
         }

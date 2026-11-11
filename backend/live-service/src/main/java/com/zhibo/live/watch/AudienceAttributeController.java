@@ -31,7 +31,7 @@ public class AudienceAttributeController {
     @GetMapping("/salesman/{id}")
     public ApiResponse<AudienceSalesmanResponse> salesman(
             @PathVariable String id, HttpServletRequest httpRequest) {
-        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
+        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_UID);
         if (viewerId == null || viewerId <= 0) {
             throw new ViewerAuthException(401, "未登录");
         }
@@ -43,7 +43,7 @@ public class AudienceAttributeController {
             @PathVariable String id,
             @Valid @RequestBody AttributeAudienceRequest request,
             HttpServletRequest httpRequest) {
-        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
+        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_UID);
         if (viewerId == null || viewerId <= 0) {
             throw new ViewerAuthException(401, "未登录");
         }

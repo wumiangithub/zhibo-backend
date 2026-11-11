@@ -11,7 +11,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UpdateViewerTagsResponse {
 
-    private Long id;
+    /** 用户中心 uid */
+    private Long uid;
     private List<Long> tagIds = new ArrayList<>();
     private List<String> tagLabels = new ArrayList<>();
 }

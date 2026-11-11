@@ -98,6 +98,7 @@ public class WatchService {
         response.setId(entity.getId());
         response.setProvider(entity.getProvider());
         response.setTitle(entity.getTitle());
+        response.setCoverUrl(entity.getCoverUrl());
         response.setState(entity.getState());
         response.setType(entity.getType());
         response.setStartTime(entity.getStartTime());

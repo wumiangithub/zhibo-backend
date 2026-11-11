@@ -102,7 +102,7 @@ class RoomUserDataCalculatorTest {
 
     private static RoomReplayWatchEntity replay(long viewerId, String start, String last) {
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
-        row.setViewerId(viewerId);
+        row.setUid(viewerId);
         row.setStartTime(LocalDateTime.parse(start.replace(' ', 'T')));
         row.setLastReportTime(LocalDateTime.parse(last.replace(' ', 'T')));
         return row;

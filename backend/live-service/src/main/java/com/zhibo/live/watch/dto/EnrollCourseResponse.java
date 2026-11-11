@@ -8,7 +8,7 @@ import lombok.Data;
 public class EnrollCourseResponse {
 
     private Long id;
-    private Long viewerId;
+    private Long uid;
     private String courseId;
     /** 本次是否新建学员行。 */
     private boolean created;

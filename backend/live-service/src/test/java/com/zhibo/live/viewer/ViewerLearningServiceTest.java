@@ -115,7 +115,7 @@ class ViewerLearningServiceTest {
         when(catalogNodeRepository.countActiveByCourseIdAndNodeType(
                         COURSE_ID, CourseCatalogNodeType.SUBCOURSE))
                 .thenReturn(5L);
-        when(courseUserRepository.findByCourseIdAndViewerIdAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
                 .thenReturn(Optional.of(cu));
 
         var resp = learningService.listEntitledCourses(9L, 1, 20);
@@ -133,7 +133,7 @@ class ViewerLearningServiceTest {
         course.setId(COURSE_ID);
         course.setAccessValidityType("long");
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-        when(courseUserRepository.findByCourseIdAndViewerIdAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
                 .thenReturn(Optional.empty());
 
         assertThrows(
@@ -171,12 +171,12 @@ class ViewerLearningServiceTest {
         progress.setProgressPercent(100);
 
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-        when(courseUserRepository.findByCourseIdAndViewerIdAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
                 .thenReturn(Optional.of(cu));
         when(catalogNodeRepository.findActiveByCourseId(COURSE_ID))
                 .thenReturn(List.of(sub, chapter, lesson));
         when(activityRepository.findAllById(any())).thenReturn(List.of(live));
-        when(progressRepository.findByCourseIdAndViewerId(COURSE_ID, 9L))
+        when(progressRepository.findByCourseIdAndUid(COURSE_ID, 9L))
                 .thenReturn(List.of(progress));
 
         var resp = learningService.getCourseDetail(9L, COURSE_ID);
@@ -215,7 +215,7 @@ class ViewerLearningServiceTest {
 
         when(catalogNodeRepository.findByIdAndCourseIdAndDeletedTimeIsNull(12L, COURSE_ID))
                 .thenReturn(Optional.of(lesson));
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 12L, 9L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 12L, 9L))
                 .thenReturn(Optional.empty());
         when(materialRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(material));
 
@@ -250,7 +250,7 @@ class ViewerLearningServiceTest {
 
         when(catalogNodeRepository.findByIdAndCourseIdAndDeletedTimeIsNull(15L, COURSE_ID))
                 .thenReturn(Optional.of(lesson));
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 15L, 9L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 15L, 9L))
                 .thenReturn(Optional.empty());
         when(materialRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(material));
         when(materialArticleRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(article));
@@ -274,7 +274,7 @@ class ViewerLearningServiceTest {
                         LIVE_ID);
         when(catalogNodeRepository.findByIdAndCourseIdAndDeletedTimeIsNull(12L, COURSE_ID))
                 .thenReturn(Optional.of(lesson));
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndViewerId(COURSE_ID, 12L, 9L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 12L, 9L))
                 .thenReturn(Optional.empty());
 
         var resp = learningService.getLessonContent(9L, COURSE_ID, 12L);
@@ -289,7 +289,7 @@ class ViewerLearningServiceTest {
         CourseUserEntity cu = new CourseUserEntity();
         cu.setEntitlementStatus(1);
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-        when(courseUserRepository.findByCourseIdAndViewerIdAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
                 .thenReturn(Optional.of(cu));
     }
 

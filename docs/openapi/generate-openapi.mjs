@@ -386,7 +386,7 @@ const FIELD_DESC_BY_NAME = {
   accessExpired: '访问是否已过期',
   accessState: '观看售卖门禁状态',
   accessValidityDays: '购买后有效天数',
-  account: '第三方用户唯一标识（观众=数字 viewerId）；本站回显；init 以 email 为准；聊天回包未必带回',
+  account: '第三方用户唯一标识（观众=数字 uid）；本站回显；init 以 email 为准；聊天回包未必带回',
   ultraLowLatency:
     '是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。创建后不可改',
   verify: '观看验证方式（微吼 verify）',
@@ -443,7 +443,7 @@ const FIELD_DESC_BY_NAME = {
   role: '开播角色',
   operatorName: '操作人姓名',
   passcode: '9 位数字开播口令',
-  viewerId: '观众 id（viewer 表主键）',
+  uid: '用户中心 uid（业务用户主键）',
   entitlementStatus: '权益状态：0 无 / 1 有',
   inviterDisplayName: '邀请人展示名',
   inviterKind: '邀请人类型：employee 员工 / audience 观众',
@@ -563,6 +563,8 @@ const FIELD_DESC_BY_PATH = {
   'WatchSummaryData.id': '本站活动 UUID',
   'WatchSummaryData.provider': '服务商（页壳可忽略；init 仍以 sdk-sign 的 provider 为准）',
   'WatchSummaryData.title': '本库活动标题',
+  'WatchSummaryData.coverUrl':
+    '活动详情封面，本库 activity.cover_url；无封面时不输出。结束页可展示',
   'WatchSummaryData.state': '本库活动状态（D106：vhall 可能刚被 webinar/info 对账写回）',
   'WatchSummaryData.type': '本库活动类型',
   'WatchSummaryData.startTime': '计划/实际开始，yyyy-MM-dd HH:mm:ss；本库',
@@ -576,7 +578,7 @@ const FIELD_DESC_BY_PATH = {
   'WatchSummaryData.playbackFastForwardAllow': '是否允许快进/拖进度；缺省 true',
   'WatchSdkData.id': '本站活动 UUID（与 Query id 相同）',
   'WatchSdkData.provider': '服务商；前端 createWatchAdapter(provider)',
-  'WatchSdkData.viewerId': '观众数字 id（与 sdk.email 一致）',
+  'WatchSdkData.uid': '用户中心 uid（与 sdk.email 本地部分一致）',
   'WatchSdkData.nickname': '与 sdk.username 同值（身份回显）',
   'WatchSdkData.sdk': '该服务商签名与 init 鉴权参数（不含脚本 CDN，D93）',
   'WatchAccessData.accessState':
@@ -2963,8 +2965,8 @@ function buildAdmin() {
     CourseUserCreateRequest: {
       type: 'object',
       properties: {
-        phone: { type: 'string', description: '与 viewerId 二选一' },
-        viewerId: {
+        phone: { type: 'string', description: '与 uid 二选一' },
+        uid: {
           type: 'integer',
           format: 'int64',
           description: '与 phone 二选一',
@@ -2980,7 +2982,7 @@ function buildAdmin() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        viewerId: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64' },
         created: { type: 'boolean', description: 'true 新建；false 已有行' },
       },
     },
@@ -3158,7 +3160,7 @@ function buildAdmin() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64', description: '名单行 id' },
-        viewerId: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64' },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         entitlementStatus: {
@@ -3198,15 +3200,15 @@ function buildAdmin() {
     ActivityAudienceCreateRequest: {
       type: 'object',
       properties: {
-        phone: { type: 'string', description: '与 viewerId 二选一' },
-        viewerId: { type: 'integer', format: 'int64', description: '与 phone 二选一' },
+        phone: { type: 'string', description: '与 uid 二选一' },
+        uid: { type: 'integer', format: 'int64', description: '与 phone 二选一' },
       },
     },
     ActivityAudienceCreateData: {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        viewerId: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64' },
         created: { type: 'boolean' },
       },
     },
@@ -3279,7 +3281,7 @@ function buildAdmin() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        viewerId: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64' },
         guestId: { type: 'string' },
         nickname: { type: 'string' },
         content: { type: 'string' },
@@ -3307,7 +3309,7 @@ function buildAdmin() {
     ViewerListItem: {
       type: 'object',
       properties: {
-        id: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64', description: '用户中心 uid（业务用户主键）' },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         registerChannel: { type: 'integer', enum: [1, 2], description: '1 微信 / 2 导入' },
@@ -3348,7 +3350,7 @@ function buildAdmin() {
     ViewerBlacklistUpdateData: {
       type: 'object',
       properties: {
-        id: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
         banComment: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
         banPurchase: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
         banAccess: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
@@ -3365,7 +3367,7 @@ function buildAdmin() {
     ViewerTagsUpdateData: {
       type: 'object',
       properties: {
-        id: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
         tagLabels: { type: 'array', items: { type: 'string' } },
       },
@@ -3373,7 +3375,7 @@ function buildAdmin() {
     ViewerLearnStatsSummaryItem: {
       type: 'object',
       properties: {
-        id: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
@@ -3400,7 +3402,7 @@ function buildAdmin() {
       type: 'object',
       required: [
         'id',
-        'viewerId',
+        'uid',
         'nickname',
         'tagIds',
         'tagLabels',
@@ -3411,7 +3413,7 @@ function buildAdmin() {
       ],
       properties: {
         id: { type: 'integer', format: 'int64', description: 'course_lesson_progress.id' },
-        viewerId: { type: 'integer', format: 'int64', description: 'viewer.id' },
+        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
         nickname: { type: 'string', description: '观众展示昵称' },
         avatarUrl: { type: 'string', description: '头像 URL；无则省略' },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' }, description: '标签 id 列表；无则 []' },
@@ -5622,7 +5624,7 @@ function buildAdmin() {
         tags: ['课程'],
         summary: '单个添加学员',
         description: [
-          '向本课添加一名学员。Body 须二选一提供 phone 或 viewerId；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。',
+          '向本课添加一名学员。Body 须二选一提供 phone 或 uid；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。',
           '本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。',
           '已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。',
         ].join(''),
@@ -6554,7 +6556,7 @@ function buildAdmin() {
         tags: ['直播中控台'],
         summary: '中控台发送优惠券',
         description:
-          '中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，viewer_id 空，nickname 为当前员工昵称）。' +
+          '中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，uid 空，nickname 为当前员工昵称）。' +
           '发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。' +
           '前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。',
         operationId: 'sendConsoleCoupon',
@@ -6624,7 +6626,7 @@ function buildAdmin() {
             in: 'path',
             required: true,
             schema: { type: 'integer', format: 'int64' },
-            description: 'viewer.id',
+            description: '用户中心 uid',
           },
         ],
         requestBody: {
@@ -6650,7 +6652,7 @@ function buildAdmin() {
             in: 'path',
             required: true,
             schema: { type: 'integer', format: 'int64' },
-            description: 'viewer.id',
+            description: '用户中心 uid',
           },
         ],
         requestBody: {
@@ -7228,14 +7230,14 @@ function buildLive() {
         account: {
           type: 'string',
           description:
-            '第三方用户唯一标识（观众=数字 viewerId）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）',
+            '第三方用户唯一标识（观众=数字 uid）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）',
         },
-        email: { type: 'string', description: '{viewerId}@qkzb.com，参与签名；new VhallSDK 必须用这份' },
+        email: { type: 'string', description: '{uid}@qkzb.com，参与签名；new VhallSDK 必须用这份' },
         username: { type: 'string', description: '优先 Query nickname；空则默认「观众」' },
         head: {
           type: 'string',
           description:
-            '对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 viewerId（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）',
+            '对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 uid（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）',
         },
         webinarId: { type: 'string', description: '微吼活动号（= provider_room_id）；仅 provider=vhall' },
         appKey: { type: 'string', description: '微吼 app_key' },
@@ -7247,11 +7249,12 @@ function buildLive() {
     WatchSummaryData: {
       type: 'object',
       description:
-        '观看页活动摘要 / 页面壳（D95）：标题、态、时间、回放开关与有效期；全部取本库 Activity，不含 SDK 签名',
+        '观看页活动摘要 / 页面壳（D95）：标题、封面、态、时间、回放开关与有效期；全部取本库 Activity，不含 SDK 签名',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         title: { type: 'string' },
+        coverUrl: { type: 'string', format: 'uri' },
         state: { $ref: '#/components/schemas/ActivityState' },
         type: { $ref: '#/components/schemas/ActivityType' },
         startTime: { type: 'string' },
@@ -7267,12 +7270,12 @@ function buildLive() {
     WatchSdkData: {
       type: 'object',
       description:
-        '观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / viewerId / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 viewerId 来自观众 JWT',
+        '观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / uid / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 uid 来自观众 JWT',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         nickname: { type: 'string' },
-        viewerId: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64' },
         sdk: { $ref: '#/components/schemas/VhallSdkPayload' },
       },
     },
@@ -7548,7 +7551,22 @@ function buildLive() {
     ViewerUserInfo: {
       type: 'object',
       properties: {
-        id: { type: 'integer', format: 'int64' },
+        uid: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '用户中心 uid（业务用户主键）。JWT sub、业务表 uid、订单中心 third_user_id 均取此值。未同步（如仅 local 明文手机号登录）时省略。本站自增 viewer.id 不对外。',
+        },
+        username: {
+          type: 'string',
+          description:
+            '同步自用户中心 LoginVo.username。订单中心 JWT claim username 取此值。本站展示昵称仍用 nickname。未同步时省略。',
+        },
+        miniOpenid: {
+          type: 'string',
+          description:
+            '微信小程序 openid（库列 mini_openid）。有则返回，供小程序收银台 wx_lite prepay 的 body.openId；local 明文造号等无凭证时省略。不是展示字段，勿当昵称。',
+        },
         hasPhone: { type: 'boolean' },
         phoneMasked: { type: 'string' },
         nickname: { type: 'string' },
@@ -7568,19 +7586,29 @@ function buildLive() {
     },
     ViewerAuthWechatLoginRequest: {
       type: 'object',
-      required: ['code', 'agreed'],
+      required: ['code', 'type', 'agreed'],
       properties: {
-        code: { type: 'string' },
-        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
+        code: { type: 'string', description: 'wx.login 返回的一次性 code。' },
+        type: {
+          type: 'string',
+          enum: ['phone', 'pc'],
+          description: '设备类型，传给用户中心。小程序与手机网页填 phone；电脑网页填 pc。',
+        },
+        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意用户协议和隐私协议。' },
       },
     },
     ViewerAuthPhoneLoginRequest: {
       type: 'object',
-      required: ['loginCode', 'phoneCode', 'agreed'],
+      required: ['loginCode', 'phoneCode', 'type', 'agreed'],
       properties: {
-        loginCode: { type: 'string' },
-        phoneCode: { type: 'string' },
-        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意' },
+        loginCode: { type: 'string', description: 'wx.login 的 code，用来换 openid/unionid。' },
+        phoneCode: { type: 'string', description: 'getPhoneNumber 的 detail.code。' },
+        type: {
+          type: 'string',
+          enum: ['phone', 'pc'],
+          description: '设备类型，传给用户中心。小程序与手机网页填 phone；电脑网页填 pc。',
+        },
+        agreed: { type: 'boolean', enum: [true], description: 'true 已勾选同意用户协议和隐私协议。' },
       },
     },
     ViewerAuthRefreshRequest: {
@@ -7747,13 +7775,13 @@ function buildLive() {
       type: 'object',
       required: ['inviterId'],
       description:
-        '邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 viewerId。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）',
+        '邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 uid。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）',
       properties: {
         inviterId: {
           type: 'integer',
           format: 'int64',
           description:
-            '邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 viewer.id（当前不落库）；库：BIGINT',
+            '邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 uid（当前不落库）；库：BIGINT',
         },
         inviterKind: {
           type: 'string',
@@ -7766,20 +7794,63 @@ function buildLive() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        viewerId: { type: 'integer', format: 'int64' },
+        uid: { type: 'integer', format: 'int64' },
       },
     },
     WatchAudienceSalesmanData: {
       type: 'object',
       description:
-        '本场业务员。读 activity_audience：优先 employee_inviter_id（员工邀请人），否则 importer_id（导入人）；无本场行或两字段皆空则 salesmanId 为 null。供观看页创建订单传订单中心 salesmanId。',
+        '本场业务员。读 activity_audience：仅 employee_inviter_id（员工邀请人）经账号 yhid 查 hr_uimsyhxx.identifier，并取在职岗位 id 最小一条的 hr_uimsyhgwxx.bmid 作 salesmanDeptId；无邀请人或档案缺失则 salesmanId 为 null。不回退 importer_id。供观看页创建订单传订单中心。',
       properties: {
         salesmanId: {
+          type: 'string',
+          nullable: true,
+          description:
+            'hr_uimsyhxx.identifier（UUID 字符串）。有有效员工邀请人且档案存在时返回；无邀请人或查不到则为 null（前端创建订单时不传 salesmanId）。不是 sys_useraccount.rs_mainkey_id。',
+          example: 'a0d9a8a1-a6d8-4978-8cb4-e7e86fba9c39',
+        },
+        salesmanDeptId: {
           type: 'integer',
           format: 'int64',
           nullable: true,
           description:
-            '员工 sys_useraccount.rs_mainkey_id。有有效邀请人用邀请人；否则用导入人；皆无则为 null（前端创建订单时不传 salesmanId）。',
+            'hr_uimsyhgwxx.bmid（在职岗位取岗位主键最小一条）。有 identifier 但无岗位时可为 null；前端仅在有正整数时写入订单中心 salesmanDeptId。',
+          example: 94,
+        },
+      },
+    },
+    DictDataItem: {
+      type: 'object',
+      required: ['label', 'value'],
+      properties: {
+        label: {
+          type: 'string',
+          description: '字典标签，对应 sys_dict_data.dict_label。例：wx_wap',
+        },
+        value: {
+          type: 'integer',
+          description: '字典键值，对应 sys_dict_data.dict_value。例：4',
+        },
+      },
+    },
+    DictData: {
+      type: 'object',
+      description:
+        '系统字典。先查 sys_dict_type（dict_dm + rs_status=1），再查 sys_dict_data（dict_id + rs_status=1），按 rs_dispindex、主键升序',
+      required: ['dictDm', 'dictName', 'list'],
+      properties: {
+        dictDm: {
+          type: 'string',
+          description: '字典代码，回显路径参数。例：pay_channel',
+        },
+        dictName: {
+          type: 'string',
+          description: '字典名称，对应 sys_dict_type.dict_name。例：支付渠道',
+        },
+        list: {
+          type: 'array',
+          description: '启用中的字典项；无项时为空数组',
+          items: { $ref: '#/components/schemas/DictDataItem' },
         },
       },
     },
@@ -7802,7 +7873,7 @@ function buildLive() {
           format: 'int64',
           description: 'course_user 行 id',
         },
-        viewerId: { type: 'integer', format: 'int64', description: '观众 id' },
+        uid: { type: 'integer', format: 'int64', description: '观众 id' },
         courseId: {
           $ref: '#/components/schemas/BusinessUuid',
           description: '课程 UUID',
@@ -7878,6 +7949,7 @@ function buildLive() {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         title: { type: 'string' },
+        coverUrl: { type: 'string', format: 'uri' },
         state: { $ref: '#/components/schemas/ActivityState' },
         type: { $ref: '#/components/schemas/ActivityType' },
         startTime: { type: 'string' },
@@ -7893,7 +7965,7 @@ function buildLive() {
     ConsoleSdkSignData: {
       type: 'object',
       description:
-        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 viewerId；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签',
+        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 uid；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
@@ -7933,6 +8005,7 @@ function buildLive() {
     ApiResponseWatchAudienceAttribute: { $ref: '#/components/schemas/WatchAudienceAttributeData' },
     ApiResponseWatchAudienceSalesman: { $ref: '#/components/schemas/WatchAudienceSalesmanData' },
     ApiResponseWatchCourseEnroll: { $ref: '#/components/schemas/WatchCourseEnrollData' },
+    ApiResponseDictData: { $ref: '#/components/schemas/DictData' },
     ApiResponseIntId: { $ref: '#/components/schemas/IdDataInt' },
 
   })) {
@@ -7955,10 +8028,10 @@ function buildLive() {
       description: '默认「观众」',
     },
     {
-      name: 'viewerId',
+      name: 'uid',
       in: 'query',
       schema: { type: 'integer', format: 'int64' },
-      description: '观众数字 id；有则 email 为 {id}@qkzb.com',
+      description: '用户中心 uid；有则 email 为 {uid}@qkzb.com',
     },
   ]
   const sdkSignParams = [
@@ -7976,7 +8049,7 @@ function buildLive() {
       name: 'nickname',
       in: 'query',
       schema: { type: 'string', maxLength: 50 },
-      description: '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；viewerId 只从 Authorization 解析（D96）',
+      description: '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；uid 只从 Authorization 解析（D96）',
     },
   ]
   const activityAccessHeader = {
@@ -8304,11 +8377,11 @@ function buildLive() {
         summary: '观看 SDK 签名与初始化载荷',
         description: [
           '旧路径 GET /api/v1/watch/sdk/{id} 已删除。',
-          'Query 仅 id + 可选 nickname；viewerId 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。',
-          '仅返回 id / provider / viewerId / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
+          'Query 仅 id + 可选 nickname；uid 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。',
+          '仅返回 id / provider / uid / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
           '不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。',
           '签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。',
-          '头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={viewerId}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。',
+          '头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={uid}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。',
         ].join('\n'),
         operationId: 'getWatchSdkSign',
         security: viewerBearer,
@@ -8447,14 +8520,36 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseIntId'),
       },
     },
+    '/api/v1/dicts/data/{dictDm}': {
+      get: {
+        tags: ['系统'],
+        summary: '按字典代码查询字典项',
+        description: [
+          '公开，不需观众 JWT。先查本库 sys_dict_type（dict_dm=路径参数且 rs_status=1）取类型主键，再查 sys_dict_data（dict_id=类型主键且 rs_status=1），按 rs_dispindex、主键升序返回。',
+          '类型不存在或已软删 → 400「字典不存在」。',
+          '观看支付页每次进入应拉 dictDm=pay_channel，用 list[].label→list[].value 映射订单中心 prepay 的 payChannel（如 wx_wap→4、wx_lite→6、alipay_wap→2）。',
+        ].join('\n'),
+        operationId: 'getDictData',
+        parameters: [
+          {
+            name: 'dictDm',
+            in: 'path',
+            required: true,
+            description: '字典代码，对应 sys_dict_type.dict_dm。例：pay_channel',
+            schema: { type: 'string', maxLength: 50, example: 'pay_channel' },
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseDictData'),
+      },
+    },
     '/api/v1/watch/audience/salesman/{id}': {
       get: {
         tags: ['用户运营'],
         summary: '本场业务员查询',
         description: [
           '须观众 Authorization；观众 id 只从 JWT 取；无票 → 401。路径 {id}=活动 UUID；活动不存在/已软删 → 400。',
-          '读本场 activity_audience 当前观众行：优先 employee_inviter_id（员工邀请人），否则 importer_id（导入人）；无行或两字段皆空 → salesmanId=null。',
-          '观看页创建订单前调用，有值则把 salesmanId 字符串写入订单中心 POST …/viewer/order/create。',
+          '读本场 activity_audience 当前观众行：仅 employee_inviter_id → sys_useraccount.yhid → hr_uimsyhxx.identifier + 在职岗位最小 id 的 bmid；无邀请人或档案缺失 → salesmanId=null。不回退 importer_id。',
+          '观看页创建订单前调用，有值则把 salesmanId / salesmanDeptId 写入订单中心 POST …/viewer/order/create。',
         ].join('\n'),
         operationId: 'watchAudienceSalesman',
         security: viewerBearer,
@@ -8467,7 +8562,7 @@ function buildLive() {
         tags: ['用户运营'],
         summary: '邀请归因',
         description: [
-          '须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 viewerId；无票 → 401。',
+          '须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 uid；无票 → 401。',
           '区分邀请人类型 inviterKind：employee 员工 / audience 观众。',
           'employee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。',
           'audience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。',
@@ -8490,7 +8585,7 @@ function buildLive() {
         tags: ['用户运营'],
         summary: '课程分享链进房 enroll',
         description: [
-          '路径 {id}=课程 UUID。须观众 JWT；viewerId 只从 JWT 取，Body 不接受 viewerId。',
+          '路径 {id}=课程 UUID。须观众 JWT；uid 只从 JWT 取，Body 不接受 uid。',
           '无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。',
           '课程不存在/已软删或观众不存在 → 400；无票 → 401。',
         ].join(''),

@@ -58,7 +58,7 @@ public class WatchSdkService {
         response.setId(entity.getId());
         response.setProvider(entity.getProvider());
         response.setNickname(resolvedNickname);
-        response.setViewerId(viewerId);
+        response.setUid(viewerId);
         response.setSdk(toSdkPayload(bundle.getSdk()));
         return response;
     }
@@ -80,7 +80,7 @@ public class WatchSdkService {
      * {@code viewer.avatar_url} 去空白；有无真实头像都拼/覆盖 {@code ?v={viewerId}}（D111）。
      */
     String resolveSdkHead(Long viewerId) {
-        ViewerEntity viewer = viewerRepository.findById(viewerId).orElse(null);
+        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
         String avatar = viewer == null ? null : viewer.getAvatarUrl();
         return SdkAvatarHeads.resolveForViewer(avatar, viewerId, defaultAvatarUrl);
     }

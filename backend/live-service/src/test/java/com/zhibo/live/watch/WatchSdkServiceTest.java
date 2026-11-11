@@ -71,12 +71,12 @@ class WatchSdkServiceTest {
 
         when(watchService.requireActivity(ID)).thenReturn(entity);
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(viewerRepository.findById(12L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUid(12L)).thenReturn(Optional.of(viewer));
         when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
 
         WatchSdkResponse response = watchSdkService.sdk(ID, "用户8079", 12L);
         assertEquals(ID, response.getId());
-        assertEquals(12L, response.getViewerId());
+        assertEquals(12L, response.getUid());
         assertEquals("vhall", response.getProvider());
         assertEquals("用户8079", response.getNickname());
         assertEquals("1001", response.getSdk().getWebinarId());
@@ -105,7 +105,7 @@ class WatchSdkServiceTest {
 
         when(watchService.requireActivity(ID)).thenReturn(entity);
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(viewerRepository.findById(12L)).thenReturn(Optional.empty());
+        when(viewerRepository.findByUid(12L)).thenReturn(Optional.empty());
         when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
 
         WatchSdkResponse response = watchSdkService.sdk(ID, null, 12L);

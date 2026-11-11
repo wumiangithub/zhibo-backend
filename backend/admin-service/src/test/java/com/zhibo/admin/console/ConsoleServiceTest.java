@@ -82,6 +82,7 @@ class ConsoleServiceTest {
         entity.setState(1);
         entity.setType(0);
         entity.setStartTime("2026-11-06 10:00:00");
+        entity.setCoverUrl("https://cdn.example/cover.jpg");
         entity.setPlaybackEnabled(true);
         entity.setPlaybackValidityType("forever");
         when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
@@ -91,6 +92,7 @@ class ConsoleServiceTest {
         assertEquals(ACTIVITY_ID, res.getId());
         assertEquals("vhall", res.getProvider());
         assertEquals("中控台场次", res.getTitle());
+        assertEquals("https://cdn.example/cover.jpg", res.getCoverUrl());
         assertEquals(1, res.getState());
         assertEquals("forever", res.getPlaybackValidityType());
         assertFalse(Boolean.TRUE.equals(res.getPlaybackExpired()));
@@ -186,7 +188,7 @@ class ConsoleServiceTest {
 
         RoomCommentEntity row = new RoomCommentEntity();
         row.setQuestionId("2397558");
-        row.setViewerId(12L);
+        row.setUid(12L);
         row.setNickname("甲");
         row.setContent("怎么报名");
         row.setMsgId("msg_q1");

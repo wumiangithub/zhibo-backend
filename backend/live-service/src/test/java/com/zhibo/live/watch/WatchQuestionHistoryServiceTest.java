@@ -39,7 +39,7 @@ class WatchQuestionHistoryServiceTest {
 
         RoomCommentEntity row = new RoomCommentEntity();
         row.setQuestionId("2397558");
-        row.setViewerId(12L);
+        row.setUid(12L);
         row.setNickname("甲");
         row.setContent("怎么报名");
         row.setMsgId("msg_q1");

@@ -37,10 +37,11 @@ class ViewerProfileServiceTest {
 
         viewer = new ViewerEntity();
         viewer.setId(9L);
+        viewer.setUid(9L);
         viewer.setStatus(ViewerStatus.NORMAL);
         viewer.setAgreedTime(LocalDateTime.now(clock));
         viewer.setLastLoginTime(LocalDateTime.now(clock));
-        when(viewerRepository.findById(9L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(viewer));
         when(viewerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 

@@ -71,7 +71,7 @@ class PresenceWriteServiceTest {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(12L);
         viewer.setPhone("13612348079");
-        when(viewerRepository.findById(12L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUid(12L)).thenReturn(Optional.of(viewer));
         when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER)).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(RoomAttendanceEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -96,7 +96,7 @@ class PresenceWriteServiceTest {
     @Test
     void join_staleEventStillInsertsEventButSkipsRoster() {
         RoomAttendanceEntity existing = row(1L, VIEWER, "2026-09-30 11:00:00", null);
-        when(viewerRepository.findById(12L)).thenReturn(Optional.empty());
+        when(viewerRepository.findByUid(12L)).thenReturn(Optional.empty());
         when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER))
                 .thenReturn(Optional.of(existing));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);

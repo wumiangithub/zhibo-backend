@@ -8,8 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ViewerFeedbackRepository extends JpaRepository<ViewerFeedbackEntity, Long> {
 
     /** 当前观众的反馈，按提交时间倒序。 */
-    Page<ViewerFeedbackEntity> findByViewerIdOrderByCreatedTimeDesc(Long viewerId, Pageable pageable);
+    Page<ViewerFeedbackEntity> findByUidOrderByCreatedTimeDesc(Long uid, Pageable pageable);
 
     /** 详情：仅本人可见。 */
-    Optional<ViewerFeedbackEntity> findByIdAndViewerId(Long id, Long viewerId);
+    Optional<ViewerFeedbackEntity> findByIdAndUid(Long id, Long uid);
 }

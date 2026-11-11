@@ -34,7 +34,7 @@ public class CourseLessonProgressService {
     public CourseLessonProgressResponse report(
             String courseIdRaw, long viewerId, CourseLessonProgressRequest request) {
         if (viewerId <= 0) {
-            throw new IllegalArgumentException("viewerId 无效");
+            throw new IllegalArgumentException("uid 无效");
         }
         if (request == null || request.getLessonNodeId() == null || request.getLessonNodeId() <= 0) {
             throw new IllegalArgumentException("lessonNodeId 无效");
@@ -65,7 +65,7 @@ public class CourseLessonProgressService {
 
         CourseLessonProgressEntity row =
                 progressRepository
-                        .findByCourseIdAndLessonNodeIdAndViewerId(
+                        .findByCourseIdAndLessonNodeIdAndUid(
                                 courseId, lesson.getId(), viewerId)
                         .orElseGet(() -> newRow(courseId, lesson.getId(), viewerId));
 
@@ -119,7 +119,7 @@ public class CourseLessonProgressService {
         CourseLessonProgressEntity row = new CourseLessonProgressEntity();
         row.setCourseId(courseId);
         row.setLessonNodeId(lessonNodeId);
-        row.setViewerId(viewerId);
+        row.setUid(viewerId);
         row.setParticipateStatus(CourseLessonParticipateStatus.NOT_STARTED);
         row.setLearnDurationSec(0L);
         row.setProgressPercent(0);

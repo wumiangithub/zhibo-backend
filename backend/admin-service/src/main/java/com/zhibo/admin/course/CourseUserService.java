@@ -110,11 +110,11 @@ public class CourseUserService {
         response.setPageSize(size);
         response.setTotal(total);
         for (CourseUserEntity row : pageRows) {
-            long completed = completedByViewer.getOrDefault(row.getViewerId(), 0L);
+            long completed = completedByViewer.getOrDefault(row.getUid(), 0L);
             response.getList().add(toItem(
                     row,
-                    viewers.get(row.getViewerId()),
-                    tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
+                    viewers.get(row.getUid()),
+                    tagsByViewer.getOrDefault(row.getUid(), List.of()),
                     prepared.accessType(),
                     prepared.now(),
                     completionRate(completed, totalLessons)));
@@ -137,19 +137,19 @@ public class CourseUserService {
         StringBuilder sb = new StringBuilder();
         sb.append("学员,用户ID,手机号,标签,小节完成率,权益状态,权益获取方式,权益首次获取时间,权益到期时间\n");
         for (CourseUserEntity row : rows) {
-            long completed = completedByViewer.getOrDefault(row.getViewerId(), 0L);
+            long completed = completedByViewer.getOrDefault(row.getUid(), 0L);
             CourseUserListItem item = toItem(
                     row,
-                    viewers.get(row.getViewerId()),
-                    tagsByViewer.getOrDefault(row.getViewerId(), List.of()),
+                    viewers.get(row.getUid()),
+                    tagsByViewer.getOrDefault(row.getUid(), List.of()),
                     prepared.accessType(),
                     prepared.now(),
                     completionRate(completed, totalLessons));
-            ViewerEntity viewer = viewers.get(row.getViewerId());
+            ViewerEntity viewer = viewers.get(row.getUid());
             String phone = viewer != null && viewer.getPhone() != null ? viewer.getPhone() : "";
             sb.append(csvCell(item.getNickname()))
                     .append(',')
-                    .append(row.getViewerId() == null ? "" : row.getViewerId())
+                    .append(row.getUid() == null ? "" : row.getUid())
                     .append(',')
                     .append(csvCell(phone))
                     .append(',')
@@ -184,7 +184,7 @@ public class CourseUserService {
             if (viewerIds.isEmpty()) {
                 return new PreparedList(List.of(), accessType, now, course.getId());
             }
-            rows = courseUserRepository.findByCourseIdAndViewerIdInOrderByCreatedTimeDescIdDesc(
+            rows = courseUserRepository.findByCourseIdAndUidInOrderByCreatedTimeDescIdDesc(
                     course.getId(), viewerIds);
         } else {
             rows = courseUserRepository.findByCourseIdOrderByCreatedTimeDescIdDesc(course.getId());
@@ -247,7 +247,7 @@ public class CourseUserService {
             throw new IllegalArgumentException("请求不能为空");
         }
         boolean hasPhone = request.getPhone() != null && !request.getPhone().isBlank();
-        boolean hasViewerId = request.getViewerId() != null;
+        boolean hasViewerId = request.getUid() != null;
         if (hasPhone == hasViewerId) {
             if (hasPhone) {
                 throw new IllegalArgumentException("手机号与用户ID不能同时传");
@@ -262,12 +262,12 @@ public class CourseUserService {
                     .findByPhone(normalized)
                     .orElseThrow(() -> new IllegalArgumentException("未找到该手机号观众"));
         } else {
-            long viewerId = request.getViewerId();
+            long viewerId = request.getUid();
             if (viewerId <= 0) {
                 throw new IllegalArgumentException("用户ID无效");
             }
             viewer = viewerRepository
-                    .findById(viewerId)
+                    .findByUid(viewerId)
                     .orElseThrow(() -> new IllegalArgumentException("未找到该用户"));
         }
 
@@ -277,7 +277,7 @@ public class CourseUserService {
         LocalDateTime customExpire = parseOptionalExpireTime(request.getExpireTime());
 
         Optional<CourseUserEntity> existing =
-                courseUserRepository.findByCourseIdAndViewerId(course.getId(), viewer.getId());
+                courseUserRepository.findByCourseIdAndUid(course.getId(), viewer.getUid());
         if (existing.isPresent()) {
             CourseUserEntity row = existing.get();
             if (row.getImporterId() == null) {
@@ -287,12 +287,12 @@ public class CourseUserService {
                 courseUserRepository.save(row);
             }
             // 已有行不改 expire
-            return new CreateCourseUserResponse(row.getId(), row.getViewerId(), false);
+            return new CreateCourseUserResponse(row.getId(), row.getUid(), false);
         }
 
         CourseUserEntity row = new CourseUserEntity();
         row.setCourseId(course.getId());
-        row.setViewerId(viewer.getId());
+        row.setUid(viewer.getUid());
         row.setEntitlementStatus(1);
         row.setAcquireWay("import");
         row.setImporterId(operatorId);
@@ -304,7 +304,7 @@ public class CourseUserService {
         course.setTotalUserCount(Math.max(0, course.getTotalUserCount()) + 1);
         courseRepository.save(course);
 
-        return new CreateCourseUserResponse(row.getId(), row.getViewerId(), true);
+        return new CreateCourseUserResponse(row.getId(), row.getUid(), true);
     }
 
     @Transactional
@@ -342,7 +342,7 @@ public class CourseUserService {
                     continue;
                 }
                 Optional<CourseUserEntity> existing =
-                        courseUserRepository.findByCourseIdAndViewerId(course.getId(), viewer.getId());
+                        courseUserRepository.findByCourseIdAndUid(course.getId(), viewer.getUid());
                 if (existing.isPresent()) {
                     CourseUserEntity row = existing.get();
                     if (row.getImporterId() == null) {
@@ -358,7 +358,7 @@ public class CourseUserService {
                 }
                 CourseUserEntity row = new CourseUserEntity();
                 row.setCourseId(course.getId());
-                row.setViewerId(viewer.getId());
+                row.setUid(viewer.getUid());
                 row.setEntitlementStatus(1);
                 row.setAcquireWay("import");
                 row.setImporterId(operatorId);
@@ -409,8 +409,8 @@ public class CourseUserService {
         List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByTagIdIn(tagIds);
         LinkedHashMap<Long, Boolean> viewerUniq = new LinkedHashMap<>();
         for (ViewerTagMemberEntity m : members) {
-            if (m.getViewerId() != null && m.getViewerId() > 0) {
-                viewerUniq.putIfAbsent(m.getViewerId(), Boolean.TRUE);
+            if (m.getUid() != null && m.getUid() > 0) {
+                viewerUniq.putIfAbsent(m.getUid(), Boolean.TRUE);
             }
         }
         List<Long> viewerIds = List.copyOf(viewerUniq.keySet());
@@ -425,7 +425,7 @@ public class CourseUserService {
         int createdCount = 0;
         for (Long viewerId : viewerIds) {
             Optional<CourseUserEntity> existing =
-                    courseUserRepository.findByCourseIdAndViewerId(course.getId(), viewerId);
+                    courseUserRepository.findByCourseIdAndUid(course.getId(), viewerId);
             if (existing.isPresent()) {
                 CourseUserEntity row = existing.get();
                 if (row.getImporterId() == null) {
@@ -441,7 +441,7 @@ public class CourseUserService {
             }
             CourseUserEntity row = new CourseUserEntity();
             row.setCourseId(course.getId());
-            row.setViewerId(viewerId);
+            row.setUid(viewerId);
             row.setEntitlementStatus(1);
             row.setAcquireWay("import");
             row.setImporterId(operatorId);
@@ -590,7 +590,7 @@ public class CourseUserService {
         if (viewer != null) {
             item.setNickname(ViewerAdminService.displayNickname(viewer));
         } else {
-            item.setNickname("用户_" + row.getViewerId());
+            item.setNickname("用户_" + row.getUid());
         }
         item.setAvatar(viewer == null ? null : viewer.getAvatarUrl());
         item.setPhoneMasked(
@@ -611,13 +611,13 @@ public class CourseUserService {
     }
 
     private Map<Long, ViewerEntity> loadViewers(List<CourseUserEntity> rows) {
-        Set<Long> ids = rows.stream().map(CourseUserEntity::getViewerId).collect(Collectors.toSet());
+        Set<Long> ids = rows.stream().map(CourseUserEntity::getUid).collect(Collectors.toSet());
         if (ids.isEmpty()) {
             return Map.of();
         }
         Map<Long, ViewerEntity> map = new HashMap<>();
-        for (ViewerEntity v : viewerRepository.findAllById(ids)) {
-            map.put(v.getId(), v);
+        for (ViewerEntity v : viewerRepository.findByUidIn(ids)) {
+            map.put(v.getUid(), v);
         }
         return map;
     }
@@ -797,8 +797,8 @@ public class CourseUserService {
         if (rows.isEmpty()) {
             return Map.of();
         }
-        List<Long> viewerIds = rows.stream().map(CourseUserEntity::getViewerId).distinct().toList();
-        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByViewerIdIn(viewerIds);
+        List<Long> viewerIds = rows.stream().map(CourseUserEntity::getUid).distinct().toList();
+        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByUidIn(viewerIds);
         if (members.isEmpty()) {
             return Map.of();
         }
@@ -813,7 +813,7 @@ public class CourseUserService {
             if (tag == null) {
                 continue;
             }
-            grouped.computeIfAbsent(m.getViewerId(), k -> new ArrayList<>())
+            grouped.computeIfAbsent(m.getUid(), k -> new ArrayList<>())
                     .add(new TagRef(tag.getId(), tag.getName()));
         }
         return grouped;
@@ -843,7 +843,7 @@ public class CourseUserService {
             if (p.getParticipateStatus() != CourseLessonParticipateStatus.COMPLETED) {
                 continue;
             }
-            out.merge(p.getViewerId(), 1L, Long::sum);
+            out.merge(p.getUid(), 1L, Long::sum);
         }
         return out;
     }

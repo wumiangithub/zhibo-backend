@@ -27,12 +27,12 @@ public interface RoomCommentRepository extends JpaRepository<RoomCommentEntity, 
 
     /** 未软删的聊天 + 提问计入「评论次数」（D107）；不计优惠券/图片（D113）。 */
     @Query(
-            "SELECT c.viewerId, COUNT(c) FROM RoomCommentEntity c "
+            "SELECT c.uid, COUNT(c) FROM RoomCommentEntity c "
                     + "WHERE c.activityId = :activityId AND c.deletedTime IS NULL "
                     + "AND c.commentType IN (1, 2) "
-                    + "AND c.viewerId IN :viewerIds GROUP BY c.viewerId")
-    List<Object[]> countActiveByViewerIds(
-            @Param("activityId") String activityId, @Param("viewerIds") Collection<Long> viewerIds);
+                    + "AND c.uid IN :uids GROUP BY c.uid")
+    List<Object[]> countActiveByUids(
+            @Param("activityId") String activityId, @Param("uids") Collection<Long> uids);
 
-    long countByActivityIdAndViewerIdAndDeletedTimeIsNull(String activityId, Long viewerId);
+    long countByActivityIdAndUidAndDeletedTimeIsNull(String activityId, Long uid);
 }

@@ -8,7 +8,8 @@ import lombok.Data;
 @Data
 public class LearningSummaryListItem {
 
-    private long id;
+    /** 用户中心 uid */
+    private long uid;
     private String nickname;
     private String avatarUrl;
     private List<Long> tagIds = new ArrayList<>();

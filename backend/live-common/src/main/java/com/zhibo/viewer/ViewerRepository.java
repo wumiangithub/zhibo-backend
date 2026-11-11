@@ -12,9 +12,15 @@ public interface ViewerRepository extends JpaRepository<ViewerEntity, Long>, Jpa
 
     Optional<ViewerEntity> findByPhone(String phone);
 
+    Optional<ViewerEntity> findByUid(Long uid);
+
+    boolean existsByUid(Long uid);
+
     List<ViewerEntity> findByPhoneIn(Collection<String> phones);
 
     List<ViewerEntity> findByNicknameContaining(String nickname);
 
     List<ViewerEntity> findByIdIn(Collection<Long> ids);
+
+    List<ViewerEntity> findByUidIn(Collection<Long> uids);
 }

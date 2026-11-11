@@ -9,7 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UpdateViewerBlacklistResponse {
 
-    private Long id;
+    /** 用户中心 uid */
+    private Long uid;
     private int banComment;
     private int banPurchase;
     private int banAccess;

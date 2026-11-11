@@ -52,7 +52,7 @@ class ViewerFeedbackServiceTest {
         viewer.setStatus(ViewerStatus.NORMAL);
         viewer.setAgreedTime(LocalDateTime.now());
         viewer.setLastLoginTime(LocalDateTime.now());
-        when(viewerRepository.findById(9L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(viewer));
         when(feedbackRepository.save(any()))
                 .thenAnswer(
                         inv -> {
@@ -121,13 +121,13 @@ class ViewerFeedbackServiceTest {
     void list_ok() {
         ViewerFeedbackEntity row = new ViewerFeedbackEntity();
         row.setId(100L);
-        row.setViewerId(9L);
+        row.setUid(9L);
         row.setCategory(ViewerFeedbackCategory.COURSE_BENEFIT);
         row.setContent("课程权益无法使用");
         row.setImagesJson(
                 "[{\"url\":\"https://qklive-testcos.cjs99.com/viewer/feedback/9_1.jpg\",\"objectKey\":\"viewer/feedback/9_1.jpg\"}]");
         row.setCreatedTime(LocalDateTime.of(2026, 10, 26, 18, 0, 0));
-        when(feedbackRepository.findByViewerIdOrderByCreatedTimeDesc(any(), any()))
+        when(feedbackRepository.findByUidOrderByCreatedTimeDesc(any(), any()))
                 .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1));
 
         ViewerFeedbackListResponse resp = service.list(9L, 1, 20);
@@ -142,12 +142,12 @@ class ViewerFeedbackServiceTest {
     void detail_ok() {
         ViewerFeedbackEntity row = new ViewerFeedbackEntity();
         row.setId(100L);
-        row.setViewerId(9L);
+        row.setUid(9L);
         row.setCategory(2);
         row.setContent("卡顿");
         row.setContactPhone("13800138000");
         row.setCreatedTime(LocalDateTime.of(2026, 10, 26, 18, 0, 0));
-        when(feedbackRepository.findByIdAndViewerId(100L, 9L)).thenReturn(Optional.of(row));
+        when(feedbackRepository.findByIdAndUid(100L, 9L)).thenReturn(Optional.of(row));
 
         ViewerFeedbackDetailResponse d = service.detail(9L, 100L);
         assertEquals(100L, d.getId());
@@ -157,7 +157,7 @@ class ViewerFeedbackServiceTest {
 
     @Test
     void detail_notFound() {
-        when(feedbackRepository.findByIdAndViewerId(1L, 9L)).thenReturn(Optional.empty());
+        when(feedbackRepository.findByIdAndUid(1L, 9L)).thenReturn(Optional.empty());
         ViewerAuthException ex =
                 assertThrows(ViewerAuthException.class, () -> service.detail(9L, 1L));
         assertEquals(404, ex.getCode());

@@ -12,6 +12,8 @@ public class ConsoleSummaryResponse {
     private String id;
     private String provider;
     private String title;
+    /** 活动详情封面；对齐观看 summary 的 coverUrl。 */
+    private String coverUrl;
     private Integer state;
     private Integer type;
     private String startTime;

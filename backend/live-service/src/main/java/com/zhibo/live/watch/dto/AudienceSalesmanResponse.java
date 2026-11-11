@@ -4,12 +4,16 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 /**
- * 本场观众业务员：优先员工邀请人，否则导入人；皆无则 {@code salesmanId} 为 null。
+ * 本场观众业务员：仅员工邀请人；{@code salesmanId}={@code hr_uimsyhxx.identifier}，
+ * {@code salesmanDeptId}={@code hr_uimsyhgwxx.bmid}（在职岗位 id 最小一条）；无则对应字段 null。
  */
 @Data
 @AllArgsConstructor
 public class AudienceSalesmanResponse {
 
-    /** 员工 {@code sys_useraccount.rs_mainkey_id}；无则 null。 */
-    private Long salesmanId;
+    /** {@code hr_uimsyhxx.identifier}；无邀请人或档案缺失则为 null。 */
+    private String salesmanId;
+
+    /** {@code hr_uimsyhgwxx.bmid}；无岗位则为 null（仍可只带 salesmanId）。 */
+    private Long salesmanDeptId;
 }

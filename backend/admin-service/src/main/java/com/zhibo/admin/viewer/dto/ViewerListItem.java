@@ -9,7 +9,8 @@ import lombok.Data;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ViewerListItem {
 
-    private Long id;
+    /** 用户中心 uid（业务用户 id） */
+    private Long uid;
     private String nickname;
     private String avatarUrl;
     /** 1 微信 / 2 导入 */

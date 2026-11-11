@@ -120,7 +120,7 @@ public class WatchAccessService {
             return STATE_NEED_PASSWORD;
         }
         if ("specified".equals(sellType)) {
-            return audienceRepository.findByActivityIdAndViewerId(entity.getId(), viewerId)
+            return audienceRepository.findByActivityIdAndUid(entity.getId(), viewerId)
                     .filter(row -> row.getEntitlementStatus() == 1)
                     .map(row -> STATE_OK)
                     .orElse(STATE_FORBIDDEN);

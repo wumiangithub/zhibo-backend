@@ -61,7 +61,7 @@ class ViewerAuthInterceptorTest {
         authed.addHeader("Authorization", "Bearer " + access);
         MockHttpServletResponse ok = new MockHttpServletResponse();
         assertTrue(interceptor.preHandle(authed, ok, new Object()));
-        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID));
+        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_UID));
     }
 
     @Test
@@ -78,7 +78,7 @@ class ViewerAuthInterceptorTest {
         authed.addHeader("Authorization", "Bearer " + access);
         MockHttpServletResponse ok = new MockHttpServletResponse();
         assertTrue(interceptor.preHandle(authed, ok, new Object()));
-        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID));
+        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_UID));
     }
 
     @Test
@@ -95,7 +95,7 @@ class ViewerAuthInterceptorTest {
         authed.addHeader("Authorization", "Bearer " + access);
         MockHttpServletResponse ok = new MockHttpServletResponse();
         assertTrue(interceptor.preHandle(authed, ok, new Object()));
-        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID));
+        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_UID));
     }
 
     @Test

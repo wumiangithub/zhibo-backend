@@ -79,6 +79,7 @@ class WatchServiceTest {
         entity.setId(ID);
         entity.setProvider("vhall");
         entity.setTitle("直播课");
+        entity.setCoverUrl("https://cdn.example/cover.jpg");
         entity.setType(2);
         entity.setState(3);
         entity.setStartTime("2026-09-18 20:00:00");
@@ -97,6 +98,7 @@ class WatchServiceTest {
         assertEquals(ID, response.getId());
         assertEquals("vhall", response.getProvider());
         assertEquals("直播课", response.getTitle());
+        assertEquals("https://cdn.example/cover.jpg", response.getCoverUrl());
         assertEquals(3, response.getState());
         assertEquals(2, response.getType());
         assertEquals("2026-09-18 20:00:00", response.getStartTime());

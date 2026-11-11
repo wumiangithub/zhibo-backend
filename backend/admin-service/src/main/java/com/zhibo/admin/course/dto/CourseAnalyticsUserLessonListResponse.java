@@ -7,7 +7,7 @@ import lombok.Data;
 @Data
 public class CourseAnalyticsUserLessonListResponse {
 
-    private long viewerId;
+    private long uid;
     private String nickname;
     private String avatarUrl;
     private long completedLessonCount;

@@ -79,6 +79,7 @@ public class ConsoleService {
         response.setId(entity.getId());
         response.setProvider(entity.getProvider());
         response.setTitle(entity.getTitle());
+        response.setCoverUrl(entity.getCoverUrl());
         response.setState(entity.getState());
         response.setType(entity.getType());
         response.setStartTime(entity.getStartTime());
@@ -300,8 +301,8 @@ public class ConsoleService {
         ConsoleQuestionHistoryItem item = new ConsoleQuestionHistoryItem();
         String questionId = blankToNull(c.getQuestionId());
         item.setQuestionId(questionId);
-        if (c.getViewerId() != null && c.getViewerId() > 0) {
-            item.setSenderId(Long.toString(c.getViewerId()));
+        if (c.getUid() != null && c.getUid() > 0) {
+            item.setSenderId(Long.toString(c.getUid()));
         }
         String nick = blankToNull(c.getNickname());
         item.setSenderName(nick != null ? nick : "观众");

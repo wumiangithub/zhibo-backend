@@ -29,12 +29,12 @@ public final class PresenceUserIds {
     private PresenceUserIds() {
     }
 
-    /** 观众观看邮箱 {@code {id}@qkzb.com}。 */
-    public static String viewerEmail(long viewerId) {
-        if (viewerId <= 0) {
-            throw new IllegalArgumentException("viewerId 无效");
+    /** 观众观看邮箱 {@code {uid}@qkzb.com}（{@code uid} 为用户中心 id）。 */
+    public static String viewerEmail(long uid) {
+        if (uid <= 0) {
+            throw new IllegalArgumentException("uid 无效");
         }
-        return viewerId + QKZB_DOMAIN;
+        return uid + QKZB_DOMAIN;
     }
 
     /** 员工角色（主持/嘉宾/助理）邮箱 {@code e{id}@qkzb.com}。 */

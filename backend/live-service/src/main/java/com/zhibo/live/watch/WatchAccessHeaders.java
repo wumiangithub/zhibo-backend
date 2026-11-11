@@ -17,7 +17,7 @@ final class WatchAccessHeaders {
         return raw == null || raw.isBlank() ? null : raw.trim();
     }
 
-    static Long tryViewerId(HttpServletRequest request, ViewerJwtTokenService jwt) {
+    static Long tryUid(HttpServletRequest request, ViewerJwtTokenService jwt) {
         if (request == null || jwt == null) {
             return null;
         }

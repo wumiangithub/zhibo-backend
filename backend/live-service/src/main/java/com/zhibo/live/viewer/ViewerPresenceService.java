@@ -31,7 +31,7 @@ public class ViewerPresenceService {
     public ViewerPresencePingResponse ping(long viewerId, String scene) {
         validateScene(scene);
         ViewerEntity viewer = viewerRepository
-                .findById(viewerId)
+                .findByUid(viewerId)
                 .orElseThrow(() -> new ViewerAuthException(403, "账号已停用"));
         if (!ViewerStatus.isNormal(viewer.getStatus())) {
             throw new ViewerAuthException(403, "账号已停用");

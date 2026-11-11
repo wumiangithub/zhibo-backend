@@ -12,15 +12,15 @@ public interface ViewerTagMemberRepository extends JpaRepository<ViewerTagMember
 
     void deleteByTagId(Long tagId);
 
-    List<ViewerTagMemberEntity> findByViewerId(Long viewerId);
+    List<ViewerTagMemberEntity> findByUid(Long uid);
 
-    List<ViewerTagMemberEntity> findByViewerIdIn(Collection<Long> viewerIds);
+    List<ViewerTagMemberEntity> findByUidIn(Collection<Long> uids);
 
     List<ViewerTagMemberEntity> findByTagIdIn(Collection<Long> tagIds);
 
     @Query(
-            "select count(distinct m.viewerId) from ViewerTagMemberEntity m"
-                    + " where m.tagId in :tagIds and m.viewerId is not null and m.viewerId > 0")
+            "select count(distinct m.uid) from ViewerTagMemberEntity m"
+                    + " where m.tagId in :tagIds and m.uid is not null and m.uid > 0")
     long countDistinctViewersByTagIdIn(@Param("tagIds") Collection<Long> tagIds);
 
     @Query(

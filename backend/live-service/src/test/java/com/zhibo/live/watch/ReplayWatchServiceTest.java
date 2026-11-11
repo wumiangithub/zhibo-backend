@@ -63,7 +63,7 @@ class ReplayWatchServiceTest {
         verify(replayWatchRepository).save(cap.capture());
         RoomReplayWatchEntity row = cap.getValue();
         assertEquals(ROOM, row.getRoomId());
-        assertEquals(12L, row.getViewerId());
+        assertEquals(12L, row.getUid());
         assertEquals(1001L, row.getRecordId());
         assertEquals(socketId, row.getSocketId());
         assertEquals(LocalDateTime.of(2026, 10, 29, 12, 0), row.getStartTime());
@@ -144,7 +144,7 @@ class ReplayWatchServiceTest {
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
         row.setId(1L);
         row.setRoomId(ROOM);
-        row.setViewerId(viewerId);
+        row.setUid(viewerId);
         row.setRecordId(1001L);
         row.setSocketId(socketId);
         row.setStartTime(LocalDateTime.of(2026, 10, 29, 11, 0));

@@ -26,8 +26,9 @@ public class ActivityAudienceEntity {
     @Column(name = "activity_id", nullable = false, length = 32)
     private String activityId;
 
-    @Column(name = "viewer_id", nullable = false)
-    private Long viewerId;
+    /** 用户中心 uid（viewer.uid）。 */
+    @Column(name = "uid", nullable = false)
+    private Long uid;
 
     /** 1 有效 / 0 无权益。 */
     @Column(name = "entitlement_status", nullable = false)

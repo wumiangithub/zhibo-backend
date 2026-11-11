@@ -11,6 +11,8 @@ public class WatchSummaryResponse {
     private String id;
     private String provider;
     private String title;
+    /** 活动详情封面；本库 {@code activity.cover_url}；无则可不输出。 */
+    private String coverUrl;
     private Integer state;
     private Integer type;
     /** 计划/实际开始时间，yyyy-MM-dd HH:mm:ss（本库 Activity）。 */

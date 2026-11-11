@@ -128,7 +128,7 @@ public final class RoomUserDataCalculator {
             return new ReplayAgg(seconds, 0, 0);
         }
         for (RoomReplayWatchEntity row : replays) {
-            if (row == null || row.getViewerId() == null || row.getStartTime() == null || row.getLastReportTime() == null) {
+            if (row == null || row.getUid() == null || row.getStartTime() == null || row.getLastReportTime() == null) {
                 continue;
             }
             long sec = Duration.between(row.getStartTime(), row.getLastReportTime()).getSeconds();
@@ -137,7 +137,7 @@ public final class RoomUserDataCalculator {
             }
             rowCount++;
             totalSec += sec;
-            seconds.merge(row.getViewerId(), sec, Long::sum);
+            seconds.merge(row.getUid(), sec, Long::sum);
         }
         return new ReplayAgg(seconds, rowCount, totalSec);
     }

@@ -58,6 +58,12 @@ viewer:
   wechat:
     mp-app-id: ${WECHAT_MP_APP_ID:}
     mp-app-secret: ${WECHAT_MP_APP_SECRET:}
+  # 用户中心微信注册（D116；测试 http://119.3.31.54:8410/acctClientManagement/；勿用 8411/backend，无票会 401）
+  oauth:
+    base-url: ${VIEWER_OAUTH_BASE_URL:}
+    channel: ${VIEWER_OAUTH_CHANNEL:钱坤云私域直播用户注册}
+    project-name: ${VIEWER_OAUTH_PROJECT_NAME:钱坤云私域直播}
+    project-code: ${VIEWER_OAUTH_PROJECT_CODE:qkysyzb}
 
 # 回放 downloading in-flight 僵尸阈值（分钟）：按 JVM map 开始时间；重启后不在 map 立刻恢复
 # 默认头像底座（D111；无 query；签名时再拼 ?v= 身份）

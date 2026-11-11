@@ -12,7 +12,7 @@ public class WatchSdkResponse {
     private String provider;
     private String nickname;
     /** 观众数字 id；与 sdk.email 一致。 */
-    private Long viewerId;
+    private Long uid;
     /** SDK 初始化字段（含服务端签名）。 */
     private SdkPayload sdk;
 }

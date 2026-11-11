@@ -31,7 +31,7 @@ public class WatchCommentService {
             throw new IllegalArgumentException("请求体不能为空");
         }
         if (viewerId <= 0) {
-            throw new IllegalArgumentException("viewerId 无效");
+            throw new IllegalArgumentException("uid 无效");
         }
         ActivityEntity activity = requireActivity(activityId);
         String content = request.getContent() == null ? "" : request.getContent().trim();
@@ -68,7 +68,7 @@ public class WatchCommentService {
         RoomCommentEntity entity = new RoomCommentEntity();
         entity.setActivityId(activity.getId());
         copyCloudContext(entity, activity);
-        entity.setViewerId(viewerId);
+        entity.setUid(viewerId);
         entity.setContent(content);
         entity.setNickname(blankToNull(request.getNickname(), 64));
         entity.setRoleName(request.getRoleName());
@@ -169,8 +169,8 @@ public class WatchCommentService {
         if (ensureCloudContext(row, activity)) {
             dirty = true;
         }
-        if (row.getViewerId() == null) {
-            row.setViewerId(viewerId);
+        if (row.getUid() == null) {
+            row.setUid(viewerId);
             dirty = true;
         }
         if (msgId != null && blankToNull(row.getMsgId(), 64) == null) {

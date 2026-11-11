@@ -19,23 +19,23 @@ public interface CourseRepository extends JpaRepository<CourseEntity, String> {
             value =
                     "SELECT c FROM CourseEntity c WHERE c.deletedTime IS NULL AND EXISTS ("
                             + "SELECT 1 FROM CourseUserEntity cu WHERE cu.courseId = c.id "
-                            + "AND cu.viewerId = :viewerId AND cu.entitlementStatus = 1 "
+                            + "AND cu.uid = :uid AND cu.entitlementStatus = 1 "
                             + "AND (c.accessValidityType NOT IN ('days', 'fixed') "
                             + "OR cu.entitlementExpireTime IS NULL "
                             + "OR cu.entitlementExpireTime > :now)"
                             + ") ORDER BY (SELECT cu2.createdTime FROM CourseUserEntity cu2 "
-                            + "WHERE cu2.courseId = c.id AND cu2.viewerId = :viewerId "
+                            + "WHERE cu2.courseId = c.id AND cu2.uid = :uid "
                             + "AND cu2.entitlementStatus = 1) DESC",
             countQuery =
                     "SELECT COUNT(c) FROM CourseEntity c WHERE c.deletedTime IS NULL AND EXISTS ("
                             + "SELECT 1 FROM CourseUserEntity cu WHERE cu.courseId = c.id "
-                            + "AND cu.viewerId = :viewerId AND cu.entitlementStatus = 1 "
+                            + "AND cu.uid = :uid AND cu.entitlementStatus = 1 "
                             + "AND (c.accessValidityType NOT IN ('days', 'fixed') "
                             + "OR cu.entitlementExpireTime IS NULL "
                             + "OR cu.entitlementExpireTime > :now)"
                             + ")")
     Page<CourseEntity> searchEntitledForViewer(
-            @Param("viewerId") long viewerId,
+            @Param("uid") long uid,
             @Param("now") LocalDateTime now,
             Pageable pageable);
 

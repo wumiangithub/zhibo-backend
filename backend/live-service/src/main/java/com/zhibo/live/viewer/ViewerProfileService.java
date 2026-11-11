@@ -56,7 +56,7 @@ public class ViewerProfileService {
     }
 
     private ViewerEntity requireViewer(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findById(viewerId).orElse(null);
+        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
         if (viewer == null) {
             throw new ViewerAuthException(401, "未登录");
         }
@@ -98,7 +98,15 @@ public class ViewerProfileService {
 
     static ViewerUserResponse toUser(ViewerEntity viewer) {
         ViewerUserResponse user = new ViewerUserResponse();
-        user.setId(viewer.getId());
+        if (viewer.getUid() != null) {
+            user.setUid(viewer.getUid());
+        }
+        if (viewer.getUsername() != null && !viewer.getUsername().isBlank()) {
+            user.setUsername(viewer.getUsername().trim());
+        }
+        if (viewer.getMiniOpenid() != null && !viewer.getMiniOpenid().isBlank()) {
+            user.setMiniOpenid(viewer.getMiniOpenid().trim());
+        }
         boolean hasPhone = viewer.getPhone() != null && !viewer.getPhone().isBlank();
         user.setHasPhone(hasPhone);
         if (hasPhone) {

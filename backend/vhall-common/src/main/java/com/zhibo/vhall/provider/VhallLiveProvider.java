@@ -872,7 +872,7 @@ public class VhallLiveProvider implements LiveProvider {
     public static String resolveWatchEmail(Long viewerId, String guestId) {
         if (viewerId != null) {
             if (viewerId <= 0) {
-                throw new IllegalArgumentException("viewerId 无效");
+                throw new IllegalArgumentException("uid 无效");
             }
             return viewerId + VIEWER_EMAIL_DOMAIN;
         }

@@ -26,7 +26,7 @@ public class CourseEnrollController {
             @PathVariable String id,
             @RequestBody(required = false) EnrollCourseRequest request,
             HttpServletRequest httpRequest) {
-        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_ID);
+        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_UID);
         if (viewerId == null || viewerId <= 0) {
             throw new ViewerAuthException(401, "未登录");
         }

@@ -113,7 +113,7 @@ public class PresenceWriteService {
     }
 
     private ViewerProfile resolveViewerProfile(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findById(viewerId).orElse(null);
+        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
         if (viewer == null) {
             return new ViewerProfile(ViewerDisplayNames.displayNicknameForId(viewerId), null);
         }

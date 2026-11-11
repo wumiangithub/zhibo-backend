@@ -248,11 +248,11 @@ public class CourseController {
     @GetMapping("/analytics/users/lessons/{courseId}")
     public ApiResponse<CourseAnalyticsUserLessonListResponse> analyticsUserLessons(
             @PathVariable String courseId,
-            @RequestParam Long viewerId,
+            @RequestParam Long uid,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
         return ApiResponse.ok(
-                courseAnalyticsService.listUserLessons(courseId, viewerId, page, pageSize));
+                courseAnalyticsService.listUserLessons(courseId, uid, page, pageSize));
     }
 
     @DeleteMapping("/delete/{id}")

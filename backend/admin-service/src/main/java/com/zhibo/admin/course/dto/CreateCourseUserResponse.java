@@ -8,6 +8,6 @@ import lombok.Data;
 public class CreateCourseUserResponse {
 
     private Long id;
-    private Long viewerId;
+    private Long uid;
     private boolean created;
 }

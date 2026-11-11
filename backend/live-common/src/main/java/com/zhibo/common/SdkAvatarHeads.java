@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
  * 观看 / 中控台 SDK 签名用的头像 URL（D111）。
  * <p>
  * <strong>有无真实头像都拼</strong> {@code ?v=}（已有 {@code v} 则覆盖），取值与进房 email 本地部分一致：
- * 观众 {@code {viewerId}}、中控台 {@code z{员工id}}、角色 {@code e{员工id}}（若走同类签名）。
+ * 观众 {@code {uid}}、中控台 {@code z{员工id}}、角色 {@code e{员工id}}（若走同类签名）。
  * 无真实头像时用默认底座再拼 query。
  * <p>
  * 进房签名另有 {@code account} = 第三方用户唯一标识（同本地部分）；聊天回包未必带回 account，
@@ -28,12 +28,12 @@ public final class SdkAvatarHeads {
     private SdkAvatarHeads() {
     }
 
-    /** 观众身份：{@code v={viewerId}}。 */
-    public static String resolveForViewer(String avatarUrl, long viewerId, String defaultBaseUrl) {
-        if (viewerId <= 0) {
-            throw new IllegalArgumentException("viewerId 无效");
+    /** 观众身份：{@code v={uid}}。 */
+    public static String resolveForViewer(String avatarUrl, long uid, String defaultBaseUrl) {
+        if (uid <= 0) {
+            throw new IllegalArgumentException("uid 无效");
         }
-        return resolveForSign(avatarUrl, Long.toString(viewerId), defaultBaseUrl);
+        return resolveForSign(avatarUrl, Long.toString(uid), defaultBaseUrl);
     }
 
     /** 中控台身份：{@code v=z{员工id}}（与 {@code z{id}@qkzb.com} / account {@code z{id}} 一致）。 */

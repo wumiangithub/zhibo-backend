@@ -29,11 +29,14 @@ public class ViewerAuthService {
     private static final String DISABLED = "账号已停用";
     private static final String UNAVAILABLE = "观众登录暂不可用";
     private static final String BAD_PHONE = "请输入正确的手机号";
+    private static final String LOGIN_FAIL = "登录失败，请重试";
+    private static final String BAD_TYPE = "设备类型须为 phone 或 pc";
     /** 中国大陆手机号：1 开头 11 位。 */
     private static final Pattern CN_MOBILE = Pattern.compile("^1\\d{10}$");
 
     private final ViewerRepository viewerRepository;
     private final WechatMpClient wechatMpClient;
+    private final ViewerOauthClient oauthClient;
     private final ViewerJwtTokenService jwtTokenService;
     private final ViewerAuthProperties properties;
     private final Clock clock;
@@ -41,11 +44,13 @@ public class ViewerAuthService {
     public ViewerAuthService(
             ViewerRepository viewerRepository,
             WechatMpClient wechatMpClient,
+            ViewerOauthClient oauthClient,
             ViewerJwtTokenService jwtTokenService,
             ViewerAuthProperties properties,
             Clock clock) {
         this.viewerRepository = viewerRepository;
         this.wechatMpClient = wechatMpClient;
+        this.oauthClient = oauthClient;
         this.jwtTokenService = jwtTokenService;
         this.properties = properties;
         this.clock = clock;
@@ -57,12 +62,15 @@ public class ViewerAuthService {
         if (request == null || isBlank(request.getCode())) {
             throw new ViewerAuthException(400, "缺少微信登录凭证");
         }
+        String deviceType = requireDeviceType(request.getType());
         requireConfigured();
         WechatMpClient.WechatSession session = wechatMpClient.code2Session(request.getCode().trim());
         LocalDateTime now = LocalDateTime.now(clock);
         ViewerEntity viewer = findOrCreate(session, now);
         requireActive(viewer);
+        requireUnionid(session);
         rememberUnionid(viewer, session, now);
+        syncOauthIdentity(viewer, session.unionid(), deviceType, now);
         markLoggedIn(viewer, now);
         return issue(viewer);
     }
@@ -76,19 +84,23 @@ public class ViewerAuthService {
         if (isBlank(request.getPhoneCode())) {
             throw new ViewerAuthException(400, "缺少手机号授权凭证");
         }
+        String deviceType = requireDeviceType(request.getType());
         requireConfigured();
         WechatMpClient.WechatSession session = wechatMpClient.code2Session(request.getLoginCode().trim());
         WechatMpClient.WechatPhone phone = wechatMpClient.getPhoneNumber(request.getPhoneCode().trim());
         LocalDateTime now = LocalDateTime.now(clock);
         ViewerEntity viewer = findOrCreate(session, now);
         requireActive(viewer);
+        requireUnionid(session);
         rememberUnionid(viewer, session, now);
         bindPhone(viewer, phone, now);
+        syncOauthIdentity(viewer, session.unionid(), deviceType, now);
         return issue(viewer);
     }
 
     /**
      * 仅 local 环境调用：按明文手机号登录；无账号则自动注册（无 mini_openid）。
+     * 不调用户中心：可登录观看，但 JWT 无订单中心可用的 uid/username。
      * Controller 须先按 spring profile=local 拦掉 test/prod。
      */
     @Transactional
@@ -104,26 +116,27 @@ public class ViewerAuthService {
         return issue(viewer);
     }
 
-    /** 过期 access 可以换票。不吊销旧 refresh。 */
+    /** 过期 access 可以换票。不吊销旧 refresh。JWT sub = uid。 */
     @Transactional
     public ViewerAuthResponse refresh(ViewerRefreshRequest request) {
         if (request == null || isBlank(request.getRefreshToken()) || isBlank(request.getAccessToken())) {
             throw new ViewerAuthException(401, "登录状态已失效，请重新登录");
         }
-        long refreshViewerId = jwtTokenService.parseRefreshUserId(request.getRefreshToken().trim());
-        long accessViewerId = jwtTokenService.parseAccessAllowExpired(request.getAccessToken().trim());
-        if (refreshViewerId != accessViewerId) {
+        long refreshUid = jwtTokenService.parseRefreshUid(request.getRefreshToken().trim());
+        long accessUid = jwtTokenService.parseAccessAllowExpired(request.getAccessToken().trim());
+        if (refreshUid != accessUid) {
             throw new ViewerAuthException(401, "登录状态已失效，请重新登录");
         }
-        ViewerEntity viewer = viewerRepository.findById(refreshViewerId)
+        ViewerEntity viewer = viewerRepository.findByUid(refreshUid)
                 .orElseThrow(() -> new ViewerAuthException(403, DISABLED));
         requireActive(viewer);
         return issue(viewer);
     }
 
+    /** @param uid 用户中心 uid（JWT sub） */
     @Transactional(readOnly = true)
-    public ViewerUserResponse userInfo(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findById(viewerId)
+    public ViewerUserResponse userInfo(long uid) {
+        ViewerEntity viewer = viewerRepository.findByUid(uid)
                 .orElseThrow(() -> new ViewerAuthException(401, "未登录"));
         if (!ViewerStatus.isNormal(viewer.getStatus())) {
             throw new ViewerAuthException(403, DISABLED);
@@ -194,6 +207,13 @@ public class ViewerAuthService {
         return phone;
     }
 
+    /** 微信这次必须带回 unionid；偶发不回则登录失败（D116）。 */
+    private void requireUnionid(WechatMpClient.WechatSession session) {
+        if (session == null || isBlank(session.unionid())) {
+            throw new ViewerAuthException(400, WECHAT_FAIL);
+        }
+    }
+
     /** 微信这次带回了 unionid 才写。没带回就保留原来的。 */
     private void rememberUnionid(ViewerEntity viewer, WechatMpClient.WechatSession session, LocalDateTime now) {
         if (viewer == null || session == null || isBlank(session.unionid())) {
@@ -206,6 +226,23 @@ public class ViewerAuthService {
         viewer.setUnionid(unionid);
         viewer.setUpdatedTime(now);
         viewerRepository.save(viewer);
+    }
+
+    /**
+     * 调用户中心 /oauth/wechat/register，把对方 uid/username 写入本站（插入或更新）。
+     * 对方失败则本站登录失败。
+     */
+    private void syncOauthIdentity(ViewerEntity viewer, String unionid, String deviceType, LocalDateTime now) {
+        ViewerOauthClient.OauthIdentity identity = oauthClient.registerByUnionId(unionid, deviceType);
+        viewer.setUid(identity.uid());
+        viewer.setUsername(identity.username());
+        viewer.setUpdatedTime(now);
+        try {
+            viewerRepository.save(viewer);
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("观众 uid 唯一约束冲突 uid={}", identity.uid());
+            throw new ViewerAuthException(400, LOGIN_FAIL);
+        }
     }
 
     private void bindPhone(ViewerEntity viewer, WechatMpClient.WechatPhone phone, LocalDateTime now) {
@@ -242,36 +279,42 @@ public class ViewerAuthService {
     }
 
     private ViewerAuthResponse issue(ViewerEntity viewer) {
-        String omsUsername = omsUsername(viewer);
+        String omsUsername = viewer.getUsername() == null ? "" : viewer.getUsername().trim();
+        Long uid = viewer.getUid();
         ViewerAuthResponse response = new ViewerAuthResponse();
-        response.setAccessToken(jwtTokenService.issueAccess(viewer.getId(), omsUsername));
+        // JWT sub = 用户中心 uid；local 无 uid 时 sub 空（可看直播，不可写业务表 / 调订单中心）
+        response.setAccessToken(jwtTokenService.issueAccess(uid, omsUsername));
         response.setExpiresIn(jwtTokenService.expireSeconds());
-        response.setRefreshToken(jwtTokenService.issueRefresh(viewer.getId(), omsUsername));
+        response.setRefreshToken(jwtTokenService.issueRefresh(uid, omsUsername));
         response.setRefreshExpiresIn(jwtTokenService.refreshExpireSeconds());
         response.setUser(toUser(viewer));
         return response;
     }
 
-    /**
-     * oms-go 观众票 {@code username}：对齐下单客户账号。
-     * 优先手机号；未绑手机用 mini_openid；再没有用 {@code viewer.id}（不可空）。
-     */
-    static String omsUsername(ViewerEntity viewer) {
-        if (viewer == null) {
-            return "";
+    private static String requireDeviceType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new ViewerAuthException(400, "缺少设备类型");
         }
-        if (!isBlank(viewer.getPhone())) {
-            return viewer.getPhone().trim();
+        String type = raw.trim().toLowerCase();
+        if (!"phone".equals(type) && !"pc".equals(type)) {
+            throw new ViewerAuthException(400, BAD_TYPE);
         }
-        if (!isBlank(viewer.getMiniOpenid())) {
-            return viewer.getMiniOpenid().trim();
-        }
-        return viewer.getId() == null ? "" : String.valueOf(viewer.getId());
+        return type;
     }
 
     private static ViewerUserResponse toUser(ViewerEntity viewer) {
         ViewerUserResponse user = new ViewerUserResponse();
-        user.setId(viewer.getId());
+        // 对外只回业务 uid，不回本站自增 id（D117）
+        if (viewer.getUid() != null) {
+            user.setUid(viewer.getUid());
+        }
+        if (!isBlank(viewer.getUsername())) {
+            user.setUsername(viewer.getUsername().trim());
+        }
+        // 小程序支付 prepay(wx_lite) 需要真实 openId；有凭证才回
+        if (!isBlank(viewer.getMiniOpenid())) {
+            user.setMiniOpenid(viewer.getMiniOpenid().trim());
+        }
         boolean hasPhone = !isBlank(viewer.getPhone());
         user.setHasPhone(hasPhone);
         if (hasPhone) {
@@ -317,12 +360,16 @@ public class ViewerAuthService {
             log.warn("观众登录配置缺失: WECHAT_MP_APP_SECRET");
             missing = true;
         }
+        if (properties.oauthBaseUrlMissing()) {
+            log.warn("观众登录配置缺失: VIEWER_OAUTH_BASE_URL");
+            missing = true;
+        }
         if (missing) {
             throw new ViewerAuthException(500, UNAVAILABLE);
         }
     }
 
-    /** local 明文手机号登录只需 JWT；不依赖微信密钥。 */
+    /** local 明文手机号登录只需 JWT；不依赖微信密钥与用户中心。 */
     private void requireJwtConfigured() {
         if (properties.jwtSecretMissing()) {
             log.warn("观众登录配置缺失: VIEWER_JWT_SECRET");

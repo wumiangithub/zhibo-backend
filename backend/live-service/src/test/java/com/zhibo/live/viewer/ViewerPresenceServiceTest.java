@@ -37,7 +37,7 @@ class ViewerPresenceServiceTest {
         viewer = new ViewerEntity();
         viewer.setId(9L);
         viewer.setStatus(ViewerStatus.NORMAL);
-        when(viewerRepository.findById(9L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(viewer));
         when(viewerRepository.save(any(ViewerEntity.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -81,7 +81,7 @@ class ViewerPresenceServiceTest {
 
     @Test
     void ping_rejectsMissingViewer() {
-        when(viewerRepository.findById(anyLong())).thenReturn(Optional.empty());
+        when(viewerRepository.findByUid(anyLong())).thenReturn(Optional.empty());
         ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping(1L, null));
         assertEquals(403, ex.getCode());
     }

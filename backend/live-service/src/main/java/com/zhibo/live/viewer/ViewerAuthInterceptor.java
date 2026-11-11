@@ -17,7 +17,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 @Component
 public class ViewerAuthInterceptor implements HandlerInterceptor {
 
-    public static final String ATTR_VIEWER_ID = "viewerId";
+    /** 请求属性：用户中心 uid（JWT sub）。 */
+    public static final String ATTR_UID = "uid";
 
     private final ViewerJwtTokenService jwtTokenService;
     private final ObjectMapper objectMapper;
@@ -39,8 +40,8 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
         }
         String token = extractBearer(request.getHeader("Authorization"));
         try {
-            long viewerId = jwtTokenService.parseUserId(token);
-            request.setAttribute(ATTR_VIEWER_ID, viewerId);
+            long uid = jwtTokenService.parseUid(token);
+            request.setAttribute(ATTR_UID, uid);
             return true;
         } catch (ViewerAuthException ex) {
             writeFail(response, ex.getCode(), ex.getMessage());
