@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -86,6 +88,38 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(403))
                 .andExpect(jsonPath("$.msg").value("账号已停用"));
+    }
+
+    @Test
+    void devAccountLogin_ok() throws Exception {
+        LoginQueryResponse data = new LoginQueryResponse();
+        data.setStatus(1);
+        data.setAccessToken("acc");
+        data.setRefreshToken("ref");
+        data.setExpiresIn(7200);
+        data.setUser(new AuthUserResponse(1L, "admin", "管理员", null, null));
+        when(authService.devAccountLogin("admin")).thenReturn(data);
+
+        mockMvc.perform(post("/api/v1/auth/dev-account-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userAccount\":\"admin\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.accessToken").value("acc"))
+                .andExpect(jsonPath("$.data.user.userAccount").value("admin"));
+    }
+
+    @Test
+    void devAccountLogin_nonLocalProfile_returns404() throws Exception {
+        when(environment.acceptsProfiles(any(Profiles.class))).thenReturn(false);
+
+        mockMvc.perform(post("/api/v1/auth/dev-account-login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userAccount\":\"admin\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.msg").value("接口不存在"));
+        verify(authService, never()).devAccountLogin(any());
     }
 
     @Test

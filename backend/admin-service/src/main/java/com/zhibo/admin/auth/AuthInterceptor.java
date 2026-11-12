@@ -54,6 +54,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         return path.equals("/api/v1/auth/captcha")
                 || path.equals("/api/v1/auth/login")
+                || path.equals("/api/v1/auth/dev-account-login")
                 || path.equals("/api/v1/auth/wechat/callback")
                 || path.equals("/api/v1/auth/login/query")
                 || path.equals("/api/v1/auth/refresh")

@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 public class UpdateViewerTagsResponse {
 
     /** 用户中心 uid */
-    private Long uid;
+    private String username;
     private List<Long> tagIds = new ArrayList<>();
     private List<String> tagLabels = new ArrayList<>();
 }

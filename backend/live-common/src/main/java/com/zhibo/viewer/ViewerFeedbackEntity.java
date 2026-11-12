@@ -22,9 +22,9 @@ public class ViewerFeedbackEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 用户中心 uid（viewer.uid）。 */
-    @Column(name = "uid", nullable = false)
-    private Long uid;
+    /** 用户中心 username（viewer.username）。 */
+    @Column(name = "username", nullable = false, length = 16)
+    private String username;
 
     /** {@link ViewerFeedbackCategory}。 */
     @Column(nullable = false)

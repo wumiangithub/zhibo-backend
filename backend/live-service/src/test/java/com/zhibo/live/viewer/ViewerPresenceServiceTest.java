@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,13 +38,13 @@ class ViewerPresenceServiceTest {
         viewer = new ViewerEntity();
         viewer.setId(9L);
         viewer.setStatus(ViewerStatus.NORMAL);
-        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUsername("9")).thenReturn(Optional.of(viewer));
         when(viewerRepository.save(any(ViewerEntity.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
     void ping_writesWhenEmpty() {
-        ViewerPresencePingResponse res = service.ping(9L, "miniapp");
+        ViewerPresencePingResponse res = service.ping("9", "miniapp");
         assertEquals("2026-10-27 14:00:00", res.getLastVisitTime());
         assertEquals(LocalDateTime.of(2026, 10, 27, 14, 0), viewer.getLastVisitTime());
         verify(viewerRepository).save(viewer);
@@ -52,7 +53,7 @@ class ViewerPresenceServiceTest {
     @Test
     void ping_throttlesWithinFiveMinutes() {
         viewer.setLastVisitTime(LocalDateTime.of(2026, 10, 27, 13, 56));
-        ViewerPresencePingResponse res = service.ping(9L, "live");
+        ViewerPresencePingResponse res = service.ping("9", "live");
         assertEquals("2026-10-27 13:56:00", res.getLastVisitTime());
         verify(viewerRepository, never()).save(any());
     }
@@ -60,29 +61,29 @@ class ViewerPresenceServiceTest {
     @Test
     void ping_writesAfterThrottleWindow() {
         viewer.setLastVisitTime(LocalDateTime.of(2026, 10, 27, 13, 54));
-        ViewerPresencePingResponse res = service.ping(9L, null);
+        ViewerPresencePingResponse res = service.ping("9", null);
         assertEquals("2026-10-27 14:00:00", res.getLastVisitTime());
         verify(viewerRepository).save(viewer);
     }
 
     @Test
     void ping_rejectsBadScene() {
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping(9L, "web"));
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping("9", "web"));
         assertEquals(400, ex.getCode());
     }
 
     @Test
     void ping_rejectsDisabled() {
         viewer.setStatus(ViewerStatus.DISABLED);
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping(9L, "miniapp"));
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping("9", "miniapp"));
         assertEquals(403, ex.getCode());
         verify(viewerRepository, never()).save(any());
     }
 
     @Test
     void ping_rejectsMissingViewer() {
-        when(viewerRepository.findByUid(anyLong())).thenReturn(Optional.empty());
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping(1L, null));
+        when(viewerRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.ping("1", null));
         assertEquals(403, ex.getCode());
     }
 }

@@ -9,7 +9,7 @@ import lombok.Data;
 public class LearningSummaryListItem {
 
     /** 用户中心 uid */
-    private long uid;
+    private String username;
     private String nickname;
     private String avatarUrl;
     private List<Long> tagIds = new ArrayList<>();

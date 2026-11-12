@@ -48,13 +48,13 @@ public class AudienceAttributeService {
      * <p>不回退导入人。
      */
     @Transactional(readOnly = true)
-    public AudienceSalesmanResponse resolveSalesman(String activityId, long viewerId) {
-        if (viewerId <= 0) {
+    public AudienceSalesmanResponse resolveSalesman(String activityId, String viewerUsername) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new IllegalArgumentException("uid 无效");
         }
         ActivityEntity activity = requireActivity(activityId);
         return audienceRepository
-                .findByActivityIdAndUid(activity.getId(), viewerId)
+                .findByActivityIdAndUsername(activity.getId(), viewerUsername)
                 .map(this::pickSalesman)
                 .orElseGet(() -> new AudienceSalesmanResponse(null, null));
     }
@@ -101,15 +101,15 @@ public class AudienceAttributeService {
 
     @Transactional
     public AttributeAudienceResponse attribute(
-            String activityId, long viewerId, AttributeAudienceRequest request) {
+            String activityId, String viewerUsername, AttributeAudienceRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
-        if (viewerId <= 0) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new IllegalArgumentException("uid 无效");
         }
         ActivityEntity activity = requireActivity(activityId);
-        if (!viewerRepository.existsByUid(viewerId)) {
+        if (!viewerRepository.existsByUsername(viewerUsername)) {
             throw new IllegalArgumentException("观众不存在");
         }
         Long inviterId = request.getInviterId();
@@ -124,18 +124,18 @@ public class AudienceAttributeService {
         if (!KIND_EMPLOYEE.equals(kind)) {
             throw new IllegalArgumentException("inviterKind 须为 employee 或 audience");
         }
-        return attributeEmployee(activity, viewerId, inviterId);
+        return attributeEmployee(activity, viewerUsername, inviterId);
     }
 
     private AttributeAudienceResponse attributeEmployee(
-            ActivityEntity activity, long viewerId, Long inviterId) {
+            ActivityEntity activity, String viewerUsername, Long inviterId) {
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
         ActivityAudienceEntity row = audienceRepository
-                .findByActivityIdAndUid(activity.getId(), viewerId)
+                .findByActivityIdAndUsername(activity.getId(), viewerUsername)
                 .orElseGet(() -> {
                     ActivityAudienceEntity created = new ActivityAudienceEntity();
                     created.setActivityId(activity.getId());
-                    created.setUid(viewerId);
+                    created.setUsername(viewerUsername);
                     created.setEntitlementStatus(1);
                     return created;
                 });
@@ -146,7 +146,7 @@ public class AudienceAttributeService {
         }
 
         audienceRepository.save(row);
-        return new AttributeAudienceResponse(row.getId(), row.getUid());
+        return new AttributeAudienceResponse(row.getId(), row.getUsername());
     }
 
     static String normalizeKind(String raw) {

@@ -25,9 +25,9 @@ public class ViewerTagMemberEntity {
     @Column(name = "tag_id", nullable = false)
     private Long tagId;
 
-    /** 用户中心 uid（viewer.uid）。 */
-    @Column(name = "uid", nullable = false)
-    private Long uid;
+    /** 用户中心 username（viewer.username）。 */
+    @Column(name = "username", nullable = false, length = 16)
+    private String username;
 
     @CreationTimestamp
     @Column(name = "created_time", nullable = false, updatable = false)

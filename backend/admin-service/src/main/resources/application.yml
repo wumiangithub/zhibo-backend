@@ -72,3 +72,4 @@ auth:
     open-redirect-uri: ${WECHAT_OPEN_REDIRECT_URI:}
     # 本地可开：未绑定账号扫码写库绑定；默认 false（正式行为）
     allow-self-bind: ${AUTH_WECHAT_ALLOW_SELF_BIND:false}
+# 账号直登接口 /api/v1/auth/dev-account-login 仅在 spring profile=local 或 test 时开放（容器默认 profile 为 local）

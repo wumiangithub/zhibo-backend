@@ -72,7 +72,7 @@ class ViewerLearningServiceTest {
     @Test
     void listEntitledLives_rejectsPageBelowOne() {
         assertThrows(
-                IllegalArgumentException.class, () -> learningService.listEntitledLives(9L, 0, 20, null));
+                IllegalArgumentException.class, () -> learningService.listEntitledLives("9", 0, 20, null));
     }
 
     @Test
@@ -84,17 +84,17 @@ class ViewerLearningServiceTest {
         row.setStartTime("2026-10-28 20:00:00");
         row.setCoverUrl("https://cover");
 
-        when(activityRepository.searchEntitledForViewer(eq(9L), anyBoolean(), any(), any()))
+        when(activityRepository.searchEntitledForViewer(eq("9"), anyBoolean(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(row)));
 
-        var resp = learningService.listEntitledLives(9L, 1, 20, null);
+        var resp = learningService.listEntitledLives("9", 1, 20, null);
         assertEquals(1, resp.getTotal());
         assertEquals(ID, resp.getList().get(0).getId());
         assertEquals("权益课", resp.getList().get(0).getTitle());
 
         ArgumentCaptor<Pageable> pageableCap = ArgumentCaptor.forClass(Pageable.class);
         verify(activityRepository)
-                .searchEntitledForViewer(eq(9L), eq(true), eq(List.of(0)), pageableCap.capture());
+                .searchEntitledForViewer(eq("9"), eq(true), eq(List.of(0)), pageableCap.capture());
         assertEquals(0, pageableCap.getValue().getPageNumber());
         assertEquals(20, pageableCap.getValue().getPageSize());
     }
@@ -110,15 +110,15 @@ class ViewerLearningServiceTest {
         CourseUserEntity cu = new CourseUserEntity();
         cu.setCreatedTime(LocalDateTime.of(2026, 9, 17, 19, 29, 0));
 
-        when(courseRepository.searchEntitledForViewer(eq(9L), any(), any()))
+        when(courseRepository.searchEntitledForViewer(eq("9"), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(course)));
         when(catalogNodeRepository.countActiveByCourseIdAndNodeType(
                         COURSE_ID, CourseCatalogNodeType.SUBCOURSE))
                 .thenReturn(5L);
-        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUsernameAndEntitlementStatus(COURSE_ID, "9", 1))
                 .thenReturn(Optional.of(cu));
 
-        var resp = learningService.listEntitledCourses(9L, 1, 20);
+        var resp = learningService.listEntitledCourses("9", 1, 20);
         assertEquals(1, resp.getTotal());
         assertEquals(COURSE_ID, resp.getList().get(0).getId());
         assertEquals("拓维班", resp.getList().get(0).getTitle());
@@ -133,11 +133,11 @@ class ViewerLearningServiceTest {
         course.setId(COURSE_ID);
         course.setAccessValidityType("long");
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUsernameAndEntitlementStatus(COURSE_ID, "9", 1))
                 .thenReturn(Optional.empty());
 
         assertThrows(
-                IllegalArgumentException.class, () -> learningService.getCourseDetail(9L, COURSE_ID));
+                IllegalArgumentException.class, () -> learningService.getCourseDetail("9", COURSE_ID));
     }
 
     @Test
@@ -171,15 +171,15 @@ class ViewerLearningServiceTest {
         progress.setProgressPercent(100);
 
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUsernameAndEntitlementStatus(COURSE_ID, "9", 1))
                 .thenReturn(Optional.of(cu));
         when(catalogNodeRepository.findActiveByCourseId(COURSE_ID))
                 .thenReturn(List.of(sub, chapter, lesson));
         when(activityRepository.findAllById(any())).thenReturn(List.of(live));
-        when(progressRepository.findByCourseIdAndUid(COURSE_ID, 9L))
+        when(progressRepository.findByCourseIdAndUsername(COURSE_ID, "9"))
                 .thenReturn(List.of(progress));
 
-        var resp = learningService.getCourseDetail(9L, COURSE_ID);
+        var resp = learningService.getCourseDetail("9", COURSE_ID);
         assertEquals(COURSE_ID, resp.getId());
         assertEquals("360天有效", resp.getValidityLabel());
         assertEquals(1, resp.getSubCourses().size());
@@ -215,11 +215,11 @@ class ViewerLearningServiceTest {
 
         when(catalogNodeRepository.findByIdAndCourseIdAndDeletedTimeIsNull(12L, COURSE_ID))
                 .thenReturn(Optional.of(lesson));
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 12L, 9L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 12L, "9"))
                 .thenReturn(Optional.empty());
         when(materialRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(material));
 
-        var resp = learningService.getLessonContent(9L, COURSE_ID, 12L);
+        var resp = learningService.getLessonContent("9", COURSE_ID, 12L);
         assertEquals(12L, resp.getLessonNodeId());
         assertEquals(CourseCatalogContentKind.IMAGE, resp.getContentKind());
         assertEquals("https://img", resp.getMaterialUrl());
@@ -250,12 +250,12 @@ class ViewerLearningServiceTest {
 
         when(catalogNodeRepository.findByIdAndCourseIdAndDeletedTimeIsNull(15L, COURSE_ID))
                 .thenReturn(Optional.of(lesson));
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 15L, 9L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 15L, "9"))
                 .thenReturn(Optional.empty());
         when(materialRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(material));
         when(materialArticleRepository.findById(MATERIAL_ID)).thenReturn(Optional.of(article));
 
-        var resp = learningService.getLessonContent(9L, COURSE_ID, 15L);
+        var resp = learningService.getLessonContent("9", COURSE_ID, 15L);
         assertEquals("<p>hello</p>", resp.getArticleHtml());
         assertEquals("张三", resp.getAuthor());
         assertEquals("文章A", resp.getMaterialName());
@@ -274,10 +274,10 @@ class ViewerLearningServiceTest {
                         LIVE_ID);
         when(catalogNodeRepository.findByIdAndCourseIdAndDeletedTimeIsNull(12L, COURSE_ID))
                 .thenReturn(Optional.of(lesson));
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 12L, 9L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 12L, "9"))
                 .thenReturn(Optional.empty());
 
-        var resp = learningService.getLessonContent(9L, COURSE_ID, 12L);
+        var resp = learningService.getLessonContent("9", COURSE_ID, 12L);
         assertEquals(LIVE_ID, resp.getActivityId());
         assertEquals(LIVE_ID, resp.getContentId());
     }
@@ -289,7 +289,7 @@ class ViewerLearningServiceTest {
         CourseUserEntity cu = new CourseUserEntity();
         cu.setEntitlementStatus(1);
         when(courseRepository.findById(COURSE_ID)).thenReturn(Optional.of(course));
-        when(courseUserRepository.findByCourseIdAndUidAndEntitlementStatus(COURSE_ID, 9L, 1))
+        when(courseUserRepository.findByCourseIdAndUsernameAndEntitlementStatus(COURSE_ID, "9", 1))
                 .thenReturn(Optional.of(cu));
     }
 

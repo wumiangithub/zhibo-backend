@@ -58,6 +58,32 @@ public class AuthService {
         return captchaService.create();
     }
 
+
+    /**
+     * 仅 local / test：按账号直接发 token，不校验密码、不走扫码。
+     * 账号必须已存在且未停用。
+     */
+    public LoginQueryResponse devAccountLogin(String userAccount) {
+        String account = userAccount == null ? "" : userAccount.trim();
+        if (account.isEmpty()) {
+            throw new IllegalArgumentException("请输入账号");
+        }
+        SysUserAccountEntity user = userRepository.findByUserAccount(account)
+                .orElseThrow(() -> new IllegalArgumentException("账号不存在"));
+        if (user.getRsStatus() == null || user.getRsStatus() != 1) {
+            throw new AuthException(403, "账号已停用");
+        }
+        LoginQueryResponse resp = new LoginQueryResponse();
+        resp.setStatus(1);
+        resp.setAccessToken(issueAccess(user));
+        resp.setExpiresIn((int) jwtTokenService.expireSeconds());
+        resp.setRefreshToken(issueRefresh(user));
+        resp.setRefreshExpiresIn((int) jwtTokenService.refreshExpireSeconds());
+        resp.setUser(toUserResponse(user));
+        log.info("账号直登（仅 local/test）: userId={} account={}", user.getId(), user.getUserAccount());
+        return resp;
+    }
+
     public LoginPendingResponse login(LoginRequest request) {
         captchaService.verifyAndConsume(request.getCaptchaId(), request.getCaptchaCode());
 

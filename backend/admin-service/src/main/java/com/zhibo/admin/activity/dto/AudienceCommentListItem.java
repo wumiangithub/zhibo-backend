@@ -8,7 +8,7 @@ import lombok.Data;
 public class AudienceCommentListItem {
 
     private Long id;
-    private Long uid;
+    private String username;
     private String guestId;
     private String nickname;
     private String content;

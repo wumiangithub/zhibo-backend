@@ -14,18 +14,18 @@ import lombok.Data;
 public class SdkPayload {
 
     /**
-     * 第三方用户唯一标识（观众 = 数字 {@code viewerId}）。本站回显；
+     * 第三方用户唯一标识（观众 = {@code viewer.username}）。本站回显；
      * 微吼 3.9.1 init 以 email 为准，<strong>不要</strong>与 email 同时传冲突字段。
      * 聊天回包未必带回，认人不能只靠它（见 D111 / chatViewerId）。
      */
     private String account;
-    /** {@code {viewerId}@qkzb.com}，参会身份并参与签名（D92）。 */
+    /** {@code {username}@qkzb.com}，参会身份并参与签名（D92 / D118）。 */
     private String email;
     /** 昵称。 */
     private String username;
     /**
      * 观众头像 URL，对应 JSSDK {@code head}；仅非空参与签名。
-     * 有无真实头像都拼/覆盖 {@code ?v={viewerId}}（无头像用默认底座，D111）。
+     * 有无真实头像都拼/覆盖 {@code ?v={username}}（无头像用默认底座，D111 / D118）。
      */
     private String head;
     /** 活动 id（SDK 参数名 webinar_id）。 */

@@ -30,8 +30,8 @@ public class ViewerProfileService {
     }
 
     @Transactional
-    public ViewerUserResponse update(long viewerId, ViewerProfileUpdateRequest request) {
-        ViewerEntity viewer = requireViewer(viewerId);
+    public ViewerUserResponse update(String viewerUsername, ViewerProfileUpdateRequest request) {
+        ViewerEntity viewer = requireViewer(viewerUsername);
         if (request == null) {
             throw new ViewerAuthException(400, "请填写昵称或头像");
         }
@@ -55,8 +55,8 @@ public class ViewerProfileService {
         return toUser(viewer);
     }
 
-    private ViewerEntity requireViewer(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
+    private ViewerEntity requireViewer(String viewerUsername) {
+        ViewerEntity viewer = viewerRepository.findByUsername(viewerUsername).orElse(null);
         if (viewer == null) {
             throw new ViewerAuthException(401, "未登录");
         }
@@ -98,9 +98,6 @@ public class ViewerProfileService {
 
     static ViewerUserResponse toUser(ViewerEntity viewer) {
         ViewerUserResponse user = new ViewerUserResponse();
-        if (viewer.getUid() != null) {
-            user.setUid(viewer.getUid());
-        }
         if (viewer.getUsername() != null && !viewer.getUsername().isBlank()) {
             user.setUsername(viewer.getUsername().trim());
         }

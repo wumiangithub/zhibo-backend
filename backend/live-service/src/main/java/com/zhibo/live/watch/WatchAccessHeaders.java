@@ -3,7 +3,7 @@ package com.zhibo.live.watch;
 import com.zhibo.live.viewer.ViewerJwtTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 
-/** 从请求提取观众 id / 本场访问 JWT。 */
+/** 从请求提取观众 username / 本场访问 JWT。 */
 final class WatchAccessHeaders {
 
     private WatchAccessHeaders() {
@@ -17,7 +17,7 @@ final class WatchAccessHeaders {
         return raw == null || raw.isBlank() ? null : raw.trim();
     }
 
-    static Long tryUid(HttpServletRequest request, ViewerJwtTokenService jwt) {
+    static String tryUsername(HttpServletRequest request, ViewerJwtTokenService jwt) {
         if (request == null || jwt == null) {
             return null;
         }
@@ -34,7 +34,7 @@ final class WatchAccessHeaders {
             return null;
         }
         try {
-            return jwt.parseUserId(token);
+            return jwt.parseUsername(token);
         } catch (RuntimeException ex) {
             return null;
         }

@@ -125,17 +125,17 @@ public class ActivityAudienceService {
                 sort,
                 order);
         List<ActivityAudienceEntity> all = prepared.rows();
-        Map<Long, Long> commentCounts = prepared.commentCounts();
-        Map<Long, WatchDurationCalculator.Durations> durations = prepared.durations();
+        Map<String, Long> commentCounts = prepared.commentCounts();
+        Map<String, WatchDurationCalculator.Durations> durations = prepared.durations();
 
         long total = all.size();
         int from = Math.min((p - 1) * size, all.size());
         int to = Math.min(from + size, all.size());
         List<ActivityAudienceEntity> pageRows = all.subList(from, to);
 
-        Map<Long, ViewerEntity> viewers = loadViewers(pageRows);
+        Map<String, ViewerEntity> viewers = loadViewers(pageRows);
         Map<Long, String> employeeNames = loadEmployeeNames(pageRows);
-        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(pageRows);
+        Map<String, List<TagRef>> tagsByViewer = loadTagsByViewer(pageRows);
 
         AudienceListResponse response = new AudienceListResponse();
         response.setPage(p);
@@ -148,8 +148,8 @@ public class ActivityAudienceService {
                             viewers,
                             employeeNames,
                             commentCounts,
-                            tagsByViewer.getOrDefault(row.getUid(), List.of()),
-                            durations.getOrDefault(row.getUid(), WatchDurationCalculator.zero())));
+                            tagsByViewer.getOrDefault(row.getUsername(), List.of()),
+                            durations.getOrDefault(row.getUsername(), WatchDurationCalculator.zero())));
         }
         return response;
     }
@@ -178,16 +178,16 @@ public class ActivityAudienceService {
         DurationFilter liveWatchFilter =
                 resolveDurationFilter("liveWatchDuration", liveWatchDurationOp, liveWatchDurationSec);
 
-        if ("id".equals(type) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
+        if ("id".equals(type) && !kw.isEmpty() && (kw.length() > 16)) {
             return new PreparedList(List.of(), Map.of(), Map.of());
         }
 
-        Set<Long> keywordViewerIds = resolveKeywordViewerIds(type, kw);
-        if (keywordViewerIds != null && keywordViewerIds.isEmpty()) {
+        Set<String> keywordViewerUsernames = resolveKeywordViewerIds(type, kw);
+        if (keywordViewerUsernames != null && keywordViewerUsernames.isEmpty()) {
             return new PreparedList(List.of(), Map.of(), Map.of());
         }
 
-        final Set<Long> keywordFilter = keywordViewerIds;
+        final Set<String> keywordFilter = keywordViewerUsernames;
         final List<Long> tagFilter = filterTagIds;
         final String tagMatchMode = match;
         Specification<ActivityAudienceEntity> spec = (root, query, cb) -> {
@@ -197,7 +197,7 @@ public class ActivityAudienceService {
                 preds.add(cb.equal(root.get("entitlementStatus"), entitlementStatus));
             }
             if (keywordFilter != null) {
-                preds.add(root.get("uid").in(keywordFilter));
+                preds.add(root.get("username").in(keywordFilter));
             }
             if (!tagFilter.isEmpty() && query != null) {
                 if ("all".equals(tagMatchMode)) {
@@ -214,7 +214,7 @@ public class ActivityAudienceService {
         };
 
         List<ActivityAudienceEntity> all = new ArrayList<>(audienceRepository.findAll(spec));
-        Map<Long, WatchDurationCalculator.Durations> durations = WatchDurationCalculator.byViewer(
+        Map<String, WatchDurationCalculator.Durations> durations = WatchDurationCalculator.byViewer(
                 activity,
                 presenceEventRepository.findByRoomId(uuid),
                 replayWatchRepository.findByRoomId(uuid),
@@ -222,9 +222,9 @@ public class ActivityAudienceService {
         if (totalWatchFilter != null || liveWatchFilter != null) {
             all.removeIf(row -> !matchesDurationFilters(row, durations, totalWatchFilter, liveWatchFilter));
         }
-        Map<Long, Long> commentCounts = loadCommentCounts(
+        Map<String, Long> commentCounts = loadCommentCounts(
                 uuid,
-                all.stream().map(ActivityAudienceEntity::getUid).collect(Collectors.toSet()));
+                all.stream().map(ActivityAudienceEntity::getUsername).collect(Collectors.toSet()));
 
         String sortKey = sort == null ? "" : sort.trim();
         boolean asc = "asc".equalsIgnoreCase(order);
@@ -245,27 +245,39 @@ public class ActivityAudienceService {
         Root<ViewerTagMemberEntity> m = sq.from(ViewerTagMemberEntity.class);
         sq.select(m.get("id"));
         sq.where(
-                cb.equal(m.get("uid"), root.get("uid")),
+                cb.equal(m.get("username"), root.get("username")),
                 m.get("tagId").in(tagIds));
         return cb.exists(sq);
     }
 
-    private Set<Long> resolveKeywordViewerIds(String type, String kw) {
+    /** @return null=不筛；空集合=无命中 */
+    private Set<String> resolveKeywordViewerIds(String type, String kw) {
         if (kw.isEmpty()) {
             return null;
         }
         return switch (type) {
             case "id" -> {
-                Long id = parsePositiveLong(kw);
-                yield id == null ? Set.of() : Set.of(id);
+                String username = kw.trim();
+                if (username.isEmpty() || username.length() > 16) {
+                    yield Set.of();
+                }
+                yield viewerRepository.findByUsername(username).stream()
+                        .map(ViewerEntity::getUsername)
+                        .filter(u -> u != null && !u.isBlank())
+                        .map(String::trim)
+                        .collect(Collectors.toSet());
             }
             case "phone" -> viewerRepository
                     .findAll((root, query, cb) -> cb.like(root.get("phone"), "%" + kw + "%"))
                     .stream()
-                    .map(ViewerEntity::getId)
+                    .map(ViewerEntity::getUsername)
+                    .filter(u -> u != null && !u.isBlank())
+                    .map(String::trim)
                     .collect(Collectors.toSet());
             default -> viewerRepository.findByNicknameContaining(kw).stream()
-                    .map(ViewerEntity::getId)
+                    .map(ViewerEntity::getUsername)
+                    .filter(u -> u != null && !u.isBlank())
+                    .map(String::trim)
                     .collect(Collectors.toSet());
         };
     }
@@ -329,11 +341,11 @@ public class ActivityAudienceService {
 
     private static boolean matchesDurationFilters(
             ActivityAudienceEntity row,
-            Map<Long, WatchDurationCalculator.Durations> durations,
+            Map<String, WatchDurationCalculator.Durations> durations,
             DurationFilter totalWatch,
             DurationFilter liveWatch) {
         WatchDurationCalculator.Durations d =
-                durations.getOrDefault(row.getUid(), WatchDurationCalculator.zero());
+                durations.getOrDefault(row.getUsername(), WatchDurationCalculator.zero());
         if (totalWatch != null && !matchesDuration(d.totalSec(), totalWatch)) {
             return false;
         }
@@ -362,22 +374,13 @@ public class ActivityAudienceService {
         return new ArrayList<>(uniq.keySet());
     }
 
-    private static Long parsePositiveLong(String raw) {
-        try {
-            long id = Long.parseLong(raw.trim());
-            return id > 0 ? id : null;
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
     @Transactional
     public CreateAudienceResponse create(String activityId, CreateAudienceRequest request, long operatorId) {
         if (request == null) {
             throw new IllegalArgumentException("请提供手机号或用户ID");
         }
         boolean hasPhone = request.getPhone() != null && !request.getPhone().isBlank();
-        boolean hasViewerId = request.getUid() != null;
+        boolean hasViewerId = request.getUsername() != null;
         if (hasPhone == hasViewerId) {
             throw new IllegalArgumentException(
                     hasPhone ? "手机号与用户ID不能同时传" : "请提供手机号或用户ID");
@@ -390,12 +393,12 @@ public class ActivityAudienceService {
                     .findByPhone(normalized)
                     .orElseThrow(() -> new IllegalArgumentException("未找到该手机号观众"));
         } else {
-            long viewerId = request.getUid();
-            if (viewerId <= 0) {
+            String viewerUsername = request.getUsername();
+            if (viewerUsername == null || viewerUsername.isBlank()) {
                 throw new IllegalArgumentException("用户ID无效");
             }
             viewer = viewerRepository
-                    .findByUid(viewerId)
+                    .findByUsername(viewerUsername)
                     .orElseThrow(() -> new IllegalArgumentException("未找到该用户"));
         }
 
@@ -403,7 +406,7 @@ public class ActivityAudienceService {
         requireActiveEmployee(operatorId);
 
         Optional<ActivityAudienceEntity> existing =
-                audienceRepository.findByActivityIdAndUid(uuid, viewer.getUid());
+                audienceRepository.findByActivityIdAndUsername(uuid, viewer.getUsername());
         LocalDateTime now = LocalDateTime.now();
         if (existing.isPresent()) {
             ActivityAudienceEntity row = existing.get();
@@ -412,17 +415,17 @@ public class ActivityAudienceService {
                 row.setImportTime(now);
                 audienceRepository.save(row);
             }
-            return new CreateAudienceResponse(row.getId(), row.getUid(), false);
+            return new CreateAudienceResponse(row.getId(), row.getUsername(), false);
         }
 
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setActivityId(uuid);
-        row.setUid(viewer.getUid());
+        row.setUsername(viewer.getUsername());
         row.setEntitlementStatus(1);
         row.setImporterId(operatorId);
         row.setImportTime(now);
         audienceRepository.save(row);
-        return new CreateAudienceResponse(row.getId(), row.getUid(), true);
+        return new CreateAudienceResponse(row.getId(), row.getUsername(), true);
     }
 
     @Transactional
@@ -457,7 +460,7 @@ public class ActivityAudienceService {
                     continue;
                 }
                 Optional<ActivityAudienceEntity> existing =
-                        audienceRepository.findByActivityIdAndUid(uuid, viewer.getUid());
+                        audienceRepository.findByActivityIdAndUsername(uuid, viewer.getUsername());
                 if (existing.isPresent()) {
                     ActivityAudienceEntity row = existing.get();
                     if (row.getImporterId() == null) {
@@ -472,7 +475,7 @@ public class ActivityAudienceService {
                 }
                 ActivityAudienceEntity row = new ActivityAudienceEntity();
                 row.setActivityId(uuid);
-                row.setUid(viewer.getUid());
+                row.setUsername(viewer.getUsername());
                 row.setEntitlementStatus(1);
                 row.setImporterId(operatorId);
                 row.setImportTime(now);
@@ -511,24 +514,24 @@ public class ActivityAudienceService {
         requireTagsExist(tagIds);
 
         List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByTagIdIn(tagIds);
-        LinkedHashMap<Long, Boolean> viewerUniq = new LinkedHashMap<>();
+        LinkedHashMap<String, Boolean> viewerUniq = new LinkedHashMap<>();
         for (ViewerTagMemberEntity m : members) {
-            if (m.getUid() != null && m.getUid() > 0) {
-                viewerUniq.putIfAbsent(m.getUid(), Boolean.TRUE);
+            if (m.getUsername() != null && !m.getUsername().isBlank()) {
+                viewerUniq.putIfAbsent(m.getUsername().trim(), Boolean.TRUE);
             }
         }
-        List<Long> viewerIds = List.copyOf(viewerUniq.keySet());
+        List<String> viewerUsernames = List.copyOf(viewerUniq.keySet());
 
         ImportAudienceByTagsResponse result = new ImportAudienceByTagsResponse();
-        result.setTotal(viewerIds.size());
-        if (viewerIds.isEmpty()) {
+        result.setTotal(viewerUsernames.size());
+        if (viewerUsernames.isEmpty()) {
             return result;
         }
 
         LocalDateTime now = LocalDateTime.now();
-        for (Long viewerId : viewerIds) {
+        for (String viewerUsername : viewerUsernames) {
             Optional<ActivityAudienceEntity> existing =
-                    audienceRepository.findByActivityIdAndUid(uuid, viewerId);
+                    audienceRepository.findByActivityIdAndUsername(uuid, viewerUsername);
             if (existing.isPresent()) {
                 ActivityAudienceEntity row = existing.get();
                 if (row.getImporterId() == null) {
@@ -543,7 +546,7 @@ public class ActivityAudienceService {
             }
             ActivityAudienceEntity row = new ActivityAudienceEntity();
             row.setActivityId(uuid);
-            row.setUid(viewerId);
+            row.setUsername(viewerUsername);
             row.setEntitlementStatus(1);
             row.setImporterId(operatorId);
             row.setImportTime(now);
@@ -668,10 +671,10 @@ public class ActivityAudienceService {
                 sort,
                 order);
         List<ActivityAudienceEntity> all = prepared.rows();
-        Map<Long, Long> commentCounts = prepared.commentCounts();
-        Map<Long, ViewerEntity> viewers = loadViewers(all);
+        Map<String, Long> commentCounts = prepared.commentCounts();
+        Map<String, ViewerEntity> viewers = loadViewers(all);
         Map<Long, String> employeeNames = loadEmployeeNames(all);
-        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(all);
+        Map<String, List<TagRef>> tagsByViewer = loadTagsByViewer(all);
 
         StringBuilder sb = new StringBuilder();
         sb.append("用户,用户ID,手机号,权益状态,所属邀请人,标签,累计观看时长,直播观看时长,回放观看时长,评论次数,直播间成交金额(元)\n");
@@ -681,13 +684,13 @@ public class ActivityAudienceService {
                     viewers,
                     employeeNames,
                     commentCounts,
-                    tagsByViewer.getOrDefault(row.getUid(), List.of()),
-                    prepared.durations().getOrDefault(row.getUid(), WatchDurationCalculator.zero()));
-            ViewerEntity viewer = viewers.get(row.getUid());
+                    tagsByViewer.getOrDefault(row.getUsername(), List.of()),
+                    prepared.durations().getOrDefault(row.getUsername(), WatchDurationCalculator.zero()));
+            ViewerEntity viewer = viewers.get(row.getUsername());
             String phone = viewer != null && viewer.getPhone() != null ? viewer.getPhone() : "";
             sb.append(csvCell(item.getNickname()))
                     .append(',')
-                    .append(item.getUid() == null ? "" : item.getUid())
+                    .append(item.getUsername() == null ? "" : item.getUsername())
                     .append(',')
                     .append(csvCell(phone))
                     .append(',')
@@ -744,7 +747,7 @@ public class ActivityAudienceService {
         for (RoomCommentEntity c : result.getContent()) {
             AudienceCommentListItem item = new AudienceCommentListItem();
             item.setId(c.getId());
-            item.setUid(c.getUid());
+            item.setUsername(c.getUsername());
             item.setGuestId(c.getGuestId());
             item.setNickname(c.getNickname());
             item.setContent(c.getContent());
@@ -758,19 +761,19 @@ public class ActivityAudienceService {
 
     private AudienceListItem toListItem(
             ActivityAudienceEntity row,
-            Map<Long, ViewerEntity> viewers,
+            Map<String, ViewerEntity> viewers,
             Map<Long, String> employeeNames,
-            Map<Long, Long> commentCounts,
+            Map<String, Long> commentCounts,
             List<TagRef> tags,
             WatchDurationCalculator.Durations durations) {
         AudienceListItem item = new AudienceListItem();
         item.setId(row.getId());
-        item.setUid(row.getUid());
-        ViewerEntity viewer = viewers.get(row.getUid());
+        item.setUsername(row.getUsername());
+        ViewerEntity viewer = viewers.get(row.getUsername());
         if (viewer != null) {
             item.setNickname(ViewerAdminService.displayNickname(viewer));
         } else {
-            item.setNickname("用户_" + row.getUid());
+            item.setNickname("用户_" + row.getUsername());
         }
         if (viewer != null && viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
             item.setAvatarUrl(viewer.getAvatarUrl());
@@ -804,17 +807,17 @@ public class ActivityAudienceService {
         item.setTotalWatchDurationSec(durations.totalSec());
         item.setLiveWatchDurationSec(durations.liveSec());
         item.setReplayWatchDurationSec(durations.replaySec());
-        item.setCommentCount(commentCounts.getOrDefault(row.getUid(), 0L));
+        item.setCommentCount(commentCounts.getOrDefault(row.getUsername(), 0L));
         item.setDealAmount("0.00");
         return item;
     }
 
-    private Map<Long, List<TagRef>> loadTagsByViewer(List<ActivityAudienceEntity> rows) {
+    private Map<String, List<TagRef>> loadTagsByViewer(List<ActivityAudienceEntity> rows) {
         if (rows.isEmpty()) {
             return Map.of();
         }
-        List<Long> viewerIds = rows.stream().map(ActivityAudienceEntity::getUid).distinct().toList();
-        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByUidIn(viewerIds);
+        List<String> viewerUsernames = rows.stream().map(ActivityAudienceEntity::getUsername).distinct().toList();
+        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByUsernameIn(viewerUsernames);
         if (members.isEmpty()) {
             return Map.of();
         }
@@ -823,13 +826,13 @@ public class ActivityAudienceService {
             tagIds.add(m.getTagId());
         }
         Map<Long, ViewerTagEntity> tags = loadActiveTags(tagIds);
-        Map<Long, List<TagRef>> grouped = new HashMap<>();
+        Map<String, List<TagRef>> grouped = new HashMap<>();
         for (ViewerTagMemberEntity m : members) {
             ViewerTagEntity tag = tags.get(m.getTagId());
             if (tag == null) {
                 continue;
             }
-            grouped.computeIfAbsent(m.getUid(), k -> new ArrayList<>())
+            grouped.computeIfAbsent(m.getUsername(), k -> new ArrayList<>())
                     .add(new TagRef(tag.getId(), tag.getName()));
         }
         return grouped;
@@ -850,29 +853,31 @@ public class ActivityAudienceService {
 
     private record TagRef(long tagId, String name) {}
 
-    private Map<Long, Long> loadCommentCounts(String activityId, Set<Long> viewerIds) {
-        Map<Long, Long> map = new HashMap<>();
-        if (viewerIds == null || viewerIds.isEmpty()) {
+    private Map<String, Long> loadCommentCounts(String activityId, Set<String> viewerUsernames) {
+        Map<String, Long> map = new HashMap<>();
+        if (viewerUsernames == null || viewerUsernames.isEmpty()) {
             return map;
         }
-        for (Object[] row : commentRepository.countActiveByUids(activityId, viewerIds)) {
+        for (Object[] row : commentRepository.countActiveByUsernames(activityId, viewerUsernames)) {
             if (row[0] != null) {
-                map.put((Long) row[0], (Long) row[1]);
+                map.put(row[0].toString(), (Long) row[1]);
             }
         }
         return map;
     }
 
-    private Map<Long, ViewerEntity> loadViewers(List<ActivityAudienceEntity> rows) {
-        Set<Long> ids = new HashSet<>();
+    private Map<String, ViewerEntity> loadViewers(List<ActivityAudienceEntity> rows) {
+        Set<String> ids = new HashSet<>();
         for (ActivityAudienceEntity row : rows) {
-            ids.add(row.getUid());
+            if (row.getUsername() != null && !row.getUsername().isBlank()) {
+                ids.add(row.getUsername().trim());
+            }
         }
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return viewerRepository.findByUidIn(ids).stream()
-                .collect(Collectors.toMap(ViewerEntity::getUid, v -> v, (a, b) -> a));
+        return viewerRepository.findByUsernameIn(ids).stream()
+                .collect(Collectors.toMap(ViewerEntity::getUsername, v -> v, (a, b) -> a));
     }
 
     private Map<Long, String> loadEmployeeNames(List<ActivityAudienceEntity> rows) {
@@ -897,23 +902,23 @@ public class ActivityAudienceService {
 
     private static Comparator<ActivityAudienceEntity> comparator(
             String sortKey,
-            Map<Long, Long> commentCounts,
-            Map<Long, WatchDurationCalculator.Durations> durations) {
+            Map<String, Long> commentCounts,
+            Map<String, WatchDurationCalculator.Durations> durations) {
         if ("stayDuration".equals(sortKey)) {
             throw new IllegalArgumentException("stayDuration 已废除");
         }
         return switch (sortKey) {
             case "commentCount" -> Comparator.comparingLong(
-                    (ActivityAudienceEntity r) -> commentCounts.getOrDefault(r.getUid(), 0L));
+                    (ActivityAudienceEntity r) -> commentCounts.getOrDefault(r.getUsername(), 0L));
             case "totalWatchDuration" -> Comparator.comparingLong(
                     (ActivityAudienceEntity r) ->
-                            durations.getOrDefault(r.getUid(), WatchDurationCalculator.zero()).totalSec());
+                            durations.getOrDefault(r.getUsername(), WatchDurationCalculator.zero()).totalSec());
             case "liveWatchDuration" -> Comparator.comparingLong(
                     (ActivityAudienceEntity r) ->
-                            durations.getOrDefault(r.getUid(), WatchDurationCalculator.zero()).liveSec());
+                            durations.getOrDefault(r.getUsername(), WatchDurationCalculator.zero()).liveSec());
             case "replayWatchDuration" -> Comparator.comparingLong(
                     (ActivityAudienceEntity r) ->
-                            durations.getOrDefault(r.getUid(), WatchDurationCalculator.zero()).replaySec());
+                            durations.getOrDefault(r.getUsername(), WatchDurationCalculator.zero()).replaySec());
             case "dealAmount" -> Comparator.comparingLong(ActivityAudienceEntity::getId);
             default -> Comparator.comparing(
                     ActivityAudienceEntity::getCreatedTime, Comparator.nullsLast(Comparator.naturalOrder()));
@@ -1052,6 +1057,6 @@ public class ActivityAudienceService {
 
     private record PreparedList(
             List<ActivityAudienceEntity> rows,
-            Map<Long, Long> commentCounts,
-            Map<Long, WatchDurationCalculator.Durations> durations) {}
+            Map<String, Long> commentCounts,
+            Map<String, WatchDurationCalculator.Durations> durations) {}
 }

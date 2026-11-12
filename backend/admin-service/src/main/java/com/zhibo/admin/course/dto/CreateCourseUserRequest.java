@@ -9,7 +9,7 @@ public class CreateCourseUserRequest {
     private String phone;
 
     /** 与 phone 二选一 */
-    private Long uid;
+    private String username;
 
     /**
      * 选填。仅新建行时生效；已有行不改 expire。

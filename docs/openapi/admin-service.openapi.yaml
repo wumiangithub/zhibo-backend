@@ -2087,17 +2087,17 @@ paths:
             type: string
             enum:
               - nickname
-              - id
+              - username
               - phone
             default: nickname
-            description: nickname 昵称 / id 用户ID / phone 手机号
+            description: nickname 昵称 / username 用户标识 / phone 手机号
             x-apifox-enum:
               - value: nickname
                 name: 昵称
                 description: 昵称
-              - value: id
-                name: 用户ID
-                description: 用户ID
+              - value: username
+                name: 用户标识
+                description: 用户标识
               - value: phone
                 name: 手机号
                 description: 手机号
@@ -2195,7 +2195,7 @@ paths:
       tags:
         - 课程
       summary: 单个添加学员
-      description: "向本课添加一名学员。Body 须二选一提供 phone 或 uid；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。"
+      description: "向本课添加一名学员。Body 须二选一提供 phone 或 username；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。"
       operationId: createCourseUser
       security:
         - BearerAuth:
@@ -2429,17 +2429,17 @@ paths:
             type: string
             enum:
               - nickname
-              - id
+              - username
               - phone
             default: nickname
-            description: nickname 昵称 / id 用户ID / phone 手机号
+            description: nickname 昵称 / username 用户标识 / phone 手机号
             x-apifox-enum:
               - value: nickname
                 name: 昵称
                 description: 昵称
-              - value: id
-                name: 用户ID
-                description: 用户ID
+              - value: username
+                name: 用户标识
+                description: 用户标识
               - value: phone
                 name: 手机号
                 description: 手机号
@@ -2978,17 +2978,17 @@ paths:
             type: string
             enum:
               - nickname
-              - id
+              - username
               - phone
             default: nickname
-            description: nickname 昵称 / id 用户ID / phone 手机号
+            description: nickname 昵称 / username 用户标识 / phone 手机号
             x-apifox-enum:
               - value: nickname
                 name: 昵称
                 description: 昵称
-              - value: id
-                name: 用户ID
-                description: 用户ID
+              - value: username
+                name: 用户标识
+                description: 用户标识
               - value: phone
                 name: 手机号
                 description: 手机号
@@ -3308,17 +3308,17 @@ paths:
             type: string
             enum:
               - nickname
-              - id
+              - username
               - phone
             default: nickname
-            description: nickname 昵称 / id 用户ID / phone 手机号
+            description: nickname 昵称 / username 用户标识 / phone 手机号
             x-apifox-enum:
               - value: nickname
                 name: 昵称
                 description: 昵称
-              - value: id
-                name: 用户ID
-                description: 用户ID
+              - value: username
+                name: 用户标识
+                description: 用户标识
               - value: phone
                 name: 手机号
                 description: 手机号
@@ -3547,7 +3547,7 @@ paths:
       tags:
         - 直播中控台
       summary: 中控台发送优惠券
-      description: "中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，uid 空，nickname 为当前员工昵称）。发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。"
+      description: "中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，username 空，nickname 为当前员工昵称）。发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。"
       operationId: sendConsoleCoupon
       security:
         - BearerAuth:
@@ -3635,16 +3635,16 @@ paths:
             type: string
             enum:
               - nickname
-              - id
+              - username
               - phone
-            description: nickname 昵称 / id 用户ID / phone 手机号
+            description: nickname 昵称 / username 用户标识 / phone 手机号
             x-apifox-enum:
               - value: nickname
                 name: 昵称
                 description: 昵称
-              - value: id
-                name: 用户ID
-                description: 用户ID
+              - value: username
+                name: 用户标识
+                description: 用户标识
               - value: phone
                 name: 手机号
                 description: 手机号
@@ -3715,9 +3715,10 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
-          description: 用户中心 uid
+            type: string
+            maxLength: 16
+            description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值
+          description: "用户中心 viewer.username（路径 {id}，D118）"
       requestBody:
         required: true
         content:
@@ -3745,9 +3746,10 @@ paths:
           in: path
           required: true
           schema:
-            type: integer
-            format: int64
-          description: 用户中心 uid
+            type: string
+            maxLength: 16
+            description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值
+          description: "用户中心 viewer.username（路径 {id}，D118）"
       requestBody:
         required: true
         content:
@@ -3833,17 +3835,17 @@ paths:
             type: string
             enum:
               - nickname
-              - id
+              - username
               - phone
             default: nickname
-            description: nickname 昵称 / id 用户ID / phone 手机号
+            description: nickname 昵称 / username 用户标识 / phone 手机号
             x-apifox-enum:
               - value: nickname
                 name: 昵称
                 description: 昵称
-              - value: id
-                name: 用户ID
-                description: 用户ID
+              - value: username
+                name: 用户标识
+                description: 用户标识
               - value: phone
                 name: 手机号
                 description: 手机号
@@ -7667,11 +7669,11 @@ components:
       properties:
         phone:
           type: string
-          description: 与 uid 二选一
-        uid:
-          type: integer
-          format: int64
-          description: 与 phone 二选一；库：BIGINT
+          description: 与 username 二选一
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username；与 phone 二选一；库：VARCHAR(16)
         expireTime:
           type: string
           description: "选填；仅新建行；yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00；空则按课程售卖规则计算到期（days → 入表时刻+N 天；fixed → 课程固定时刻；long → 空）；库：DATETIME(3)"
@@ -7682,10 +7684,10 @@ components:
           type: integer
           format: int64
           description: 主键 id；库：BIGINT
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid（业务用户主键）；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         created:
           type: boolean
           description: true 新建；false 已有行；库：TINYINT(1)
@@ -7976,10 +7978,10 @@ components:
           type: integer
           format: int64
           description: 名单行 id；库：BIGINT
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid（业务用户主键）；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -8066,11 +8068,11 @@ components:
       properties:
         phone:
           type: string
-          description: 与 uid 二选一
-        uid:
-          type: integer
-          format: int64
-          description: 与 phone 二选一；库：BIGINT
+          description: 与 username 二选一
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username；与 phone 二选一；库：VARCHAR(16)
     ActivityAudienceCreateData:
       type: object
       properties:
@@ -8078,10 +8080,10 @@ components:
           type: integer
           format: int64
           description: 主键 id；库：BIGINT
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid（业务用户主键）；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         created:
           type: boolean
           description: 是否新建；库：TINYINT(1)
@@ -8200,10 +8202,10 @@ components:
           type: integer
           format: int64
           description: 主键 id；库：BIGINT
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid（业务用户主键）；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         guestId:
           type: string
           description: 本站生成的游客 id；库：VARCHAR(64)
@@ -8256,10 +8258,10 @@ components:
     ViewerListItem:
       type: object
       properties:
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid（业务用户主键）；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -8435,10 +8437,10 @@ components:
     ViewerBlacklistUpdateData:
       type: object
       properties:
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         banComment:
           type: integer
           enum:
@@ -8505,10 +8507,10 @@ components:
     ViewerTagsUpdateData:
       type: object
       properties:
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         tagIds:
           type: array
           items:
@@ -8523,10 +8525,10 @@ components:
     ViewerLearnStatsSummaryItem:
       type: object
       properties:
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         nickname:
           type: string
           description: 昵称；库：VARCHAR(64)
@@ -8580,7 +8582,7 @@ components:
       type: object
       required:
         - id
-        - uid
+        - username
         - nickname
         - tagIds
         - tagLabels
@@ -8593,10 +8595,10 @@ components:
           type: integer
           format: int64
           description: course_lesson_progress.id；库：BIGINT
-        uid:
-          type: integer
-          format: int64
-          description: 用户中心 uid；库：BIGINT
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)
         nickname:
           type: string
           description: 观众展示昵称；库：VARCHAR(64)

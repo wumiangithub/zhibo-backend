@@ -145,7 +145,7 @@ public class CourseAnalyticsService {
         sb.append("用户,用户ID,课程参与状态,小节完成数,小节完成率,累计学习时长,课程权益状态\n");
         for (CourseAnalyticsUserItem item : all) {
             sb.append(csv(item.getNickname())).append(',')
-                    .append(item.getUid()).append(',')
+                    .append(item.getUsername()).append(',')
                     .append(csv(participateLabel(item.getParticipateStatus()))).append(',')
                     .append(item.getCompletedLessonCount()).append(',')
                     .append(formatRate(item.getLessonCompletionRate())).append(',')
@@ -158,19 +158,19 @@ public class CourseAnalyticsService {
 
     @Transactional(readOnly = true)
     public CourseAnalyticsUserLessonListResponse listUserLessons(
-            String courseIdRaw, Long viewerId, int page, int pageSize) {
-        if (viewerId == null || viewerId <= 0) {
+            String courseIdRaw, String viewerUsername, int page, int pageSize) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new IllegalArgumentException("uid 无效");
         }
         CourseEntity course = requireCourse(courseIdRaw);
         CourseUserEntity membership = courseUserRepository
-                .findByCourseIdAndUid(course.getId(), viewerId)
+                .findByCourseIdAndUsername(course.getId(), viewerUsername)
                 .orElseThrow(() -> new IllegalArgumentException("学员不在本课"));
 
         List<CourseCatalogNodeEntity> lessons = lessonsInCatalogOrder(course.getId());
         long totalLessonCount = lessons.size();
         Map<Long, CourseLessonProgressEntity> byLesson = progressRepository
-                .findByCourseIdAndUid(course.getId(), viewerId)
+                .findByCourseIdAndUsername(course.getId(), viewerUsername)
                 .stream()
                 .collect(Collectors.toMap(
                         CourseLessonProgressEntity::getLessonNodeId, p -> p, (a, b) -> a));
@@ -209,12 +209,12 @@ public class CourseAnalyticsService {
         int from = Math.min((p - 1) * size, all.size());
         int to = Math.min(from + size, all.size());
 
-        ViewerEntity viewer = viewerRepository.findByUid(membership.getUid()).orElse(null);
+        ViewerEntity viewer = viewerRepository.findByUsername(membership.getUsername()).orElse(null);
         CourseAnalyticsUserLessonListResponse resp = new CourseAnalyticsUserLessonListResponse();
-        resp.setUid(viewerId);
+        resp.setUsername(viewerUsername);
         resp.setNickname(
                 viewer == null
-                        ? "用户_" + viewerId
+                        ? "用户_" + viewerUsername
                         : ViewerAdminService.displayNickname(viewer));
         resp.setAvatarUrl(viewer == null ? null : viewer.getAvatarUrl());
         resp.setCompletedLessonCount(completed);
@@ -237,24 +237,24 @@ public class CourseAnalyticsService {
 
         List<CourseUserEntity> rows =
                 courseUserRepository.findByCourseIdOrderByCreatedTimeDescIdDesc(course.getId());
-        Set<Long> viewerIds = rows.stream().map(CourseUserEntity::getUid).collect(Collectors.toSet());
-        Map<Long, ViewerEntity> viewers = viewerIds.isEmpty()
+        Set<String> viewerUsernames = rows.stream().map(CourseUserEntity::getUsername).collect(Collectors.toSet());
+        Map<String, ViewerEntity> viewers = viewerUsernames.isEmpty()
                 ? Map.of()
-                : viewerRepository.findByUidIn(viewerIds).stream()
-                        .collect(Collectors.toMap(ViewerEntity::getUid, v -> v, (a, b) -> a));
+                : viewerRepository.findByUsernameIn(viewerUsernames).stream()
+                        .collect(Collectors.toMap(ViewerEntity::getUsername, v -> v, (a, b) -> a));
 
         List<CourseCatalogNodeEntity> lessons = lessonsInCatalogOrder(course.getId());
         long totalLessonCount = lessons.size();
         Set<Long> lessonIdSet =
                 lessons.stream().map(CourseCatalogNodeEntity::getId).collect(Collectors.toSet());
 
-        Map<Long, long[]> progressAgg = new HashMap<>();
+        Map<String, long[]> progressAgg = new HashMap<>();
         // [0]=completedCount, [1]=learnDurationSec
         for (CourseLessonProgressEntity p : progressRepository.findByCourseId(course.getId())) {
             if (!lessonIdSet.contains(p.getLessonNodeId())) {
                 continue;
             }
-            long[] arr = progressAgg.computeIfAbsent(p.getUid(), k -> new long[2]);
+            long[] arr = progressAgg.computeIfAbsent(p.getUsername(), k -> new long[2]);
             arr[1] += Math.max(0L, p.getLearnDurationSec());
             if (p.getParticipateStatus() == CourseLessonParticipateStatus.COMPLETED) {
                 arr[0]++;
@@ -265,18 +265,18 @@ public class CourseAnalyticsService {
         String accessType = course.getAccessValidityType();
         List<CourseAnalyticsUserItem> items = new ArrayList<>();
         for (CourseUserEntity row : rows) {
-            ViewerEntity viewer = viewers.get(row.getUid());
+            ViewerEntity viewer = viewers.get(row.getUsername());
             String nickname =
                     viewer == null
-                            ? "用户_" + row.getUid()
+                            ? "用户_" + row.getUsername()
                             : ViewerAdminService.displayNickname(viewer);
             if (!kw.isEmpty() && !nickname.toLowerCase(Locale.ROOT).contains(kw)) {
                 continue;
             }
-            long[] agg = progressAgg.getOrDefault(row.getUid(), new long[2]);
+            long[] agg = progressAgg.getOrDefault(row.getUsername(), new long[2]);
             long completed = agg[0];
             CourseAnalyticsUserItem item = new CourseAnalyticsUserItem();
-            item.setUid(row.getUid());
+            item.setUsername(row.getUsername());
             item.setNickname(nickname);
             item.setAvatarUrl(viewer == null ? null : viewer.getAvatarUrl());
             item.setCompletedLessonCount(completed);
@@ -329,13 +329,13 @@ public class CourseAnalyticsService {
 
     private List<CourseAnalyticsLessonItem> buildLessonItems(CourseEntity course) {
         List<CourseCatalogNodeEntity> lessons = lessonsInCatalogOrder(course.getId());
-        Set<Long> validViewerIds = validViewerIds(course);
-        long validCount = validViewerIds.size();
+        Set<String> validViewerUsernames = validViewerUsernameSet(course);
+        long validCount = validViewerUsernames.size();
 
         Map<Long, long[]> stats = new HashMap<>();
         // [0]=participate, [1]=complete among valid
         for (CourseLessonProgressEntity p : progressRepository.findByCourseId(course.getId())) {
-            if (!validViewerIds.contains(p.getUid())) {
+            if (!validViewerUsernames.contains(p.getUsername())) {
                 continue;
             }
             if (p.getParticipateStatus() < CourseLessonParticipateStatus.IN_PROGRESS) {
@@ -365,13 +365,13 @@ public class CourseAnalyticsService {
     }
 
     private long countValidStudents(CourseEntity course) {
-        return validViewerIds(course).size();
+        return validViewerUsernameSet(course).size();
     }
 
-    private Set<Long> validViewerIds(CourseEntity course) {
+    private Set<String> validViewerUsernameSet(CourseEntity course) {
         LocalDateTime now = LocalDateTime.now();
         String accessType = course.getAccessValidityType();
-        Set<Long> ids = new HashSet<>();
+        Set<String> ids = new HashSet<>();
         for (CourseUserEntity row :
                 courseUserRepository.findByCourseIdOrderByCreatedTimeDescIdDesc(course.getId())) {
             String state = CourseEntitlementSupport.resolveState(
@@ -380,7 +380,10 @@ public class CourseAnalyticsService {
                     row.getEntitlementExpireTime(),
                     now);
             if ("valid".equals(state)) {
-                ids.add(row.getUid());
+                String username = row.getUsername();
+                if (username != null && !username.isBlank()) {
+                    ids.add(username.trim());
+                }
             }
         }
         return ids;

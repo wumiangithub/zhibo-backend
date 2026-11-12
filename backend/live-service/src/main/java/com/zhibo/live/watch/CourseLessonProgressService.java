@@ -32,8 +32,8 @@ public class CourseLessonProgressService {
 
     @Transactional
     public CourseLessonProgressResponse report(
-            String courseIdRaw, long viewerId, CourseLessonProgressRequest request) {
-        if (viewerId <= 0) {
+            String courseIdRaw, String viewerUsername, CourseLessonProgressRequest request) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new IllegalArgumentException("uid 无效");
         }
         if (request == null || request.getLessonNodeId() == null || request.getLessonNodeId() <= 0) {
@@ -65,9 +65,9 @@ public class CourseLessonProgressService {
 
         CourseLessonProgressEntity row =
                 progressRepository
-                        .findByCourseIdAndLessonNodeIdAndUid(
-                                courseId, lesson.getId(), viewerId)
-                        .orElseGet(() -> newRow(courseId, lesson.getId(), viewerId));
+                        .findByCourseIdAndLessonNodeIdAndUsername(
+                                courseId, lesson.getId(), viewerUsername)
+                        .orElseGet(() -> newRow(courseId, lesson.getId(), viewerUsername));
 
         LocalDateTime now = LocalDateTime.now();
         markParticipated(row, now);
@@ -115,11 +115,11 @@ public class CourseLessonProgressService {
                 completed);
     }
 
-    private static CourseLessonProgressEntity newRow(String courseId, long lessonNodeId, long viewerId) {
+    private static CourseLessonProgressEntity newRow(String courseId, long lessonNodeId, String viewerUsername) {
         CourseLessonProgressEntity row = new CourseLessonProgressEntity();
         row.setCourseId(courseId);
         row.setLessonNodeId(lessonNodeId);
-        row.setUid(viewerId);
+        row.setUsername(viewerUsername);
         row.setParticipateStatus(CourseLessonParticipateStatus.NOT_STARTED);
         row.setLearnDurationSec(0L);
         row.setProgressPercent(0);

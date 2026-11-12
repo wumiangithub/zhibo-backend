@@ -188,7 +188,7 @@ class ConsoleServiceTest {
 
         RoomCommentEntity row = new RoomCommentEntity();
         row.setQuestionId("2397558");
-        row.setUid(12L);
+        row.setUsername("12");
         row.setNickname("甲");
         row.setContent("怎么报名");
         row.setMsgId("msg_q1");

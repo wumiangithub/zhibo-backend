@@ -100,8 +100,7 @@ public class ViewerAuthService {
 
     /**
      * local / test 环境调用：按明文手机号登录；无账号则自动注册（无 mini_openid）。
-     * 不调用户中心：可登录观看，但 JWT 无订单中心可用的 uid/username。
-     * Controller 须先按 spring profile=local|test 拦掉 prod。
+     * 不调用户中心：可登录观看，但 JWT 无订单中心可用的 username。
      */
     @Transactional
     public ViewerAuthResponse devPhoneLogin(DevPhoneLoginRequest request) {
@@ -116,27 +115,30 @@ public class ViewerAuthService {
         return issue(viewer);
     }
 
-    /** 过期 access 可以换票。不吊销旧 refresh。JWT sub = uid。 */
+    /** 过期 access 可以换票。不吊销旧 refresh。JWT sub = username。 */
     @Transactional
     public ViewerAuthResponse refresh(ViewerRefreshRequest request) {
         if (request == null || isBlank(request.getRefreshToken()) || isBlank(request.getAccessToken())) {
             throw new ViewerAuthException(401, "登录状态已失效，请重新登录");
         }
-        long refreshUid = jwtTokenService.parseRefreshUid(request.getRefreshToken().trim());
-        long accessUid = jwtTokenService.parseAccessAllowExpired(request.getAccessToken().trim());
-        if (refreshUid != accessUid) {
+        String refreshUsername = jwtTokenService.parseRefreshUsername(request.getRefreshToken().trim());
+        String accessUsername = jwtTokenService.parseAccessAllowExpired(request.getAccessToken().trim());
+        if (!refreshUsername.equals(accessUsername)) {
             throw new ViewerAuthException(401, "登录状态已失效，请重新登录");
         }
-        ViewerEntity viewer = viewerRepository.findByUid(refreshUid)
+        ViewerEntity viewer = viewerRepository.findByUsername(refreshUsername)
                 .orElseThrow(() -> new ViewerAuthException(403, DISABLED));
         requireActive(viewer);
         return issue(viewer);
     }
 
-    /** @param uid 用户中心 uid（JWT sub） */
+    /** @param username 用户中心 username（JWT sub） */
     @Transactional(readOnly = true)
-    public ViewerUserResponse userInfo(long uid) {
-        ViewerEntity viewer = viewerRepository.findByUid(uid)
+    public ViewerUserResponse userInfo(String username) {
+        if (isBlank(username)) {
+            throw new ViewerAuthException(401, "未登录");
+        }
+        ViewerEntity viewer = viewerRepository.findByUsername(username.trim())
                 .orElseThrow(() -> new ViewerAuthException(401, "未登录"));
         if (!ViewerStatus.isNormal(viewer.getStatus())) {
             throw new ViewerAuthException(403, DISABLED);
@@ -175,7 +177,6 @@ public class ViewerAuthService {
         }
     }
 
-    /** local 造号：只写手机号，不写 mini_openid；渠道仍记微信（本地联调造数）。 */
     private ViewerEntity createViewerByPhone(String phone, LocalDateTime now) {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setPhone(phone);
@@ -207,14 +208,12 @@ public class ViewerAuthService {
         return phone;
     }
 
-    /** 微信这次必须带回 unionid；偶发不回则登录失败（D116）。 */
     private void requireUnionid(WechatMpClient.WechatSession session) {
         if (session == null || isBlank(session.unionid())) {
             throw new ViewerAuthException(400, WECHAT_FAIL);
         }
     }
 
-    /** 微信这次带回了 unionid 才写。没带回就保留原来的。 */
     private void rememberUnionid(ViewerEntity viewer, WechatMpClient.WechatSession session, LocalDateTime now) {
         if (viewer == null || session == null || isBlank(session.unionid())) {
             return;
@@ -228,19 +227,19 @@ public class ViewerAuthService {
         viewerRepository.save(viewer);
     }
 
-    /**
-     * 调用户中心 /oauth/wechat/register，把对方 uid/username 写入本站（插入或更新）。
-     * 对方失败则本站登录失败。
-     */
+    /** 调用户中心，写入 uid（备查）与 username（业务身份）；缺少 username 则登录失败。 */
     private void syncOauthIdentity(ViewerEntity viewer, String unionid, String deviceType, LocalDateTime now) {
         ViewerOauthClient.OauthIdentity identity = oauthClient.registerByUnionId(unionid, deviceType);
+        if (identity == null || isBlank(identity.username())) {
+            throw new ViewerAuthException(400, LOGIN_FAIL);
+        }
         viewer.setUid(identity.uid());
-        viewer.setUsername(identity.username());
+        viewer.setUsername(identity.username().trim());
         viewer.setUpdatedTime(now);
         try {
             viewerRepository.save(viewer);
         } catch (DataIntegrityViolationException ex) {
-            log.warn("观众 uid 唯一约束冲突 uid={}", identity.uid());
+            log.warn("观众 username 唯一约束冲突 username={}", identity.username());
             throw new ViewerAuthException(400, LOGIN_FAIL);
         }
     }
@@ -279,13 +278,11 @@ public class ViewerAuthService {
     }
 
     private ViewerAuthResponse issue(ViewerEntity viewer) {
-        String omsUsername = viewer.getUsername() == null ? "" : viewer.getUsername().trim();
-        Long uid = viewer.getUid();
+        String username = viewer.getUsername() == null ? "" : viewer.getUsername().trim();
         ViewerAuthResponse response = new ViewerAuthResponse();
-        // JWT sub = 用户中心 uid；local 无 uid 时 sub 空（可看直播，不可写业务表 / 调订单中心）
-        response.setAccessToken(jwtTokenService.issueAccess(uid, omsUsername));
+        response.setAccessToken(jwtTokenService.issueAccess(username.isEmpty() ? null : username));
         response.setExpiresIn(jwtTokenService.expireSeconds());
-        response.setRefreshToken(jwtTokenService.issueRefresh(uid, omsUsername));
+        response.setRefreshToken(jwtTokenService.issueRefresh(username.isEmpty() ? null : username));
         response.setRefreshExpiresIn(jwtTokenService.refreshExpireSeconds());
         response.setUser(toUser(viewer));
         return response;
@@ -304,14 +301,9 @@ public class ViewerAuthService {
 
     private static ViewerUserResponse toUser(ViewerEntity viewer) {
         ViewerUserResponse user = new ViewerUserResponse();
-        // 对外只回业务 uid，不回本站自增 id（D117）
-        if (viewer.getUid() != null) {
-            user.setUid(viewer.getUid());
-        }
         if (!isBlank(viewer.getUsername())) {
             user.setUsername(viewer.getUsername().trim());
         }
-        // 小程序支付 prepay(wx_lite) 需要真实 openId；有凭证才回
         if (!isBlank(viewer.getMiniOpenid())) {
             user.setMiniOpenid(viewer.getMiniOpenid().trim());
         }
@@ -344,7 +336,6 @@ public class ViewerAuthService {
         }
     }
 
-    /** 缺哪一项只写日志，响应里不点名。 */
     private void requireConfigured() {
         boolean missing = false;
         if (properties.jwtSecretMissing()) {
@@ -369,7 +360,6 @@ public class ViewerAuthService {
         }
     }
 
-    /** local 明文手机号登录只需 JWT；不依赖微信密钥与用户中心。 */
     private void requireJwtConfigured() {
         if (properties.jwtSecretMissing()) {
             log.warn("观众登录配置缺失: VIEWER_JWT_SECRET");

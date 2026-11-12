@@ -26,10 +26,10 @@ public class CourseLessonProgressController {
             @PathVariable String courseId,
             @RequestBody CourseLessonProgressRequest request,
             HttpServletRequest httpRequest) {
-        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null || viewerId <= 0) {
+        String viewerUsername = (String) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME);
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new ViewerAuthException(401, "未登录");
         }
-        return ApiResponse.ok(courseLessonProgressService.report(courseId, viewerId, request));
+        return ApiResponse.ok(courseLessonProgressService.report(courseId, viewerUsername, request));
     }
 }

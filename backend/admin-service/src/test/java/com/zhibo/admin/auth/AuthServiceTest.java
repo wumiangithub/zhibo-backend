@@ -90,6 +90,36 @@ class AuthServiceTest {
     }
 
     @Test
+    void devAccountLogin_issuesTokens() {
+        when(userRepository.findByUserAccount("admin"))
+                .thenReturn(Optional.of(activeUser(1L, "admin", "pass123", "oid-1", "uid-1")));
+
+        LoginQueryResponse resp = authService.devAccountLogin("admin");
+        assertEquals(1, resp.getStatus());
+        assertNotNull(resp.getAccessToken());
+        assertNotNull(resp.getRefreshToken());
+        assertNotNull(resp.getUser());
+        assertEquals("admin", resp.getUser().getUserAccount());
+    }
+
+    @Test
+    void devAccountLogin_missing_throws() {
+        when(userRepository.findByUserAccount("nope")).thenReturn(Optional.empty());
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class, () -> authService.devAccountLogin("nope"));
+        assertEquals("账号不存在", ex.getMessage());
+    }
+
+    @Test
+    void devAccountLogin_disabled_throws403() {
+        SysUserAccountEntity disabled = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        disabled.setRsStatus(0);
+        when(userRepository.findByUserAccount("admin")).thenReturn(Optional.of(disabled));
+        AuthException ex = assertThrows(AuthException.class, () -> authService.devAccountLogin("admin"));
+        assertEquals(403, ex.getCode());
+    }
+
+    @Test
     void login_disabled_throws403() {
         SysUserAccountEntity user = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
         user.setRsStatus(0);

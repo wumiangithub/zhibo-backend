@@ -897,13 +897,14 @@
             "description": "默认「观众」"
           },
           {
-            "name": "uid",
+            "name": "username",
             "in": "query",
             "schema": {
-              "type": "integer",
-              "format": "int64"
+              "type": "string",
+              "maxLength": 16,
+              "description": "用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值"
             },
-            "description": "用户中心 uid；有则 email 为 {uid}@qkzb.com"
+            "description": "用户中心 viewer.username；有则 email 为 {username}@qkzb.com（嵌入兜底；正式观看走 JWT + sdk-sign）"
           }
         ],
         "responses": {
@@ -962,7 +963,7 @@
           "观看"
         ],
         "summary": "观看 SDK 签名与初始化载荷",
-        "description": "旧路径 GET /api/v1/watch/sdk/{id} 已删除。\nQuery 仅 id + 可选 nickname；uid 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。\n仅返回 id / provider / uid / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。\n不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。\n签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。\n头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={uid}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。",
+        "description": "旧路径 GET /api/v1/watch/sdk/{id} 已删除。\nQuery 仅 id + 可选 nickname；username 只从 Authorization 观众 JWT 解析（D96/D118）；无有效 JWT → 400「请先登录」。\n仅返回 id / provider / username / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。\n不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。\n签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。\n头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={username}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。",
         "operationId": "getWatchSdkSign",
         "security": [
           {
@@ -990,7 +991,7 @@
               "type": "string",
               "maxLength": 50
             },
-            "description": "默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；uid 只从 Authorization 解析（D96）"
+            "description": "默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；username 只从 Authorization JWT 解析（D96/D118）"
           },
           {
             "name": "X-Activity-Access",
@@ -1439,7 +1440,7 @@
           "用户运营"
         ],
         "summary": "邀请归因",
-        "description": "须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 uid；无票 → 401。\n区分邀请人类型 inviterKind：employee 员工 / audience 观众。\nemployee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。\naudience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。\n缺省 inviterKind=employee。",
+        "description": "须观众 Authorization（D97/D118）；被邀请观众 username 只从 JWT 取，Body 不传 username；无票 → 401。\n区分邀请人类型 inviterKind：employee 员工 / audience 观众。\nemployee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。\naudience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。\n缺省 inviterKind=employee。",
         "operationId": "watchAudienceAttribute",
         "security": [
           {
@@ -1481,7 +1482,7 @@
           "用户运营"
         ],
         "summary": "课程分享链进房 enroll",
-        "description": "路径 {id}=课程 UUID。须观众 JWT；uid 只从 JWT 取，Body 不接受 uid。无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。课程不存在/已软删或观众不存在 → 400；无票 → 401。",
+        "description": "路径 {id}=课程 UUID。须观众 JWT；username 只从 JWT 取，Body 不接受 username。无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。课程不存在/已软删或观众不存在 → 400；无票 → 401。",
         "operationId": "watchCourseEnroll",
         "security": [
           {
@@ -2523,21 +2524,21 @@
         "properties": {
           "account": {
             "type": "string",
-            "description": "第三方用户唯一标识（观众=数字 uid）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）"
+            "description": "第三方用户唯一标识（观众=viewer.username）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）"
           },
           "email": {
             "type": "string",
-            "description": "{uid}@qkzb.com，参与签名；new VhallSDK 必须用这份；库：VARCHAR(128)",
+            "description": "{username}@qkzb.com，参与签名；new VhallSDK 必须用这份；库：VARCHAR(128)",
             "maxLength": 128
           },
           "username": {
             "type": "string",
-            "description": "优先 Query nickname；空则默认「观众」；库：VARCHAR(50)",
+            "description": "微吼 JSSDK 展示昵称（优先 Query nickname；空则默认「观众」）；不是业务身份 viewer.username；库：VARCHAR(50)",
             "maxLength": 50
           },
           "head": {
             "type": "string",
-            "description": "对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 uid（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）"
+            "description": "对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为 viewer.username（例 ?v=qk_u_xxx），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）"
           },
           "webinarId": {
             "type": "string",
@@ -2700,7 +2701,7 @@
       },
       "WatchSdkData": {
         "type": "object",
-        "description": "观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / uid / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 uid 来自观众 JWT",
+        "description": "观看 SDK 签名载荷（D92/D93/D94/D95/D96/D118）：仅 id / provider / username / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 username 只从观众 JWT 解析",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/BusinessUuid",
@@ -2729,13 +2730,13 @@
           },
           "nickname": {
             "type": "string",
-            "description": "与 sdk.username 同值（身份回显）；库：VARCHAR(64)",
+            "description": "与 sdk.username 同值（展示昵称回显；非业务身份）；库：VARCHAR(64)",
             "maxLength": 64
           },
-          "uid": {
-            "type": "integer",
-            "format": "int64",
-            "description": "用户中心 uid（与 sdk.email 本地部分一致）；库：BIGINT"
+          "username": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)"
           },
           "sdk": {
             "$ref": "#/components/schemas/VhallSdkPayload",
@@ -3275,15 +3276,10 @@
       "ViewerUserInfo": {
         "type": "object",
         "properties": {
-          "uid": {
-            "type": "integer",
-            "format": "int64",
-            "description": "用户中心 uid（业务用户主键）。JWT sub、业务表 uid、订单中心 third_user_id 均取此值。未同步（如仅 local 明文手机号登录）时省略。本站自增 viewer.id 不对外。；库：BIGINT"
-          },
           "username": {
             "type": "string",
-            "description": "同步自用户中心 LoginVo.username。订单中心 JWT claim username 取此值。本站展示昵称仍用 nickname。未同步时省略。；库：VARCHAR(50)",
-            "maxLength": 50
+            "maxLength": 16,
+            "description": "用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)"
           },
           "miniOpenid": {
             "type": "string",
@@ -3856,12 +3852,12 @@
         "required": [
           "inviterId"
         ],
-        "description": "邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 uid。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）",
+        "description": "邀请归因（D97/D118）。被邀请观众 username 只从 Authorization 解析，Body 不传 username。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）",
         "properties": {
           "inviterId": {
             "type": "integer",
             "format": "int64",
-            "description": "邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 uid（当前不落库）；库：BIGINT"
+            "description": "邀请人 id；employee 时为员工 rs_mainkey_id；audience 时为观众 username（当前不落库，日后可能改 string）；库：BIGINT"
           },
           "inviterKind": {
             "type": "string",
@@ -3893,10 +3889,10 @@
             "format": "int64",
             "description": "主键 id；库：BIGINT"
           },
-          "uid": {
-            "type": "integer",
-            "format": "int64",
-            "description": "用户中心 uid（业务用户主键）；库：BIGINT"
+          "username": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)"
           }
         }
       },
@@ -3980,10 +3976,10 @@
             "format": "int64",
             "description": "course_user 行 id；库：BIGINT"
           },
-          "uid": {
-            "type": "integer",
-            "format": "int64",
-            "description": "观众 id；库：BIGINT"
+          "username": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值；库：VARCHAR(16)"
           },
           "courseId": {
             "$ref": "#/components/schemas/BusinessUuid",
@@ -4446,7 +4442,7 @@
             "type": "object",
             "properties": {
               "data": {
-                "description": "中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 uid；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签",
+                "description": "中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替观众 username；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签",
                 "type": "object",
                 "properties": {
                   "id": {

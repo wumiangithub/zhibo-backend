@@ -117,16 +117,16 @@ public class ViewerAdminController {
         return out;
     }
 
-    @PutMapping("/update-blacklist/{id}")
+    @PutMapping("/update-blacklist/{username}")
     public ApiResponse<UpdateViewerBlacklistResponse> updateBlacklist(
-            @PathVariable long id, @Valid @RequestBody UpdateViewerBlacklistRequest request) {
+            @PathVariable String username, @Valid @RequestBody UpdateViewerBlacklistRequest request) {
         return ApiResponse.ok(viewerAdminService.updateBlacklist(
-                id, request.getBanComment(), request.getBanPurchase(), request.getBanAccess()));
+                username, request.getBanComment(), request.getBanPurchase(), request.getBanAccess()));
     }
 
-    @PutMapping("/update-tags/{id}")
+    @PutMapping("/update-tags/{username}")
     public ApiResponse<UpdateViewerTagsResponse> updateTags(
-            @PathVariable long id, @Valid @RequestBody UpdateViewerTagsRequest request) {
-        return ApiResponse.ok(viewerAdminService.updateTags(id, request.getTagIds()));
+            @PathVariable String username, @Valid @RequestBody UpdateViewerTagsRequest request) {
+        return ApiResponse.ok(viewerAdminService.updateTags(username, request.getTagIds()));
     }
 }

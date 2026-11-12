@@ -27,18 +27,22 @@ public final class WatchDurationCalculator {
     private WatchDurationCalculator() {
     }
 
-    public static Map<Long, Durations> byViewer(
+    public static Map<String, Durations> byViewer(
             ActivityEntity activity,
             List<PresenceEventEntity> events,
             List<RoomReplayWatchEntity> replays,
             LocalDateTime now) {
-        Map<Long, Long> live = liveSeconds(activity, events, now);
-        Map<Long, Long> replay = replaySeconds(replays);
-        Map<Long, Durations> out = new HashMap<>();
-        for (Long viewerId : live.keySet()) {
-            out.put(viewerId, new Durations(live.getOrDefault(viewerId, 0L), replay.getOrDefault(viewerId, 0L)));
+        Map<String, Long> live = liveSeconds(activity, events, now);
+        Map<String, Long> replay = replaySeconds(replays);
+        Map<String, Durations> out = new HashMap<>();
+        for (String viewerUsername : live.keySet()) {
+            out.put(
+                    viewerUsername,
+                    new Durations(
+                            live.getOrDefault(viewerUsername, 0L),
+                            replay.getOrDefault(viewerUsername, 0L)));
         }
-        for (Map.Entry<Long, Long> e : replay.entrySet()) {
+        for (Map.Entry<String, Long> e : replay.entrySet()) {
             out.putIfAbsent(e.getKey(), new Durations(0L, e.getValue()));
         }
         return out;
@@ -48,7 +52,7 @@ public final class WatchDurationCalculator {
         return new Durations(0L, 0L);
     }
 
-    static Map<Long, Long> liveSeconds(
+    static Map<String, Long> liveSeconds(
             ActivityEntity activity, List<PresenceEventEntity> events, LocalDateTime now) {
         LocalDateTime liveStart = liveStart(activity);
         LocalDateTime liveEndBound = liveEndBound(activity, now);
@@ -56,26 +60,26 @@ public final class WatchDurationCalculator {
         boolean ended = isEnded(activity);
         boolean hasActualEnd = activity != null && activity.getLiveActualEndTime() != null;
 
-        Map<Long, Map<String, LocalDateTime>> open = new LinkedHashMap<>();
-        Map<Long, Long> seconds = new HashMap<>();
+        Map<String, Map<String, LocalDateTime>> open = new LinkedHashMap<>();
+        Map<String, Long> seconds = new HashMap<>();
         for (PresenceEventEntity event : ordered(events)) {
-            Long viewerId = PresenceUserIds.viewerId(event.getUserId());
+            String viewerUsername = PresenceUserIds.viewerUsername(event.getUserId());
             String socketId = blankToNull(event.getSocketId());
             LocalDateTime time = event.getEventTime();
-            if (viewerId == null || socketId == null || time == null) {
+            if (viewerUsername == null || socketId == null || time == null) {
                 continue;
             }
-            Map<String, LocalDateTime> sockets = open.computeIfAbsent(viewerId, k -> new LinkedHashMap<>());
+            Map<String, LocalDateTime> sockets = open.computeIfAbsent(viewerUsername, k -> new LinkedHashMap<>());
             if (PresenceEventEntity.TYPE_JOIN.equals(event.getType())) {
                 sockets.putIfAbsent(socketId, time);
             } else if (PresenceEventEntity.TYPE_LEAVE.equals(event.getType())) {
                 LocalDateTime join = sockets.remove(socketId);
                 if (join != null) {
-                    add(seconds, viewerId, overlapSeconds(join, time, liveStart, liveEndBound));
+                    add(seconds, viewerUsername, overlapSeconds(join, time, liveStart, liveEndBound));
                 }
             }
         }
-        for (Map.Entry<Long, Map<String, LocalDateTime>> user : open.entrySet()) {
+        for (Map.Entry<String, Map<String, LocalDateTime>> user : open.entrySet()) {
             for (LocalDateTime join : user.getValue().values()) {
                 if (liveInProgress) {
                     add(seconds, user.getKey(), overlapSeconds(join, now, liveStart, now));
@@ -91,20 +95,24 @@ public final class WatchDurationCalculator {
         return seconds;
     }
 
-    static Map<Long, Long> replaySeconds(List<RoomReplayWatchEntity> replays) {
-        Map<Long, Long> seconds = new HashMap<>();
+    static Map<String, Long> replaySeconds(List<RoomReplayWatchEntity> replays) {
+        Map<String, Long> seconds = new HashMap<>();
         if (replays == null) {
             return seconds;
         }
         for (RoomReplayWatchEntity row : replays) {
-            if (row == null || row.getUid() == null || row.getStartTime() == null || row.getLastReportTime() == null) {
+            if (row == null
+                    || row.getUsername() == null
+                    || row.getUsername().isBlank()
+                    || row.getStartTime() == null
+                    || row.getLastReportTime() == null) {
                 continue;
             }
             long sec = Duration.between(row.getStartTime(), row.getLastReportTime()).getSeconds();
             if (sec < 0) {
                 sec = 0;
             }
-            add(seconds, row.getUid(), sec);
+            add(seconds, row.getUsername(), sec);
         }
         return seconds;
     }
@@ -153,12 +161,12 @@ public final class WatchDurationCalculator {
         return Duration.between(start, end).getSeconds();
     }
 
-    private static void add(Map<Long, Long> seconds, long viewerId, long delta) {
+    private static void add(Map<String, Long> seconds, String viewerUsername, long delta) {
         if (delta <= 0) {
-            seconds.putIfAbsent(viewerId, 0L);
+            seconds.putIfAbsent(viewerUsername, 0L);
             return;
         }
-        seconds.merge(viewerId, delta, Long::sum);
+        seconds.merge(viewerUsername, delta, Long::sum);
     }
 
     private static LocalDateTime parseNullable(String raw) {

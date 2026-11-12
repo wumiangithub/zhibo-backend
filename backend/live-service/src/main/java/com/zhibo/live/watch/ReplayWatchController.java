@@ -30,10 +30,10 @@ public class ReplayWatchController {
             @PathVariable String id,
             @Valid @RequestBody ReplayStartRequest request,
             HttpServletRequest httpRequest) {
-        long viewerId = requireViewerId(httpRequest);
+        String viewerUsername = ViewerAuthInterceptor.requireViewerUsername(httpRequest);
         watchAccessService.assertAllowed(
-                id, viewerId, WatchAccessHeaders.activityAccess(httpRequest));
-        String socketId = replayWatchService.start(id, viewerId, request.getRecordId());
+                id, viewerUsername, WatchAccessHeaders.activityAccess(httpRequest));
+        String socketId = replayWatchService.start(id, viewerUsername, request.getRecordId());
         return ApiResponse.ok(new ReplayStartResponse(socketId));
     }
 
@@ -42,18 +42,10 @@ public class ReplayWatchController {
             @PathVariable String id,
             @Valid @RequestBody ReplayHeartbeatRequest request,
             HttpServletRequest httpRequest) {
-        long viewerId = requireViewerId(httpRequest);
+        String viewerUsername = ViewerAuthInterceptor.requireViewerUsername(httpRequest);
         watchAccessService.assertAllowed(
-                id, viewerId, WatchAccessHeaders.activityAccess(httpRequest));
-        var last = replayWatchService.heartbeat(id, viewerId, request.getSocketId());
+                id, viewerUsername, WatchAccessHeaders.activityAccess(httpRequest));
+        var last = replayWatchService.heartbeat(id, viewerUsername, request.getSocketId());
         return ApiResponse.ok(new ReplayHeartbeatResponse(AttendanceTimes.format(last)));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
     }
 }

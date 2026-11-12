@@ -39,7 +39,7 @@ class ViewerJwtTokenServiceTest {
 
     @Test
     void issueAccess_matchesGoViewersClaims_fromOauth() {
-        String token = service.issueAccess(90001L, "qk_user_abc");
+        String token = service.issueAccess("qk90001");
         Claims claims = Jwts.parser()
                 .verifyWith(signingKey(SECRET))
                 .requireIssuer("zhibo-viewer")
@@ -48,10 +48,10 @@ class ViewerJwtTokenServiceTest {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        assertEquals("90001", claims.getSubject());
+        assertEquals("qk90001", claims.getSubject());
         assertEquals(ViewerJwtTokenService.TOKEN_TYPE_ACCESS, claims.get("token_type", String.class));
-        assertEquals("qk_user_abc", claims.get("username", String.class));
-        assertEquals("90001", claims.get("third_user_id", String.class));
+        assertEquals("qk90001", claims.get("username", String.class));
+        assertEquals("qk90001", claims.get("third_user_id", String.class));
         assertEquals("zhibo-viewer", claims.getIssuer());
         assertTrue(claims.getAudience().contains("viewer"));
         assertNotNull(claims.getId());
@@ -62,7 +62,7 @@ class ViewerJwtTokenServiceTest {
 
     @Test
     void issueAccess_blankOmsLeavesEmptyClaims() {
-        String token = service.issueAccess(7L, "  ");
+        String token = service.issueAccess("u7");
         Claims claims = Jwts.parser()
                 .verifyWith(signingKey(SECRET))
                 .requireIssuer("zhibo-viewer")
@@ -71,14 +71,14 @@ class ViewerJwtTokenServiceTest {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        assertEquals("", claims.get("username", String.class));
-        assertEquals("7", claims.get("third_user_id", String.class));
-        assertEquals("7", claims.getSubject());
+        assertEquals("u7", claims.get("username", String.class));
+        assertEquals("u7", claims.get("third_user_id", String.class));
+        assertEquals("u7", claims.getSubject());
     }
 
     @Test
     void issueRefresh_usesRefreshAudienceAndTokenType() {
-        String token = service.issueRefresh(42L, "qk_user_x");
+        String token = service.issueRefresh("qk_user_x");
         Claims claims = Jwts.parser()
                 .verifyWith(signingKey(SECRET))
                 .requireIssuer("zhibo-viewer")
@@ -87,18 +87,19 @@ class ViewerJwtTokenServiceTest {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        assertEquals("42", claims.getSubject());
+        assertEquals("qk_user_x", claims.getSubject());
         assertTrue(claims.getAudience().contains("viewer-refresh"));
         assertEquals(ViewerJwtTokenService.TOKEN_TYPE_REFRESH, claims.get("token_type", String.class));
         assertEquals("qk_user_x", claims.get("username", String.class));
-        assertEquals("42", claims.get("third_user_id", String.class));
+        assertEquals("qk_user_x", claims.get("third_user_id", String.class));
         ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.parseUserId(token));
         assertEquals(401, ex.getCode());
     }
 
     @Test
     void parseUserId_roundTrip() {
-        String token = service.issueAccess(7L, "13800138000");
+        String token = service.issueAccess("7");
+        assertEquals("7", service.parseUsername(token));
         assertEquals(7L, service.parseUserId(token));
     }
 

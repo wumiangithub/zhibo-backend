@@ -26,11 +26,11 @@ public class WatchCommentService {
     private final RoomCommentRepository commentRepository;
 
     @Transactional
-    public ReportCommentResponse report(String activityId, long viewerId, ReportCommentRequest request) {
+    public ReportCommentResponse report(String activityId, String viewerUsername, ReportCommentRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
-        if (viewerId <= 0) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new IllegalArgumentException("uid 无效");
         }
         ActivityEntity activity = requireActivity(activityId);
@@ -52,12 +52,12 @@ public class WatchCommentService {
             var byQuestion = commentRepository.findByActivityIdAndQuestionId(
                     activity.getId(), questionId);
             if (byQuestion.isPresent()) {
-                return touchExisting(byQuestion.get(), activity, viewerId, msgId);
+                return touchExisting(byQuestion.get(), activity, viewerUsername, msgId);
             }
         } else if (msgId != null) {
             var byMsg = commentRepository.findByActivityIdAndMsgId(activity.getId(), msgId);
             if (byMsg.isPresent()) {
-                return touchExisting(byMsg.get(), activity, viewerId, null);
+                return touchExisting(byMsg.get(), activity, viewerUsername, null);
             }
         }
 
@@ -68,7 +68,7 @@ public class WatchCommentService {
         RoomCommentEntity entity = new RoomCommentEntity();
         entity.setActivityId(activity.getId());
         copyCloudContext(entity, activity);
-        entity.setUid(viewerId);
+        entity.setUsername(viewerUsername);
         entity.setContent(content);
         entity.setNickname(blankToNull(request.getNickname(), 64));
         entity.setRoleName(request.getRoleName());
@@ -82,13 +82,13 @@ public class WatchCommentService {
             if (questionId != null) {
                 return commentRepository
                         .findByActivityIdAndQuestionId(activity.getId(), questionId)
-                        .map(c -> touchExisting(c, activity, viewerId, msgId))
+                        .map(c -> touchExisting(c, activity, viewerUsername, msgId))
                         .orElseThrow(() -> dup);
             }
             if (msgId != null) {
                 return commentRepository
                         .findByActivityIdAndMsgId(activity.getId(), msgId)
-                        .map(c -> touchExisting(c, activity, viewerId, null))
+                        .map(c -> touchExisting(c, activity, viewerUsername, null))
                         .orElseThrow(() -> dup);
             }
             throw dup;
@@ -164,13 +164,13 @@ public class WatchCommentService {
     }
 
     private ReportCommentResponse touchExisting(
-            RoomCommentEntity row, ActivityEntity activity, long viewerId, String msgId) {
+            RoomCommentEntity row, ActivityEntity activity, String viewerUsername, String msgId) {
         boolean dirty = false;
         if (ensureCloudContext(row, activity)) {
             dirty = true;
         }
-        if (row.getUid() == null) {
-            row.setUid(viewerId);
+        if (row.getUsername() == null) {
+            row.setUsername(viewerUsername);
             dirty = true;
         }
         if (msgId != null && blankToNull(row.getMsgId(), 64) == null) {

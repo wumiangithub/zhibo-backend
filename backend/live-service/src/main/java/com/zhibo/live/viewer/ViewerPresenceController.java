@@ -24,14 +24,6 @@ public class ViewerPresenceController {
     public ApiResponse<ViewerPresencePingResponse> ping(
             @RequestBody(required = false) ViewerPresencePingRequest request, HttpServletRequest httpRequest) {
         String scene = request == null ? null : request.getScene();
-        return ApiResponse.ok(presenceService.ping(requireViewerId(httpRequest), scene));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
+        return ApiResponse.ok(presenceService.ping(ViewerAuthInterceptor.requireViewerUsername(httpRequest), scene));
     }
 }

@@ -28,7 +28,7 @@ class PresenceUserIdsTest {
 
     @Test
     void emails_roundTrip() {
-        assertEquals("12@qkzb.com", PresenceUserIds.viewerEmail(12L));
+        assertEquals("12@qkzb.com", PresenceUserIds.viewerEmail("12"));
         assertEquals("e10001@qkzb.com", PresenceUserIds.staffEmail(10001L));
         assertEquals("z10001@qkzb.com", PresenceUserIds.consoleEmail(10001L));
         assertEquals(12L, PresenceUserIds.viewerId("12"));
@@ -48,7 +48,8 @@ class PresenceUserIdsTest {
         assertTrue(PresenceUserIds.isConsole("z10001"));
         assertFalse(PresenceUserIds.isStaff("z10001"));
         assertFalse(PresenceUserIds.isConsole("e10001"));
-        assertFalse(PresenceUserIds.mayWriteRoom("guest1"));
+        // 游客挡在回调 isGuestEmail(email)；此处 userId 已与观众同为字符串
+        assertTrue(PresenceUserIds.mayWriteRoom("guest1"));
         assertFalse(PresenceUserIds.mayWriteRoom(null));
         assertTrue(PresenceUserIds.isGuestEmail("guest1@zhibo.local"));
         assertFalse(PresenceUserIds.isGuestEmail("12@qkzb.com"));

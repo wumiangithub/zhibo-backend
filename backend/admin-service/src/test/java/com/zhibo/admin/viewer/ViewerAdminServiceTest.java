@@ -77,11 +77,11 @@ class ViewerAdminServiceTest {
         row.setBanComment(1);
         when(viewerRepository.findAll(ArgumentMatchers.<Specification<ViewerEntity>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row)));
-        when(memberRepository.findByUidIn(List.of(3L))).thenReturn(List.of());
+        when(memberRepository.findByUsernameIn(List.of("3"))).thenReturn(List.of());
 
         ViewerListResponse res = service.list(1, 20, null, null, null, null, null, null, null, null, null, null);
         assertEquals(1, res.getTotal());
-        assertEquals(3L, res.getList().get(0).getUid());
+        assertEquals("3", res.getList().get(0).getUsername());
         assertEquals("阿坤", res.getList().get(0).getNickname());
         assertEquals("188****8888", res.getList().get(0).getPhoneMasked());
         assertEquals(ViewerRegisterChannel.WECHAT, res.getList().get(0).getRegisterChannel());
@@ -98,7 +98,7 @@ class ViewerAdminServiceTest {
         row.setNickname("  ");
         when(viewerRepository.findAll(ArgumentMatchers.<Specification<ViewerEntity>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row)));
-        when(memberRepository.findByUidIn(List.of(8L))).thenReturn(List.of());
+        when(memberRepository.findByUsernameIn(List.of("8"))).thenReturn(List.of());
 
         ViewerListResponse res = service.list(1, 10, null, null, null, null, null, null, null, null, null, null);
         assertEquals("用户_8", res.getList().get(0).getNickname());
@@ -111,7 +111,7 @@ class ViewerAdminServiceTest {
         row.setPhone("13800138000");
         when(viewerRepository.findAll(ArgumentMatchers.<Specification<ViewerEntity>>any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row)));
-        when(memberRepository.findByUidIn(List.of(8L))).thenReturn(List.of());
+        when(memberRepository.findByUsernameIn(List.of("8"))).thenReturn(List.of());
 
         ViewerListResponse res = service.list(1, 10, null, null, null, null, null, null, null, null, null, null);
         assertEquals("用户8000", res.getList().get(0).getNickname());
@@ -142,7 +142,7 @@ class ViewerAdminServiceTest {
         progress.setId(9L);
         progress.setCourseId("c1");
         progress.setLessonNodeId(18L);
-        progress.setUid(3L);
+        progress.setUsername("3");
         progress.setLearnDurationSec(1800L);
         progress.setProgressPercent(84);
         progress.setFirstParticipateTime(LocalDateTime.of(2026, 9, 22, 17, 0, 0));
@@ -153,8 +153,8 @@ class ViewerAdminServiceTest {
         ViewerEntity viewer = baseViewer(3L);
         viewer.setNickname("阿坤");
         viewer.setAvatarUrl("https://cdn/a.jpg");
-        when(viewerRepository.findByUidIn(ArgumentMatchers.anyCollection())).thenReturn(List.of(viewer));
-        when(memberRepository.findByUidIn(List.of(3L))).thenReturn(List.of());
+        when(viewerRepository.findByUsernameIn(ArgumentMatchers.anyCollection())).thenReturn(List.of(viewer));
+        when(memberRepository.findByUsernameIn(List.of("3"))).thenReturn(List.of());
 
         CourseCatalogNodeEntity node = new CourseCatalogNodeEntity();
         node.setId(18L);
@@ -171,7 +171,7 @@ class ViewerAdminServiceTest {
         LearningCourseListResponse res = service.learningCourses(1, 10, null, null, null, null);
         assertEquals(1, res.getTotal());
         assertEquals(9L, res.getList().get(0).getId());
-        assertEquals(3L, res.getList().get(0).getUid());
+        assertEquals("3", res.getList().get(0).getUsername());
         assertEquals("阿坤", res.getList().get(0).getNickname());
         assertEquals(18L, res.getList().get(0).getLessonNodeId());
         assertEquals("第十八节 心态修炼", res.getList().get(0).getLessonName());
@@ -241,10 +241,10 @@ class ViewerAdminServiceTest {
     @Test
     void updateBlacklist_syncsStatus() {
         ViewerEntity row = baseViewer(5L);
-        when(viewerRepository.findByUid(5L)).thenReturn(Optional.of(row));
+        when(viewerRepository.findByUsername("5")).thenReturn(Optional.of(row));
         when(viewerRepository.save(any(ViewerEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UpdateViewerBlacklistResponse res = service.updateBlacklist(5L, 1, 0, 1);
+        UpdateViewerBlacklistResponse res = service.updateBlacklist("5", 1, 0, 1);
         assertEquals(1, res.getBanComment());
         assertEquals(0, res.getBanPurchase());
         assertEquals(1, res.getBanAccess());
@@ -255,7 +255,7 @@ class ViewerAdminServiceTest {
     @Test
     void updateTags_replacesManualOnly() {
         ViewerEntity row = baseViewer(9L);
-        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(row));
+        when(viewerRepository.findByUsername("9")).thenReturn(Optional.of(row));
 
         ViewerTagEntity manualOld = tag(1L, "A", ViewerTagType.MANUAL);
         ViewerTagEntity auto = tag(2L, "Auto", ViewerTagType.AUTO);
@@ -264,7 +264,7 @@ class ViewerAdminServiceTest {
         ViewerTagMemberEntity m1 = member(1L, 9L, 1L);
         ViewerTagMemberEntity m2 = member(2L, 9L, 2L);
         ViewerTagMemberEntity m3 = member(3L, 9L, 3L);
-        when(memberRepository.findByUid(9L)).thenReturn(List.of(m1, m2), List.of(m2, m3));
+        when(memberRepository.findByUsername("9")).thenReturn(List.of(m1, m2), List.of(m2, m3));
         when(tagRepository.findAllById(ArgumentMatchers.anyCollection()))
                 .thenAnswer(inv -> {
                     @SuppressWarnings("unchecked")
@@ -274,7 +274,7 @@ class ViewerAdminServiceTest {
                 });
         when(memberRepository.save(any(ViewerTagMemberEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UpdateViewerTagsResponse res = service.updateTags(9L, List.of(3L));
+        UpdateViewerTagsResponse res = service.updateTags("9", List.of(3L));
         verify(memberRepository).delete(m1);
         assertEquals(List.of(2L, 3L), res.getTagIds());
         assertEquals(List.of("Auto", "B"), res.getTagLabels());
@@ -295,7 +295,7 @@ class ViewerAdminServiceTest {
     private static ViewerEntity baseViewer(long id) {
         ViewerEntity row = new ViewerEntity();
         row.setId(id);
-        row.setUid(id);
+        row.setUsername(Long.toString(id));
         row.setRegisterChannel(ViewerRegisterChannel.WECHAT);
         row.setStatus(ViewerStatus.NORMAL);
         row.setBanComment(0);
@@ -318,7 +318,7 @@ class ViewerAdminServiceTest {
     private static ViewerTagMemberEntity member(long id, long viewerId, long tagId) {
         ViewerTagMemberEntity m = new ViewerTagMemberEntity();
         m.setId(id);
-        m.setUid(viewerId);
+        m.setUsername(Long.toString(viewerId));
         m.setTagId(tagId);
         return m;
     }

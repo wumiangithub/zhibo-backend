@@ -31,11 +31,11 @@ public class AudienceAttributeController {
     @GetMapping("/salesman/{id}")
     public ApiResponse<AudienceSalesmanResponse> salesman(
             @PathVariable String id, HttpServletRequest httpRequest) {
-        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null || viewerId <= 0) {
+        String viewerUsername = (String) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME);
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new ViewerAuthException(401, "未登录");
         }
-        return ApiResponse.ok(audienceAttributeService.resolveSalesman(id, viewerId));
+        return ApiResponse.ok(audienceAttributeService.resolveSalesman(id, viewerUsername));
     }
 
     @PostMapping("/attribute/{id}")
@@ -43,10 +43,10 @@ public class AudienceAttributeController {
             @PathVariable String id,
             @Valid @RequestBody AttributeAudienceRequest request,
             HttpServletRequest httpRequest) {
-        Long viewerId = (Long) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null || viewerId <= 0) {
+        String viewerUsername = (String) httpRequest.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME);
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new ViewerAuthException(401, "未登录");
         }
-        return ApiResponse.ok(audienceAttributeService.attribute(id, viewerId, request));
+        return ApiResponse.ok(audienceAttributeService.attribute(id, viewerUsername, request));
     }
 }

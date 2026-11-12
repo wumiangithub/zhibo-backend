@@ -27,7 +27,7 @@ public class ReplayWatchService {
     private final Clock clock;
 
     @Transactional
-    public String start(String activityId, long viewerId, Long recordId) {
+    public String start(String activityId, String viewerUsername, Long recordId) {
         if (recordId == null || recordId <= 0) {
             throw new IllegalArgumentException("recordId 须为正整数");
         }
@@ -37,7 +37,7 @@ public class ReplayWatchService {
         LocalDateTime now = now();
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
         row.setRoomId(activity.getId());
-        row.setUid(viewerId);
+        row.setUsername(viewerUsername);
         row.setRecordId(recordId);
         row.setSocketId(UuidIds.newId());
         row.setStartTime(now);
@@ -47,7 +47,7 @@ public class ReplayWatchService {
     }
 
     @Transactional
-    public LocalDateTime heartbeat(String activityId, long viewerId, String socketId) {
+    public LocalDateTime heartbeat(String activityId, String viewerUsername, String socketId) {
         String sid = socketId == null ? "" : socketId.trim();
         if (sid.isEmpty()) {
             throw new IllegalArgumentException("socketId 不能为空");
@@ -55,7 +55,7 @@ public class ReplayWatchService {
         ActivityEntity activity = watchService.requireActivity(activityId);
         RoomReplayWatchEntity row = replayWatchRepository.findBySocketId(sid)
                 .orElseThrow(() -> new IllegalArgumentException("回放观看记录不存在"));
-        if (!activity.getId().equals(row.getRoomId()) || !Long.valueOf(viewerId).equals(row.getUid())) {
+        if (!activity.getId().equals(row.getRoomId()) || !viewerUsername.equals(row.getUsername())) {
             throw new IllegalArgumentException("回放观看记录不存在");
         }
         LocalDateTime now = now();

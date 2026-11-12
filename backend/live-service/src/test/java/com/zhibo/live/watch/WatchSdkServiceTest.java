@@ -71,12 +71,12 @@ class WatchSdkServiceTest {
 
         when(watchService.requireActivity(ID)).thenReturn(entity);
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(viewerRepository.findByUid(12L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUsername("12")).thenReturn(Optional.of(viewer));
         when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
 
-        WatchSdkResponse response = watchSdkService.sdk(ID, "用户8079", 12L);
+        WatchSdkResponse response = watchSdkService.sdk(ID, "用户8079", "12");
         assertEquals(ID, response.getId());
-        assertEquals(12L, response.getUid());
+        assertEquals("12", response.getUsername());
         assertEquals("vhall", response.getProvider());
         assertEquals("用户8079", response.getNickname());
         assertEquals("1001", response.getSdk().getWebinarId());
@@ -105,10 +105,10 @@ class WatchSdkServiceTest {
 
         when(watchService.requireActivity(ID)).thenReturn(entity);
         when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(viewerRepository.findByUid(12L)).thenReturn(Optional.empty());
+        when(viewerRepository.findByUsername("12")).thenReturn(Optional.empty());
         when(liveProvider.buildWatchSdk(any(WatchSdkCommand.class))).thenReturn(bundle);
 
-        WatchSdkResponse response = watchSdkService.sdk(ID, null, 12L);
+        WatchSdkResponse response = watchSdkService.sdk(ID, null, "12");
         assertEquals(expectedHead, response.getSdk().getHead());
 
         ArgumentCaptor<WatchSdkCommand> captor = ArgumentCaptor.forClass(WatchSdkCommand.class);
@@ -119,14 +119,14 @@ class WatchSdkServiceTest {
     @Test
     void sdk_requiresViewerId() {
         assertThrows(ViewerAuthException.class, () -> watchSdkService.sdk(ID, null, null));
-        assertThrows(ViewerAuthException.class, () -> watchSdkService.sdk(ID, null, 0L));
+        assertThrows(ViewerAuthException.class, () -> watchSdkService.sdk(ID, null, ""));
     }
 
     @Test
     void resolveSdkNickname_prefersClientWhenViewerId() {
-        assertEquals("用户8079", WatchSdkService.resolveSdkNickname("用户8079", 12L));
-        assertEquals("观众", WatchSdkService.resolveSdkNickname(null, 12L));
-        assertEquals("观众", WatchSdkService.resolveSdkNickname("  ", 12L));
+        assertEquals("用户8079", WatchSdkService.resolveSdkNickname("用户8079", "12"));
+        assertEquals("观众", WatchSdkService.resolveSdkNickname(null, "12"));
+        assertEquals("观众", WatchSdkService.resolveSdkNickname("  ", "12"));
         assertEquals("本地昵称", WatchSdkService.resolveSdkNickname("本地昵称", null));
     }
 }

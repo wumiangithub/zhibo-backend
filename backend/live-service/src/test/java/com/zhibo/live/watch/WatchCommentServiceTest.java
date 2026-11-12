@@ -64,13 +64,13 @@ class WatchCommentServiceTest {
             return e;
         });
 
-        var resp = service.report(ACTIVITY_ID, 12L, request);
+        var resp = service.report(ACTIVITY_ID, "12", request);
         assertEquals(9L, resp.getId());
 
         ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
         assertEquals("hello", cap.getValue().getContent());
-        assertEquals(12L, cap.getValue().getUid());
+        assertEquals("12", cap.getValue().getUsername());
         assertNull(cap.getValue().getMsgId());
         assertNull(cap.getValue().getQuestionId());
         assertEquals(PROVIDER, cap.getValue().getProvider());
@@ -94,7 +94,7 @@ class WatchCommentServiceTest {
             return e;
         });
 
-        assertEquals(11L, service.report(ACTIVITY_ID, 12L, request).getId());
+        assertEquals(11L, service.report(ACTIVITY_ID, "12", request).getId());
 
         ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
@@ -112,7 +112,7 @@ class WatchCommentServiceTest {
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("这是提问");
         request.setCommentType(RoomCommentType.QUESTION);
-        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, 12L, request));
+        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, "12", request));
     }
 
     @Test
@@ -121,7 +121,7 @@ class WatchCommentServiceTest {
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("hello");
         request.setCommentType(9);
-        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, 12L, request));
+        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, "12", request));
     }
 
     @Test
@@ -141,13 +141,13 @@ class WatchCommentServiceTest {
             return e;
         });
 
-        var resp = service.report(ACTIVITY_ID, 12L, request);
+        var resp = service.report(ACTIVITY_ID, "12", request);
         assertEquals(9L, resp.getId());
 
         ArgumentCaptor<RoomCommentEntity> cap = ArgumentCaptor.forClass(RoomCommentEntity.class);
         verify(commentRepository).save(cap.capture());
         assertEquals("hello", cap.getValue().getContent());
-        assertEquals(12L, cap.getValue().getUid());
+        assertEquals("12", cap.getValue().getUsername());
         assertNull(cap.getValue().getGuestId());
         assertEquals("msg-1", cap.getValue().getMsgId());
         assertEquals(PROVIDER, cap.getValue().getProvider());
@@ -159,7 +159,7 @@ class WatchCommentServiceTest {
         stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
-        existing.setUid(12L);
+        existing.setUsername("12");
         existing.setProvider(PROVIDER);
         existing.setRoomId(ROOM_ID);
         when(commentRepository.findByActivityIdAndMsgId(ACTIVITY_ID, "msg-1"))
@@ -169,7 +169,7 @@ class WatchCommentServiceTest {
         request.setContent("hello");
         request.setMsgId("msg-1");
 
-        assertEquals(3L, service.report(ACTIVITY_ID, 12L, request).getId());
+        assertEquals(3L, service.report(ACTIVITY_ID, "12", request).getId());
     }
 
     @Test
@@ -177,7 +177,7 @@ class WatchCommentServiceTest {
         stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
-        existing.setUid(12L);
+        existing.setUsername("12");
         existing.setQuestionId("2397558");
         when(commentRepository.findByActivityIdAndQuestionId(ACTIVITY_ID, "2397558"))
                 .thenReturn(Optional.of(existing));
@@ -189,7 +189,7 @@ class WatchCommentServiceTest {
         request.setQuestionId("2397558");
         request.setMsgId("msg_d10f061ca8275a064f5fff8fd7d852ea");
 
-        assertEquals(3L, service.report(ACTIVITY_ID, 12L, request).getId());
+        assertEquals(3L, service.report(ACTIVITY_ID, "12", request).getId());
         assertEquals("msg_d10f061ca8275a064f5fff8fd7d852ea", existing.getMsgId());
         assertEquals(PROVIDER, existing.getProvider());
         assertEquals(ROOM_ID, existing.getRoomId());
@@ -201,7 +201,7 @@ class WatchCommentServiceTest {
         stubActivity();
         RoomCommentEntity existing = new RoomCommentEntity();
         existing.setId(3L);
-        existing.setUid(null);
+        existing.setUsername(null);
         when(commentRepository.findByActivityIdAndMsgId(ACTIVITY_ID, "msg-1"))
                 .thenReturn(Optional.of(existing));
         when(commentRepository.save(any(RoomCommentEntity.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -210,8 +210,8 @@ class WatchCommentServiceTest {
         request.setContent("hello");
         request.setMsgId("msg-1");
 
-        assertEquals(3L, service.report(ACTIVITY_ID, 12L, request).getId());
-        assertEquals(12L, existing.getUid());
+        assertEquals(3L, service.report(ACTIVITY_ID, "12", request).getId());
+        assertEquals("12", existing.getUsername());
         assertEquals(PROVIDER, existing.getProvider());
         assertEquals(ROOM_ID, existing.getRoomId());
         verify(commentRepository).save(existing);
@@ -221,7 +221,7 @@ class WatchCommentServiceTest {
     void report_rejectsInvalidViewerId() {
         ReportCommentRequest request = new ReportCommentRequest();
         request.setContent("x");
-        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, 0L, request));
+        assertThrows(IllegalArgumentException.class, () -> service.report(ACTIVITY_ID, "", request));
     }
 
     @Test
@@ -259,7 +259,7 @@ class WatchCommentServiceTest {
         assertEquals(1, saved.getAnswerRoleName());
         assertEquals(PROVIDER, saved.getProvider());
         assertEquals(ROOM_ID, saved.getRoomId());
-        assertNull(saved.getUid());
+        assertNull(saved.getUsername());
     }
 
     @Test

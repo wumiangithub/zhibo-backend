@@ -49,7 +49,7 @@ class CourseLessonProgressServiceTest {
     @Test
     void openImage_completes() {
         stubCourseAndLesson(12L, CourseCatalogContentKind.IMAGE);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 12L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 12L, "7"))
                 .thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -57,7 +57,7 @@ class CourseLessonProgressServiceTest {
         req.setLessonNodeId(12L);
         req.setEvent("open");
 
-        CourseLessonProgressResponse resp = service.report(COURSE_ID, 7L, req);
+        CourseLessonProgressResponse resp = service.report(COURSE_ID, "7", req);
         assertTrue(resp.isCompleted());
         assertEquals(CourseLessonParticipateStatus.COMPLETED, resp.getParticipateStatus());
         assertEquals(100, resp.getProgressPercent());
@@ -69,10 +69,10 @@ class CourseLessonProgressServiceTest {
         CourseLessonProgressEntity existing = new CourseLessonProgressEntity();
         existing.setCourseId(COURSE_ID);
         existing.setLessonNodeId(3L);
-        existing.setUid(7L);
+        existing.setUsername("7");
         existing.setParticipateStatus(CourseLessonParticipateStatus.IN_PROGRESS);
         existing.setProgressPercent(80);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 3L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 3L, "7"))
                 .thenReturn(Optional.of(existing));
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -83,7 +83,7 @@ class CourseLessonProgressServiceTest {
         req.setProgressPercent(100);
         req.setProgressBarSec(600);
 
-        CourseLessonProgressResponse resp = service.report(COURSE_ID, 7L, req);
+        CourseLessonProgressResponse resp = service.report(COURSE_ID, "7", req);
         assertTrue(resp.isCompleted());
         assertEquals(30L, resp.getLearnDurationSec());
         assertEquals(600, resp.getProgressBarSec());
@@ -97,7 +97,7 @@ class CourseLessonProgressServiceTest {
     @Test
     void liveEnded_completesLive() {
         stubCourseAndLesson(9L, CourseCatalogContentKind.LIVE);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 9L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 9L, "7"))
                 .thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -105,13 +105,13 @@ class CourseLessonProgressServiceTest {
         req.setLessonNodeId(9L);
         req.setEvent("live_ended");
 
-        assertTrue(service.report(COURSE_ID, 7L, req).isCompleted());
+        assertTrue(service.report(COURSE_ID, "7", req).isCompleted());
     }
 
     @Test
     void scrollBottom_completesArticle() {
         stubCourseAndLesson(5L, CourseCatalogContentKind.ARTICLE);
-        when(progressRepository.findByCourseIdAndLessonNodeIdAndUid(COURSE_ID, 5L, 7L))
+        when(progressRepository.findByCourseIdAndLessonNodeIdAndUsername(COURSE_ID, 5L, "7"))
                 .thenReturn(Optional.empty());
         when(progressRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -119,7 +119,7 @@ class CourseLessonProgressServiceTest {
         req.setLessonNodeId(5L);
         req.setEvent("scroll_bottom");
 
-        assertTrue(service.report(COURSE_ID, 7L, req).isCompleted());
+        assertTrue(service.report(COURSE_ID, "7", req).isCompleted());
     }
 
     private void stubCourseAndLesson(long lessonId, int contentKind) {

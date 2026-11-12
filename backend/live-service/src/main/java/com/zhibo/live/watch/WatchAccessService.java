@@ -38,17 +38,17 @@ public class WatchAccessService {
     private final ActivityAccessTokenService activityAccessTokenService;
     private final Clock clock;
 
-    public WatchAccessResponse access(String activityId, Long viewerId, String activityAccessToken) {
+    public WatchAccessResponse access(String activityId, String viewerUsername, String activityAccessToken) {
         ActivityEntity entity = watchService.requireActivity(activityId);
         watchService.requireReadyForWatch(entity);
-        return buildResponse(entity, resolveState(entity, viewerId, activityAccessToken));
+        return buildResponse(entity, resolveState(entity, viewerUsername, activityAccessToken));
     }
 
     /**
      * 校验观看密码并发本场访问 JWT。须已登录（D115）；未登录 → 403「请先登录」。
      */
-    public VerifyPasswordResponse verifyPassword(String activityId, Long viewerId, String password) {
-        if (viewerId == null || viewerId <= 0) {
+    public VerifyPasswordResponse verifyPassword(String activityId, String viewerUsername, String password) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new WatchAccessException("请先登录");
         }
         ActivityEntity entity = watchService.requireActivity(activityId);
@@ -83,26 +83,26 @@ public class WatchAccessService {
     }
 
     /** summary / sdk / records / products / history / replay 硬拦；未放行抛 403。 */
-    public void assertAllowed(ActivityEntity entity, Long viewerId, String activityAccessToken) {
-        String state = resolveState(entity, viewerId, activityAccessToken);
+    public void assertAllowed(ActivityEntity entity, String viewerUsername, String activityAccessToken) {
+        String state = resolveState(entity, viewerUsername, activityAccessToken);
         if (STATE_OK.equals(state)) {
             return;
         }
         throw new WatchAccessException(messageFor(state));
     }
 
-    public void assertAllowed(String activityId, Long viewerId, String activityAccessToken) {
+    public void assertAllowed(String activityId, String viewerUsername, String activityAccessToken) {
         ActivityEntity entity = watchService.requireActivity(activityId);
         watchService.requireReadyForWatch(entity);
-        assertAllowed(entity, viewerId, activityAccessToken);
+        assertAllowed(entity, viewerUsername, activityAccessToken);
     }
 
     /**
      * 门禁状态（探态与硬拦共用）。
      * 顺序：先登录 →（售卖附加门禁时）过期 → 加密密码 / 指定用户权益。
      */
-    String resolveState(ActivityEntity entity, Long viewerId, String activityAccessToken) {
-        if (viewerId == null || viewerId <= 0) {
+    String resolveState(ActivityEntity entity, String viewerUsername, String activityAccessToken) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             return STATE_NEED_LOGIN;
         }
         if (!AccessRules.requiresGate(entity)) {
@@ -120,7 +120,7 @@ public class WatchAccessService {
             return STATE_NEED_PASSWORD;
         }
         if ("specified".equals(sellType)) {
-            return audienceRepository.findByActivityIdAndUid(entity.getId(), viewerId)
+            return audienceRepository.findByActivityIdAndUsername(entity.getId(), viewerUsername)
                     .filter(row -> row.getEntitlementStatus() == 1)
                     .map(row -> STATE_OK)
                     .orElse(STATE_FORBIDDEN);

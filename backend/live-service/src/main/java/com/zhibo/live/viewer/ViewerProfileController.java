@@ -23,14 +23,6 @@ public class ViewerProfileController {
     @PutMapping("/update")
     public ApiResponse<ViewerUserResponse> update(
             @RequestBody ViewerProfileUpdateRequest request, HttpServletRequest httpRequest) {
-        return ApiResponse.ok(viewerProfileService.update(requireViewerId(httpRequest), request));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
+        return ApiResponse.ok(viewerProfileService.update(ViewerAuthInterceptor.requireViewerUsername(httpRequest), request));
     }
 }

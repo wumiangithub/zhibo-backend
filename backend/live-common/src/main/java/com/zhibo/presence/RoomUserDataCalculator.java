@@ -35,13 +35,13 @@ public final class RoomUserDataCalculator {
         LiveAgg live = liveAggregate(activity, events, now);
         ReplayAgg replay = replayAggregate(replays);
 
-        Set<Long> positiveLive = new HashSet<>();
-        for (Map.Entry<Long, Long> e : live.viewerSeconds.entrySet()) {
+        Set<String> positiveLive = new HashSet<>();
+        for (Map.Entry<String, Long> e : live.viewerSeconds.entrySet()) {
             if (e.getValue() > 0) {
                 positiveLive.add(e.getKey());
             }
         }
-        Set<Long> union = new HashSet<>(positiveLive);
+        Set<String> union = new HashSet<>(positiveLive);
         union.addAll(replay.viewerSeconds.keySet());
 
         LocalDateTime trendStart = trendStart(activity, now);
@@ -68,32 +68,32 @@ public final class RoomUserDataCalculator {
         boolean ended = isEnded(activity);
         boolean hasActualEnd = activity != null && activity.getLiveActualEndTime() != null;
 
-        Map<Long, Map<String, LocalDateTime>> open = new LinkedHashMap<>();
-        Map<Long, Long> seconds = new HashMap<>();
+        Map<String, Map<String, LocalDateTime>> open = new LinkedHashMap<>();
+        Map<String, Long> seconds = new HashMap<>();
         long sessionCount = 0;
 
         for (PresenceEventEntity event : ordered(events)) {
-            Long viewerId = PresenceUserIds.viewerId(event.getUserId());
+            String viewerUsername = PresenceUserIds.viewerUsername(event.getUserId());
             String socketId = blankToNull(event.getSocketId());
             LocalDateTime time = event.getEventTime();
-            if (viewerId == null || socketId == null || time == null) {
+            if (viewerUsername == null || socketId == null || time == null) {
                 continue;
             }
-            Map<String, LocalDateTime> sockets = open.computeIfAbsent(viewerId, k -> new LinkedHashMap<>());
+            Map<String, LocalDateTime> sockets = open.computeIfAbsent(viewerUsername, k -> new LinkedHashMap<>());
             if (PresenceEventEntity.TYPE_JOIN.equals(event.getType())) {
                 sockets.putIfAbsent(socketId, time);
             } else if (PresenceEventEntity.TYPE_LEAVE.equals(event.getType())) {
                 LocalDateTime join = sockets.remove(socketId);
                 if (join != null) {
                     long sec = overlapSeconds(join, time, liveStart, liveEndBound);
-                    add(seconds, viewerId, sec);
+                    add(seconds, viewerUsername, sec);
                     if (sec > 0) {
                         sessionCount++;
                     }
                 }
             }
         }
-        for (Map.Entry<Long, Map<String, LocalDateTime>> user : open.entrySet()) {
+        for (Map.Entry<String, Map<String, LocalDateTime>> user : open.entrySet()) {
             for (LocalDateTime join : user.getValue().values()) {
                 long sec = 0L;
                 if (liveInProgress) {
@@ -121,14 +121,18 @@ public final class RoomUserDataCalculator {
     }
 
     private static ReplayAgg replayAggregate(List<RoomReplayWatchEntity> replays) {
-        Map<Long, Long> seconds = new HashMap<>();
+        Map<String, Long> seconds = new HashMap<>();
         long rowCount = 0;
         long totalSec = 0;
         if (replays == null) {
             return new ReplayAgg(seconds, 0, 0);
         }
         for (RoomReplayWatchEntity row : replays) {
-            if (row == null || row.getUid() == null || row.getStartTime() == null || row.getLastReportTime() == null) {
+            if (row == null
+                    || row.getUsername() == null
+                    || row.getUsername().isBlank()
+                    || row.getStartTime() == null
+                    || row.getLastReportTime() == null) {
                 continue;
             }
             long sec = Duration.between(row.getStartTime(), row.getLastReportTime()).getSeconds();
@@ -137,7 +141,7 @@ public final class RoomUserDataCalculator {
             }
             rowCount++;
             totalSec += sec;
-            seconds.merge(row.getUid(), sec, Long::sum);
+            seconds.merge(row.getUsername(), sec, Long::sum);
         }
         return new ReplayAgg(seconds, rowCount, totalSec);
     }
@@ -227,12 +231,12 @@ public final class RoomUserDataCalculator {
         return Duration.between(start, end).getSeconds();
     }
 
-    private static void add(Map<Long, Long> seconds, long viewerId, long delta) {
+    private static void add(Map<String, Long> seconds, String viewerUsername, long delta) {
         if (delta <= 0) {
-            seconds.putIfAbsent(viewerId, 0L);
+            seconds.putIfAbsent(viewerUsername, 0L);
             return;
         }
-        seconds.merge(viewerId, delta, Long::sum);
+        seconds.merge(viewerUsername, delta, Long::sum);
     }
 
     private static LocalDateTime parseNullable(String raw) {
@@ -264,9 +268,9 @@ public final class RoomUserDataCalculator {
         return raw.trim();
     }
 
-    private record LiveAgg(Map<Long, Long> viewerSeconds, long sessionCount, long totalSec) {
+    private record LiveAgg(Map<String, Long> viewerSeconds, long sessionCount, long totalSec) {
     }
 
-    private record ReplayAgg(Map<Long, Long> viewerSeconds, long rowCount, long totalSec) {
+    private record ReplayAgg(Map<String, Long> viewerSeconds, long rowCount, long totalSec) {
     }
 }

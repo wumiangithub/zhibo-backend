@@ -56,7 +56,7 @@ class UserDataServiceTest {
                 event("12", "Join", "s1", "2026-10-29 10:00:00"),
                 event("12", "Leave", "s1", "2026-10-29 10:10:00")));
         RoomReplayWatchEntity replay = new RoomReplayWatchEntity();
-        replay.setUid(99L);
+        replay.setUsername("99");
         replay.setStartTime(LocalDateTime.of(2026, 10, 29, 12, 0));
         replay.setLastReportTime(LocalDateTime.of(2026, 10, 29, 12, 2));
         when(replayWatchRepository.findByRoomId(ID)).thenReturn(List.of(replay));

@@ -4,6 +4,7 @@ import com.zhibo.admin.auth.dto.AuthUserResponse;
 import com.zhibo.admin.auth.dto.CaptchaResponse;
 import com.zhibo.admin.auth.dto.LoginPendingResponse;
 import com.zhibo.admin.auth.dto.LoginQueryResponse;
+import com.zhibo.admin.auth.dto.DevAccountLoginRequest;
 import com.zhibo.admin.auth.dto.LoginRequest;
 import com.zhibo.admin.auth.dto.RefreshRequest;
 import com.zhibo.admin.auth.dto.RefreshResponse;
@@ -47,6 +48,7 @@ public class AuthController {
         this.environment = environment;
     }
 
+
     @GetMapping("/captcha")
     public ApiResponse<CaptchaResponse> captcha() {
         return ApiResponse.ok(authService.captcha());
@@ -55,6 +57,18 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginPendingResponse> login(@Valid @RequestBody LoginRequest request) {
         return ApiResponse.ok(authService.login(request));
+    }
+
+    /**
+     * spring profile=local / test：仅输入账号直接登录。
+     * prod / uat 一律业务 404，不暴露能力。
+     */
+    @PostMapping("/dev-account-login")
+    public ApiResponse<LoginQueryResponse> devAccountLogin(@Valid @RequestBody DevAccountLoginRequest request) {
+        if (!environment.acceptsProfiles(Profiles.of("local", "test"))) {
+            throw new AuthException(404, "接口不存在");
+        }
+        return ApiResponse.ok(authService.devAccountLogin(request.getUserAccount()));
     }
 
     @GetMapping(value = "/wechat/callback", produces = MediaType.TEXT_HTML_VALUE)

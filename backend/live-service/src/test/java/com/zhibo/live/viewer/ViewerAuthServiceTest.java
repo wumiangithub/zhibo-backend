@@ -112,31 +112,30 @@ class ViewerAuthServiceTest {
         ViewerAuthResponse first = service.wechatLogin(wechat("c1"));
         ViewerAuthResponse second = service.wechatLogin(wechat("c2"));
 
-        assertEquals(90001L, first.getUser().getUid());
-        assertEquals(90001L, second.getUser().getUid());
+        assertEquals("qk_u_union-1", first.getUser().getUsername());
         assertEquals("qk_u_union-1", second.getUser().getUsername());
         assertFalse(second.getUser().isHasPhone());
         assertNull(second.getUser().getPhoneMasked());
         assertEquals("oid-1", store.viewer.getMiniOpenid());
         assertEquals("oid-1", second.getUser().getMiniOpenid());
         assertEquals("union-1", store.viewer.getUnionid());
-        assertEquals(Long.valueOf(90001L), store.viewer.getUid());
+        assertEquals(90001L, store.viewer.getUid());
         assertEquals("qk_u_union-1", store.viewer.getUsername());
         assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
         assertNull(store.viewer.getPhone());
 
         String json = new ObjectMapper().writeValueAsString(second.getUser());
         assertTrue(json.contains("\"hasPhone\":false"));
-        assertTrue(json.contains("\"uid\":90001"));
+        assertTrue(json.contains("\"username\":\"qk_u_union-1\""));
         assertTrue(json.contains("\"miniOpenid\":\"oid-1\""));
         assertFalse(json.contains("\"id\""));
         assertFalse(json.contains("phoneMasked"));
         assertFalse(json.contains("nickname"));
 
         Claims claims = parseAccess(second.getAccessToken());
-        assertEquals("90001", claims.getSubject());
+        assertEquals("qk_u_union-1", claims.getSubject());
         assertEquals("qk_u_union-1", claims.get("username", String.class));
-        assertEquals("90001", claims.get("third_user_id", String.class));
+        assertEquals("qk_u_union-1", claims.get("third_user_id", String.class));
     }
 
     @Test
@@ -171,7 +170,7 @@ class ViewerAuthServiceTest {
         assertEquals("136****8079", response.getUser().getPhoneMasked());
         assertEquals("86", store.viewer.getPhoneCountryCode());
         assertEquals("13612348079", store.viewer.getPhone());
-        assertEquals(Long.valueOf(80002L), store.viewer.getUid());
+        assertEquals(80002L, store.viewer.getUid());
         assertEquals("oms_name_2", store.viewer.getUsername());
         assertEquals(ViewerRegisterChannel.WECHAT, store.viewer.getRegisterChannel());
 
@@ -181,7 +180,8 @@ class ViewerAuthServiceTest {
 
         Claims accessClaims = parseAccess(response.getAccessToken());
         assertEquals("oms_name_2", accessClaims.get("username", String.class));
-        assertEquals("80002", accessClaims.get("third_user_id", String.class));
+        assertEquals("oms_name_2", accessClaims.getSubject());
+        assertEquals("oms_name_2", accessClaims.get("third_user_id", String.class));
     }
 
     @Test
@@ -215,7 +215,7 @@ class ViewerAuthServiceTest {
     @Test
     void disabledViewer_returns403OnLoginMeAndRefresh() {
         ViewerEntity viewer = viewer(5L, ViewerStatus.DISABLED, null, "oid-off");
-        viewer.setUid(55L);
+        viewer.setUsername("55");
         LocalDateTime original = LocalDateTime.of(2020, 1, 1, 0, 0);
         viewer.setLastLoginTime(original);
         store.viewer = viewer;
@@ -228,13 +228,13 @@ class ViewerAuthServiceTest {
         assertEquals(original, store.viewer.getLastLoginTime());
         verifyNoInteractions(oauthClient);
 
-        ViewerAuthException me = assertThrows(ViewerAuthException.class, () -> service.userInfo(55L));
+        ViewerAuthException me = assertThrows(ViewerAuthException.class, () -> service.userInfo("55"));
         assertEquals(403, me.getCode());
         assertEquals("账号已停用", me.getMessage());
 
         ViewerRefreshRequest refresh = new ViewerRefreshRequest();
-        refresh.setAccessToken(jwtTokenService.issueAccess(55L));
-        refresh.setRefreshToken(jwtTokenService.issueRefresh(55L));
+        refresh.setAccessToken(jwtTokenService.issueAccess("55"));
+        refresh.setRefreshToken(jwtTokenService.issueRefresh("55"));
         ViewerAuthException refreshed = assertThrows(ViewerAuthException.class, () -> service.refresh(refresh));
         assertEquals(403, refreshed.getCode());
         assertEquals("账号已停用", refreshed.getMessage());
@@ -243,35 +243,34 @@ class ViewerAuthServiceTest {
     @Test
     void refresh_expiredAccessWithValidRefresh_issuesNewPair() {
         store.viewer = viewer(1L, ViewerStatus.NORMAL, "13612348079", "oid-1");
-        store.viewer.setUid(700L);
-        store.viewer.setUsername("oms_refresh");
-        String access = jwtTokenService.issueAccess(700L, "oms_refresh");
-        String refreshToken = jwtTokenService.issueRefresh(700L, "oms_refresh");
+        store.viewer.setUsername("u700");
+        String access = jwtTokenService.issueAccess("u700");
+        String refreshToken = jwtTokenService.issueRefresh("u700");
         clock.advanceSeconds(7201);
 
-        assertThrows(ViewerAuthException.class, () -> jwtTokenService.parseUid(access));
+        assertThrows(ViewerAuthException.class, () -> jwtTokenService.parseUsername(access));
 
         ViewerRefreshRequest request = new ViewerRefreshRequest();
         request.setAccessToken(access);
         request.setRefreshToken(refreshToken);
         ViewerAuthResponse response = service.refresh(request);
 
-        assertEquals(700L, response.getUser().getUid());
+        assertEquals("u700", response.getUser().getUsername());
         assertEquals("136****8079", response.getUser().getPhoneMasked());
-        assertEquals(700L, jwtTokenService.parseUid(response.getAccessToken()));
-        assertEquals(700L, jwtTokenService.parseRefreshUid(refreshToken));
+        assertEquals("u700", jwtTokenService.parseUsername(response.getAccessToken()));
+        assertEquals("u700", jwtTokenService.parseRefreshUsername(refreshToken));
         assertTrue(!access.equals(response.getAccessToken()));
         Claims claims = parseAccess(response.getAccessToken());
-        assertEquals("oms_refresh", claims.get("username", String.class));
-        assertEquals("700", claims.get("third_user_id", String.class));
-        assertEquals("700", claims.getSubject());
+        assertEquals("u700", claims.get("username", String.class));
+        assertEquals("u700", claims.get("third_user_id", String.class));
+        assertEquals("u700", claims.getSubject());
     }
 
     @Test
     void refresh_rejectsDifferentSubjects() {
         ViewerRefreshRequest request = new ViewerRefreshRequest();
-        request.setAccessToken(jwtTokenService.issueAccess(1L));
-        request.setRefreshToken(jwtTokenService.issueRefresh(2L));
+        request.setAccessToken(jwtTokenService.issueAccess("u1"));
+        request.setRefreshToken(jwtTokenService.issueRefresh("u2"));
 
         ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.refresh(request));
         assertEquals(401, ex.getCode());
@@ -311,8 +310,8 @@ class ViewerAuthServiceTest {
         ViewerAuthResponse first = service.devPhoneLogin(request);
         ViewerAuthResponse second = service.devPhoneLogin(request);
 
-        assertNull(first.getUser().getUid());
-        assertNull(second.getUser().getUid());
+        assertNull(first.getUser().getUsername());
+        assertNull(second.getUser().getUsername());
         assertTrue(second.getUser().isHasPhone());
         assertEquals("138****8000", second.getUser().getPhoneMasked());
         assertNull(second.getUser().getUsername());
@@ -352,12 +351,12 @@ class ViewerAuthServiceTest {
             }
             return entity;
         });
-        when(viewerRepository.findByUid(anyLong())).thenAnswer(invocation -> {
-            Long uid = invocation.getArgument(0);
-            if (store.viewer != null && uid.equals(store.viewer.getUid())) {
+        when(viewerRepository.findByUsername(anyString())).thenAnswer(invocation -> {
+            String username = invocation.getArgument(0);
+            if (store.viewer != null && username.equals(store.viewer.getUsername())) {
                 return Optional.of(store.viewer);
             }
-            if (store.other != null && uid.equals(store.other.getUid())) {
+            if (store.other != null && username.equals(store.other.getUsername())) {
                 return Optional.of(store.other);
             }
             return Optional.empty();

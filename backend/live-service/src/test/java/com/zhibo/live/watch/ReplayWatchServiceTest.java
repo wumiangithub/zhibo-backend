@@ -56,14 +56,14 @@ class ReplayWatchServiceTest {
         when(replayWatchRepository.save(any(RoomReplayWatchEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        String socketId = service.start(ROOM, 12L, 1001L);
+        String socketId = service.start(ROOM, "12", 1001L);
 
         assertEquals(32, socketId.length());
         ArgumentCaptor<RoomReplayWatchEntity> cap = ArgumentCaptor.forClass(RoomReplayWatchEntity.class);
         verify(replayWatchRepository).save(cap.capture());
         RoomReplayWatchEntity row = cap.getValue();
         assertEquals(ROOM, row.getRoomId());
-        assertEquals(12L, row.getUid());
+        assertEquals("12", row.getUsername());
         assertEquals(1001L, row.getRecordId());
         assertEquals(socketId, row.getSocketId());
         assertEquals(LocalDateTime.of(2026, 10, 29, 12, 0), row.getStartTime());
@@ -77,7 +77,7 @@ class ReplayWatchServiceTest {
         when(watchService.requireActivity(ROOM)).thenReturn(activity);
 
         IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class, () -> service.start(ROOM, 12L, 1001L));
+                IllegalArgumentException.class, () -> service.start(ROOM, "12", 1001L));
         assertEquals("回放未开启", ex.getMessage());
         verify(replayWatchRepository, never()).save(any());
     }
@@ -91,19 +91,19 @@ class ReplayWatchServiceTest {
         when(watchService.requireActivity(ROOM)).thenReturn(activity);
 
         IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class, () -> service.start(ROOM, 12L, 1001L));
+                IllegalArgumentException.class, () -> service.start(ROOM, "12", 1001L));
         assertEquals("回放已过期", ex.getMessage());
     }
 
     @Test
     void heartbeat_updatesLastReport() {
-        RoomReplayWatchEntity row = existing("sock-1", 12L);
+        RoomReplayWatchEntity row = existing("sock-1", "12");
         when(watchService.requireActivity(ROOM)).thenReturn(replayable());
         when(replayWatchRepository.findBySocketId("sock-1")).thenReturn(Optional.of(row));
         when(replayWatchRepository.save(any(RoomReplayWatchEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        LocalDateTime last = service.heartbeat(ROOM, 12L, "sock-1");
+        LocalDateTime last = service.heartbeat(ROOM, "12", "sock-1");
 
         assertEquals(LocalDateTime.of(2026, 10, 29, 12, 0), last);
         verify(replayWatchRepository).save(row);
@@ -112,10 +112,10 @@ class ReplayWatchServiceTest {
     @Test
     void heartbeat_wrongViewerRejected() {
         when(watchService.requireActivity(ROOM)).thenReturn(replayable());
-        when(replayWatchRepository.findBySocketId("sock-1")).thenReturn(Optional.of(existing("sock-1", 99L)));
+        when(replayWatchRepository.findBySocketId("sock-1")).thenReturn(Optional.of(existing("sock-1", "99")));
 
         IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class, () -> service.heartbeat(ROOM, 12L, "sock-1"));
+                IllegalArgumentException.class, () -> service.heartbeat(ROOM, "12", "sock-1"));
         assertEquals("回放观看记录不存在", ex.getMessage());
         verify(replayWatchRepository, never()).save(any());
         assertTrue(ex.getMessage().contains("不存在"));
@@ -140,11 +140,11 @@ class ReplayWatchServiceTest {
         return activity;
     }
 
-    private static RoomReplayWatchEntity existing(String socketId, long viewerId) {
+    private static RoomReplayWatchEntity existing(String socketId, String viewerUsername) {
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
         row.setId(1L);
         row.setRoomId(ROOM);
-        row.setUid(viewerId);
+        row.setUsername(viewerUsername);
         row.setRecordId(1001L);
         row.setSocketId(socketId);
         row.setStartTime(LocalDateTime.of(2026, 10, 29, 11, 0));

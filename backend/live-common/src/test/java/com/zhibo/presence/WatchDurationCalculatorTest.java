@@ -19,7 +19,7 @@ class WatchDurationCalculatorTest {
         activity.setLiveActualStartTime(LocalDateTime.of(2026, 10, 29, 10, 0));
         activity.setLiveActualEndTime(LocalDateTime.of(2026, 10, 29, 11, 0));
 
-        Map<Long, Long> live = WatchDurationCalculator.liveSeconds(
+        Map<String, Long> live = WatchDurationCalculator.liveSeconds(
                 activity,
                 List.of(
                         event("12", "Join", "s1", "2026-10-29 09:50:00"),
@@ -30,7 +30,7 @@ class WatchDurationCalculatorTest {
                         event("e10001", "Leave", "staff", "2026-10-29 10:40:00")),
                 LocalDateTime.of(2026, 10, 29, 12, 0));
 
-        assertEquals(1800L, live.get(12L));
+        assertEquals(1800L, live.get("12"));
         assertNull(live.get(10001L));
     }
 
@@ -40,12 +40,12 @@ class WatchDurationCalculatorTest {
         activity.setLiveActualStartTime(LocalDateTime.of(2026, 10, 29, 10, 0));
         LocalDateTime now = LocalDateTime.of(2026, 10, 29, 10, 5);
 
-        Map<Long, Long> live = WatchDurationCalculator.liveSeconds(
+        Map<String, Long> live = WatchDurationCalculator.liveSeconds(
                 activity,
                 List.of(event("12", "Join", "s1", "2026-10-29 10:00:00")),
                 now);
 
-        assertEquals(300L, live.get(12L));
+        assertEquals(300L, live.get("12"));
     }
 
     @Test
@@ -53,12 +53,12 @@ class WatchDurationCalculatorTest {
         ActivityEntity activity = activity(3);
         activity.setStartTime("2026-10-29 10:00:00");
 
-        Map<Long, Long> live = WatchDurationCalculator.liveSeconds(
+        Map<String, Long> live = WatchDurationCalculator.liveSeconds(
                 activity,
                 List.of(event("12", "Join", "s1", "2026-10-29 10:00:00")),
                 LocalDateTime.of(2026, 10, 29, 12, 0));
 
-        assertEquals(0L, live.getOrDefault(12L, 0L));
+        assertEquals(0L, live.getOrDefault("12", 0L));
     }
 
     @Test
@@ -67,30 +67,30 @@ class WatchDurationCalculatorTest {
         activity.setLiveActualStartTime(LocalDateTime.of(2026, 10, 29, 10, 0));
         activity.setLiveActualEndTime(LocalDateTime.of(2026, 10, 29, 11, 0));
 
-        Map<Long, Long> live = WatchDurationCalculator.liveSeconds(
+        Map<String, Long> live = WatchDurationCalculator.liveSeconds(
                 activity,
                 List.of(event("12", "Join", "s1", "2026-10-29 10:00:00")),
                 LocalDateTime.of(2026, 10, 29, 12, 0));
 
-        assertEquals(3600L, live.get(12L));
+        assertEquals(3600L, live.get("12"));
     }
 
     @Test
     void replay_usesLastReportMinusStart() {
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
-        row.setUid(12L);
+        row.setUsername("12");
         row.setStartTime(LocalDateTime.of(2026, 10, 29, 10, 0));
         row.setLastReportTime(LocalDateTime.of(2026, 10, 29, 10, 3));
 
-        Map<Long, WatchDurationCalculator.Durations> out = WatchDurationCalculator.byViewer(
+        Map<String, WatchDurationCalculator.Durations> out = WatchDurationCalculator.byViewer(
                 activity(3),
                 List.of(),
                 List.of(row),
                 LocalDateTime.of(2026, 10, 29, 12, 0));
 
-        assertEquals(180L, out.get(12L).replaySec());
-        assertEquals(180L, out.get(12L).totalSec());
-        assertEquals(0L, out.get(12L).liveSec());
+        assertEquals(180L, out.get("12").replaySec());
+        assertEquals(180L, out.get("12").totalSec());
+        assertEquals(0L, out.get("12").liveSec());
     }
 
     private static ActivityEntity activity(int state) {

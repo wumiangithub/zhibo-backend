@@ -8,5 +8,5 @@ import lombok.Data;
 public class AttributeAudienceResponse {
 
     private Long id;
-    private Long uid;
+    private String username;
 }

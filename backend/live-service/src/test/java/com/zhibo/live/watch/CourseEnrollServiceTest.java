@@ -49,8 +49,8 @@ class CourseEnrollServiceTest {
         course.setTitle("演示课");
         course.setTotalUserCount(0);
         when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
-        when(viewerRepository.existsByUid(12L)).thenReturn(true);
-        when(courseUserRepository.findByCourseIdAndUid(CID, 12L)).thenReturn(Optional.empty());
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUsername(CID, "12")).thenReturn(Optional.empty());
         when(courseUserRepository.save(any())).thenAnswer(inv -> {
             CourseUserEntity row = inv.getArgument(0);
             row.setId(7L);
@@ -60,9 +60,9 @@ class CourseEnrollServiceTest {
         EnrollCourseRequest req = new EnrollCourseRequest();
         req.setInviterId(10001L);
 
-        var res = service.enroll(CID, 12L, req);
+        var res = service.enroll(CID, "12", req);
         assertEquals(7L, res.getId());
-        assertEquals(12L, res.getUid());
+        assertEquals("12", res.getUsername());
         assertTrue(res.isCreated());
         assertEquals("演示课", res.getTitle());
         assertEquals(1, course.getTotalUserCount());
@@ -83,15 +83,15 @@ class CourseEnrollServiceTest {
         course.setAccessValidityType("days");
         course.setAccessValidityDays(7);
         when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
-        when(viewerRepository.existsByUid(12L)).thenReturn(true);
-        when(courseUserRepository.findByCourseIdAndUid(CID, 12L)).thenReturn(Optional.empty());
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUsername(CID, "12")).thenReturn(Optional.empty());
         when(courseUserRepository.save(any())).thenAnswer(inv -> {
             CourseUserEntity row = inv.getArgument(0);
             row.setId(7L);
             return row;
         });
 
-        service.enroll(CID, 12L, new EnrollCourseRequest());
+        service.enroll(CID, "12", new EnrollCourseRequest());
 
         ArgumentCaptor<CourseUserEntity> cap = ArgumentCaptor.forClass(CourseUserEntity.class);
         verify(courseUserRepository).save(cap.capture());
@@ -106,20 +106,20 @@ class CourseEnrollServiceTest {
         course.setTitle("演示课");
         course.setTotalUserCount(3);
         when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
-        when(viewerRepository.existsByUid(12L)).thenReturn(true);
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
 
         CourseUserEntity existing = new CourseUserEntity();
         existing.setId(7L);
         existing.setCourseId(CID);
-        existing.setUid(12L);
+        existing.setUsername("12");
         existing.setEmployeeInviterId(90001L);
-        when(courseUserRepository.findByCourseIdAndUid(CID, 12L)).thenReturn(Optional.of(existing));
+        when(courseUserRepository.findByCourseIdAndUsername(CID, "12")).thenReturn(Optional.of(existing));
         when(courseUserRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         EnrollCourseRequest req = new EnrollCourseRequest();
         req.setInviterId(10001L);
 
-        var res = service.enroll(CID, 12L, req);
+        var res = service.enroll(CID, "12", req);
         assertFalse(res.isCreated());
         assertEquals(3, course.getTotalUserCount());
         assertEquals(90001L, existing.getEmployeeInviterId());

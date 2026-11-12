@@ -429,8 +429,8 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalStateException("缺少微吼 SecretKey，无法签名 SDK 载荷");
         }
 
-        Long viewerId = command.viewerId();
-        if (viewerId == null || viewerId <= 0) {
+        String viewerIdentity = command.viewerIdentity();
+        if (viewerIdentity == null || viewerIdentity.isBlank()) {
             throw new IllegalArgumentException("请先登录");
         }
         String nickname = resolveNickname(command.nickname());
@@ -442,11 +442,11 @@ public class VhallLiveProvider implements LiveProvider {
             // account = 第三方用户唯一标识 z{id}（与角色 e{id} 错开；聊天回包未必带回）
             email = emailOverride;
             String parsed = com.zhibo.presence.PresenceUserIds.parseEmail(email);
-            account = parsed != null ? parsed : ("z" + viewerId);
+            account = parsed != null ? parsed : ("z" + viewerIdentity);
         } else {
-            email = resolveWatchEmail(viewerId, null);
-            // account = 第三方用户唯一标识（观众数字 id）；聊天回包未必带回
-            account = Long.toString(viewerId);
+            email = resolveWatchEmail(viewerIdentity, null);
+            // account = 第三方用户唯一标识（观众 username）；聊天回包未必带回
+            account = viewerIdentity.trim();
         }
         String webinarId = command.providerRoomId();
         String head = command.head() == null ? "" : command.head().trim();
@@ -869,12 +869,9 @@ public class VhallLiveProvider implements LiveProvider {
      * 观看身份邮箱。有观众 id 时为 {@code {id}@qkzb.com}（与签名、{@code new VhallSDK} 的 email 一致）；
      * 没有则 {@code {guestId}@zhibo.local}。
      */
-    public static String resolveWatchEmail(Long viewerId, String guestId) {
-        if (viewerId != null) {
-            if (viewerId <= 0) {
-                throw new IllegalArgumentException("uid 无效");
-            }
-            return viewerId + VIEWER_EMAIL_DOMAIN;
+    public static String resolveWatchEmail(String viewerUsername, String guestId) {
+        if (viewerUsername != null && !viewerUsername.isBlank()) {
+            return com.zhibo.presence.PresenceUserIds.viewerEmail(viewerUsername);
         }
         return resolveGuestId(guestId) + EMAIL_DOMAIN;
     }

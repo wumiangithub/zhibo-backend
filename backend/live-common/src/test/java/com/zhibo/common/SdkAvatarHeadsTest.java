@@ -14,10 +14,10 @@ class SdkAvatarHeadsTest {
     void resolveForViewer_blankUsesDefaultWithNumericV() {
         assertEquals(
                 DEFAULT + "?v=12",
-                SdkAvatarHeads.resolveForViewer(null, 12L, DEFAULT));
+                SdkAvatarHeads.resolveForViewer(null, "12", DEFAULT));
         assertEquals(
-                DEFAULT + "?v=10001",
-                SdkAvatarHeads.resolveForViewer("  ", 10001L, DEFAULT));
+                DEFAULT + "?v=user10001",
+                SdkAvatarHeads.resolveForViewer("  ", "user10001", DEFAULT));
     }
 
     @Test
@@ -39,14 +39,14 @@ class SdkAvatarHeadsTest {
         String site = "https://qklive-testcos.cjs99.com/viewer/avatar/12.png";
         assertEquals(
                 site + "?v=12",
-                SdkAvatarHeads.resolveForViewer(site, 12L, DEFAULT));
+                SdkAvatarHeads.resolveForViewer(site, "12", DEFAULT));
     }
 
     @Test
     void realAvatar_alwaysAppendsOrReplacesV() {
         assertEquals(
                 "https://wx.cdn/a.jpg?v=12",
-                SdkAvatarHeads.resolveForViewer("https://wx.cdn/a.jpg", 12L, DEFAULT));
+                SdkAvatarHeads.resolveForViewer("https://wx.cdn/a.jpg", "12", DEFAULT));
         assertEquals(
                 "https://wx.cdn/a.jpg?v=z276",
                 SdkAvatarHeads.resolveForConsole("https://wx.cdn/a.jpg", 276L, DEFAULT));
@@ -56,7 +56,7 @@ class SdkAvatarHeadsTest {
         assertEquals(
                 "https://cdn/viewer/avatar/12.png?v=12",
                 SdkAvatarHeads.resolveForViewer(
-                        "https://cdn/viewer/avatar/12.png?v=999", 12L, DEFAULT));
+                        "https://cdn/viewer/avatar/12.png?v=999", "12", DEFAULT));
     }
 
     @Test
@@ -97,15 +97,12 @@ class SdkAvatarHeadsTest {
     void rejectsInvalidIdentity() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> SdkAvatarHeads.resolveForViewer(null, 0L, DEFAULT));
+                () -> SdkAvatarHeads.resolveForViewer(null, "", DEFAULT));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> SdkAvatarHeads.withUserQuery(DEFAULT, "0"));
+                () -> SdkAvatarHeads.withUserQuery(DEFAULT, ""));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> SdkAvatarHeads.withUserQuery(DEFAULT, "zz1"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> SdkAvatarHeads.withUserQuery(DEFAULT, "guest1"));
+                () -> SdkAvatarHeads.withUserQuery(DEFAULT, "bad id!"));
     }
 }

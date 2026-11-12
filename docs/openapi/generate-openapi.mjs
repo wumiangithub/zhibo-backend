@@ -230,6 +230,14 @@ const BUSINESS_UUID = {
     '本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)',
 }
 
+/** 观众业务身份（D118）；勿与 VhallSdkPayload.username（微吼展示昵称）混淆。 */
+const VIEWER_USERNAME = {
+  type: 'string',
+  maxLength: 16,
+  description:
+    '用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值',
+}
+
 const pageParams = [
   {
     name: 'page',
@@ -386,7 +394,7 @@ const FIELD_DESC_BY_NAME = {
   accessExpired: '访问是否已过期',
   accessState: '观看售卖门禁状态',
   accessValidityDays: '购买后有效天数',
-  account: '第三方用户唯一标识（观众=数字 uid）；本站回显；init 以 email 为准；聊天回包未必带回',
+  account: '第三方用户唯一标识（观众=viewer.username）；本站回显；init 以 email 为准；聊天回包未必带回',
   ultraLowLatency:
     '是否超低延迟。true 时创建微吼传 no_delay_webinar=1，false 传 0；不传则不带该参。创建后不可改',
   verify: '观看验证方式（微吼 verify）',
@@ -443,7 +451,7 @@ const FIELD_DESC_BY_NAME = {
   role: '开播角色',
   operatorName: '操作人姓名',
   passcode: '9 位数字开播口令',
-  uid: '用户中心 uid（业务用户主键）',
+  uid: '同步自用户中心 LoginVo.uid（大智慧自增）；仅库内备查，业务/JWT/接口关联不用（D118）',
   entitlementStatus: '权益状态：0 无 / 1 有',
   inviterDisplayName: '邀请人展示名',
   inviterKind: '邀请人类型：employee 员工 / audience 观众',
@@ -578,8 +586,26 @@ const FIELD_DESC_BY_PATH = {
   'WatchSummaryData.playbackFastForwardAllow': '是否允许快进/拖进度；缺省 true',
   'WatchSdkData.id': '本站活动 UUID（与 Query id 相同）',
   'WatchSdkData.provider': '服务商；前端 createWatchAdapter(provider)',
-  'WatchSdkData.uid': '用户中心 uid（与 sdk.email 本地部分一致）',
-  'WatchSdkData.nickname': '与 sdk.username 同值（身份回显）',
+  'WatchSdkData.username':
+    '用户中心 viewer.username（与 sdk.email 本地部分一致；D118）；只从观众 JWT 解析',
+  'WatchSdkData.nickname': '与 sdk.username 同值（展示昵称回显；非业务身份）',
+  'ViewerUserInfo.username':
+    '用户中心 viewer.username（业务身份 / JWT sub）。未同步（local 明文登录）时省略',
+  'ViewerListItem.username': '用户中心 viewer.username（D118）',
+  'ViewerBlacklistUpdateData.username': '用户中心 viewer.username（D118）',
+  'ViewerTagsUpdateData.username': '用户中心 viewer.username（D118）',
+  'ViewerLearnStatsSummaryItem.username': '用户中心 viewer.username（D118）',
+  'ViewerLearnStatsCourseItem.username': '用户中心 viewer.username（D118）',
+  'ActivityAudienceListItem.username': '用户中心 viewer.username（D118）',
+  'ActivityAudienceCommentItem.username': '发言观众 viewer.username（D118）',
+  'WatchAudienceAttributeData.username': '被邀请观众 username（JWT 解析结果）',
+  'WatchCourseEnrollData.username': '学员 viewer.username（JWT 解析结果）',
+  'VhallSdkPayload.username':
+    '微吼 JSSDK 展示昵称（优先 Query nickname；空则默认「观众」）；不是业务身份 viewer.username',
+  'VhallSdkPayload.account':
+    '第三方用户唯一标识（观众=viewer.username）。微吼 init 以 email 为准；聊天回包未必带回，认人不能只靠它（D111）',
+  'VhallSdkPayload.email': '{username}@qkzb.com，参与签名；new VhallSDK 必须用这份',
+  'WatchChatHistoryItem.senderId': '发言观众 viewer.username（room_comment.username）；补建行可空',
   'WatchSdkData.sdk': '该服务商签名与 init 鉴权参数（不含脚本 CDN，D93）',
   'WatchAccessData.accessState':
     'ok 已放行 / need_password 已登录但缺观看密码 / need_login 需登录（含免费场） / forbidden 无观看权限 / expired 访问已过期',
@@ -840,6 +866,22 @@ const FIELD_DB_BY_PATH = {
   'ViewerTagUpdateRequest.groupId': { db: 'BIGINT', format: 'int64' },
   // 组织部门编码来自总部表 bmbm（字符串）；勿套全局 code→INT（API 业务码）
   'OrgDeptNode.code': { db: 'VARCHAR(64)', maxLength: 64 },
+  // D118 观众业务 identity（viewer.username）；勿与 VhallSdkPayload.username（展示昵称 VARCHAR(50)）混用
+  'ViewerUserInfo.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ViewerListItem.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ViewerBlacklistUpdateData.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ViewerTagsUpdateData.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ViewerLearnStatsSummaryItem.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ViewerLearnStatsCourseItem.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ActivityAudienceListItem.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ActivityAudienceCreateRequest.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ActivityAudienceCreateData.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'ActivityAudienceCommentItem.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'CourseUserCreateRequest.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'CourseUserCreateData.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'WatchSdkData.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'WatchAudienceAttributeData.username': { db: 'VARCHAR(16)', maxLength: 16 },
+  'WatchCourseEnrollData.username': { db: 'VARCHAR(16)', maxLength: 16 },
 }
 
 const DB_ANNOTATION_SKIP = new Set([
@@ -3042,11 +3084,10 @@ function buildAdmin() {
     CourseUserCreateRequest: {
       type: 'object',
       properties: {
-        phone: { type: 'string', description: '与 uid 二选一' },
-        uid: {
-          type: 'integer',
-          format: 'int64',
-          description: '与 phone 二选一',
+        phone: { type: 'string', description: '与 username 二选一' },
+        username: {
+          ...VIEWER_USERNAME,
+          description: '用户中心 viewer.username；与 phone 二选一',
         },
         expireTime: {
           type: 'string',
@@ -3059,7 +3100,7 @@ function buildAdmin() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        uid: { type: 'integer', format: 'int64' },
+        username: { ...VIEWER_USERNAME },
         created: { type: 'boolean', description: 'true 新建；false 已有行' },
       },
     },
@@ -3237,7 +3278,7 @@ function buildAdmin() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64', description: '名单行 id' },
-        uid: { type: 'integer', format: 'int64' },
+        username: { ...VIEWER_USERNAME },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         entitlementStatus: {
@@ -3277,15 +3318,18 @@ function buildAdmin() {
     ActivityAudienceCreateRequest: {
       type: 'object',
       properties: {
-        phone: { type: 'string', description: '与 uid 二选一' },
-        uid: { type: 'integer', format: 'int64', description: '与 phone 二选一' },
+        phone: { type: 'string', description: '与 username 二选一' },
+        username: {
+          ...VIEWER_USERNAME,
+          description: '用户中心 viewer.username；与 phone 二选一',
+        },
       },
     },
     ActivityAudienceCreateData: {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        uid: { type: 'integer', format: 'int64' },
+        username: { ...VIEWER_USERNAME },
         created: { type: 'boolean' },
       },
     },
@@ -3358,7 +3402,7 @@ function buildAdmin() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        uid: { type: 'integer', format: 'int64' },
+        username: { ...VIEWER_USERNAME },
         guestId: { type: 'string' },
         nickname: { type: 'string' },
         content: { type: 'string' },
@@ -3386,7 +3430,7 @@ function buildAdmin() {
     ViewerListItem: {
       type: 'object',
       properties: {
-        uid: { type: 'integer', format: 'int64', description: '用户中心 uid（业务用户主键）' },
+        username: { ...VIEWER_USERNAME },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         registerChannel: { type: 'integer', enum: [1, 2], description: '1 微信 / 2 导入' },
@@ -3427,7 +3471,7 @@ function buildAdmin() {
     ViewerBlacklistUpdateData: {
       type: 'object',
       properties: {
-        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
+        username: { ...VIEWER_USERNAME },
         banComment: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
         banPurchase: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
         banAccess: { type: 'integer', enum: [0, 1], description: '0 关闭 / 1 开启' },
@@ -3444,7 +3488,7 @@ function buildAdmin() {
     ViewerTagsUpdateData: {
       type: 'object',
       properties: {
-        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
+        username: { ...VIEWER_USERNAME },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
         tagLabels: { type: 'array', items: { type: 'string' } },
       },
@@ -3452,7 +3496,7 @@ function buildAdmin() {
     ViewerLearnStatsSummaryItem: {
       type: 'object',
       properties: {
-        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
+        username: { ...VIEWER_USERNAME },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' } },
@@ -3479,7 +3523,7 @@ function buildAdmin() {
       type: 'object',
       required: [
         'id',
-        'uid',
+        'username',
         'nickname',
         'tagIds',
         'tagLabels',
@@ -3490,7 +3534,7 @@ function buildAdmin() {
       ],
       properties: {
         id: { type: 'integer', format: 'int64', description: 'course_lesson_progress.id' },
-        uid: { type: 'integer', format: 'int64', description: '用户中心 uid' },
+        username: { ...VIEWER_USERNAME },
         nickname: { type: 'string', description: '观众展示昵称' },
         avatarUrl: { type: 'string', description: '头像 URL；无则省略' },
         tagIds: { type: 'array', items: { type: 'integer', format: 'int64' }, description: '标签 id 列表；无则 []' },
@@ -5613,9 +5657,9 @@ function buildAdmin() {
             in: 'query',
             schema: {
               type: 'string',
-              enum: ['nickname', 'id', 'phone'],
+              enum: ['nickname', 'username', 'phone'],
               default: 'nickname',
-              description: 'nickname 昵称 / id 用户ID / phone 手机号',
+              description: 'nickname 昵称 / username 用户标识 / phone 手机号',
             },
           },
           {
@@ -5701,7 +5745,7 @@ function buildAdmin() {
         tags: ['课程'],
         summary: '单个添加学员',
         description: [
-          '向本课添加一名学员。Body 须二选一提供 phone 或 uid；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。',
+          '向本课添加一名学员。Body 须二选一提供 phone 或 username；选填 expireTime（yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss；仅日则存当日 00:00:00）。',
           '本课无该观众行时：新建 course_user，entitlement_status=1、acquire_way=import、写导入人；有 expireTime 则写入该时刻，否则按课程售卖规则计算到期；course.total_user_count +1。',
           '已有行：仅补写空的导入人，不改 entitlement_expire_time；响应 created=false。',
         ].join(''),
@@ -5915,9 +5959,9 @@ function buildAdmin() {
             in: 'query',
             schema: {
               type: 'string',
-              enum: ['nickname', 'id', 'phone'],
+              enum: ['nickname', 'username', 'phone'],
               default: 'nickname',
-              description: 'nickname 昵称 / id 用户ID / phone 手机号',
+              description: 'nickname 昵称 / username 用户标识 / phone 手机号',
             },
           },
           {
@@ -6347,7 +6391,7 @@ function buildAdmin() {
         security: bearer,
         parameters: [activityId,
           ...pageParams,
-          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], default: 'nickname', description: 'nickname 昵称 / id 用户ID / phone 手机号' } },
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'username', 'phone'], default: 'nickname', description: 'nickname 昵称 / username 用户标识 / phone 手机号' } },
           { name: 'keyword', in: 'query', schema: { type: 'string' } },
           { name: 'tagIds', in: 'query', schema: { type: 'string' }, description: '逗号分隔标签 id' },
           { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'none', 'all'], default: 'any', description: 'any 满足其一 / none 不包含 / all 全部满足' } },
@@ -6505,7 +6549,7 @@ function buildAdmin() {
         security: bearer,
         parameters: [activityId,
           ...pageParams,
-          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], default: 'nickname', description: 'nickname 昵称 / id 用户ID / phone 手机号' } },
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'username', 'phone'], default: 'nickname', description: 'nickname 昵称 / username 用户标识 / phone 手机号' } },
           { name: 'keyword', in: 'query', schema: { type: 'string' } },
           { name: 'tagIds', in: 'query', schema: { type: 'string' }, description: '逗号分隔标签 id' },
           { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'none', 'all'], default: 'any', description: 'any 满足其一 / none 不包含 / all 全部满足' } },
@@ -6633,7 +6677,7 @@ function buildAdmin() {
         tags: ['直播中控台'],
         summary: '中控台发送优惠券',
         description:
-          '中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，uid 空，nickname 为当前员工昵称）。' +
+          '中控台优惠券 Tab 二次确认后调用。同事务 upsert activity_coupon（一场一券一行，含 last_sender_dept_*）并 insert room_comment（comment_type=3，content 为券 JSON 快照含 employeeId 与岗位表部门 deptId/deptName，username 空，nickname 为当前员工昵称）。' +
           '发送人部门仅走 hr_uimsyhgwxx.yhid→bmid + sys_uimsbmxx，禁止 qw_bmxx；无岗位则部门字段省略。' +
           '前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: coupon, data })。允许同一券反复发送。admin JWT。活动不存在或已软删 → 400。',
         operationId: 'sendConsoleCoupon',
@@ -6681,7 +6725,7 @@ function buildAdmin() {
         security: bearer,
         parameters: [
           ...pageParams,
-          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], description: 'nickname 昵称 / id 用户ID / phone 手机号' } },
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'username', 'phone'], description: 'nickname 昵称 / username 用户标识 / phone 手机号' } },
           { name: 'keyword', in: 'query', schema: { type: 'string' } },
           { name: 'tagIds', in: 'query', schema: { type: 'string' } },
           { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'none', 'all'], description: 'any 满足其一 / none 不包含 / all 全部满足' } },
@@ -6702,8 +6746,8 @@ function buildAdmin() {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'integer', format: 'int64' },
-            description: '用户中心 uid',
+            schema: { ...VIEWER_USERNAME },
+            description: '用户中心 viewer.username（路径 {id}，D118）',
           },
         ],
         requestBody: {
@@ -6728,8 +6772,8 @@ function buildAdmin() {
             name: 'id',
             in: 'path',
             required: true,
-            schema: { type: 'integer', format: 'int64' },
-            description: '用户中心 uid',
+            schema: { ...VIEWER_USERNAME },
+            description: '用户中心 viewer.username（路径 {id}，D118）',
           },
         ],
         requestBody: {
@@ -6766,7 +6810,7 @@ function buildAdmin() {
         security: bearer,
         parameters: [
           ...pageParams,
-          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'id', 'phone'], default: 'nickname', description: 'nickname 昵称 / id 用户ID / phone 手机号' }, description: '用户关键字类型；缺省 nickname' },
+          { name: 'keywordType', in: 'query', schema: { type: 'string', enum: ['nickname', 'username', 'phone'], default: 'nickname', description: 'nickname 昵称 / username 用户标识 / phone 手机号' }, description: '用户关键字类型；缺省 nickname' },
           { name: 'keyword', in: 'query', schema: { type: 'string' }, description: '用户关键字；空则不过滤' },
           { name: 'tagIds', in: 'query', schema: { type: 'string' }, description: '标签 id，逗号分隔，如 1,2,3' },
           { name: 'tagMatch', in: 'query', schema: { type: 'string', enum: ['any', 'all', 'none'], default: 'any', description: 'any 满足其一 / none 不包含 / all 全部满足' }, description: '标签匹配；缺省 any' },
@@ -7300,14 +7344,21 @@ function buildLive() {
         account: {
           type: 'string',
           description:
-            '第三方用户唯一标识（观众=数字 uid）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）',
+            '第三方用户唯一标识（观众=viewer.username）。本站回显；微吼 init 以 email 为准、勿与 email 同时传冲突字段。聊天回包未必带回，认人不能只靠它（D111）',
         },
-        email: { type: 'string', description: '{uid}@qkzb.com，参与签名；new VhallSDK 必须用这份' },
-        username: { type: 'string', description: '优先 Query nickname；空则默认「观众」' },
+        email: {
+          type: 'string',
+          description: '{username}@qkzb.com，参与签名；new VhallSDK 必须用这份',
+        },
+        username: {
+          type: 'string',
+          description:
+            '微吼 JSSDK 展示昵称（优先 Query nickname；空则默认「观众」）；不是业务身份 viewer.username',
+        },
         head: {
           type: 'string',
           description:
-            '对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为数字 uid（例 ?v=12），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）',
+            '对应微吼 JSSDK 初始化参数 head：服务端下发已拼好的绝对 http(s) URL，不是相对路径；本签名接口不会把 objectKey 与 CDN 域名再拼接。底座来源：观看端取 viewer.avatar_url（去空白）；中控台按本场 activity_member.avatar_url → 员工 headimgurl → user_avatar。空白或无记录时改用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（可用环境变量 ZHIBO_DEFAULT_AVATAR_URL / 配置 zhibo.default-avatar-url 覆盖）。拼接规则：去掉 #fragment、去掉已有查询参数 v（大小写不敏感，其它 query 保留），再追加 ?v={身份}（URL 已有其它 query 则用 &v=）。身份与进房 email 本地部分 / sdk.account 一致：观看为 viewer.username（例 ?v=qk_u_xxx），中控台为 z{员工id}（例 ?v=z276）。响应始终非空字符串；非空 head 参与签名（空串勿签入，否则微吼 20005）。前端 new VhallSDK 须原样传入本字段，不要自行改写或再拼 CDN（D111）',
         },
         webinarId: { type: 'string', description: '微吼活动号（= provider_room_id）；仅 provider=vhall' },
         appKey: { type: 'string', description: '微吼 app_key' },
@@ -7340,12 +7391,12 @@ function buildLive() {
     WatchSdkData: {
       type: 'object',
       description:
-        '观看 SDK 签名载荷（D92/D93/D94/D95/D96）：仅 id / provider / uid / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 uid 来自观众 JWT',
+        '观看 SDK 签名载荷（D92/D93/D94/D95/D96/D118）：仅 id / provider / username / nickname / sdk；无 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*；响应 username 只从观众 JWT 解析',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
         nickname: { type: 'string' },
-        uid: { type: 'integer', format: 'int64' },
+        username: { ...VIEWER_USERNAME },
         sdk: { $ref: '#/components/schemas/VhallSdkPayload' },
       },
     },
@@ -7621,17 +7672,7 @@ function buildLive() {
     ViewerUserInfo: {
       type: 'object',
       properties: {
-        uid: {
-          type: 'integer',
-          format: 'int64',
-          description:
-            '用户中心 uid（业务用户主键）。JWT sub、业务表 uid、订单中心 third_user_id 均取此值。未同步（如仅 local 明文手机号登录）时省略。本站自增 viewer.id 不对外。',
-        },
-        username: {
-          type: 'string',
-          description:
-            '同步自用户中心 LoginVo.username。订单中心 JWT claim username 取此值。本站展示昵称仍用 nickname。未同步时省略。',
-        },
+        username: { ...VIEWER_USERNAME },
         miniOpenid: {
           type: 'string',
           description:
@@ -7847,13 +7888,13 @@ function buildLive() {
       type: 'object',
       required: ['inviterId'],
       description:
-        '邀请归因（D97）。被邀请观众 id 只从 Authorization 解析，Body 不传 uid。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）',
+        '邀请归因（D97/D118）。被邀请观众 username 只从 Authorization 解析，Body 不传 username。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）',
       properties: {
         inviterId: {
           type: 'integer',
           format: 'int64',
           description:
-            '邀请人 id；employee 时为员工 rs_mainkey_id，audience 时为观众 uid（当前不落库）；库：BIGINT',
+            '邀请人 id；employee 时为员工 rs_mainkey_id；audience 时为观众 username（当前不落库，日后可能改 string）',
         },
         inviterKind: {
           type: 'string',
@@ -7866,7 +7907,7 @@ function buildLive() {
       type: 'object',
       properties: {
         id: { type: 'integer', format: 'int64' },
-        uid: { type: 'integer', format: 'int64' },
+        username: { ...VIEWER_USERNAME },
       },
     },
     WatchAudienceSalesmanData: {
@@ -7945,7 +7986,7 @@ function buildLive() {
           format: 'int64',
           description: 'course_user 行 id',
         },
-        uid: { type: 'integer', format: 'int64', description: '观众 id' },
+        username: { ...VIEWER_USERNAME },
         courseId: {
           $ref: '#/components/schemas/BusinessUuid',
           description: '课程 UUID',
@@ -8037,7 +8078,7 @@ function buildLive() {
     ConsoleSdkSignData: {
       type: 'object',
       description:
-        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替 uid；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签',
+        '中控台员工进房签名（D110）：对齐观看 sdk-sign；employeeId 代替观众 username；sdk.email 为 z{员工id}@qkzb.com（角色仍用 e{id}）；昵称本场成员优先否则员工资料；sdk.head 为本场/员工绝对头像 URL（或默认底座）再拼 ?v=z{员工id}，不做 CDN+相对路径拼接，始终非空并入签',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid' },
         provider: { $ref: '#/components/schemas/Provider' },
@@ -8100,10 +8141,11 @@ function buildLive() {
       description: '默认「观众」',
     },
     {
-      name: 'uid',
+      name: 'username',
       in: 'query',
-      schema: { type: 'integer', format: 'int64' },
-      description: '用户中心 uid；有则 email 为 {uid}@qkzb.com',
+      schema: { ...VIEWER_USERNAME },
+      description:
+        '用户中心 viewer.username；有则 email 为 {username}@qkzb.com（嵌入兜底；正式观看走 JWT + sdk-sign）',
     },
   ]
   const sdkSignParams = [
@@ -8121,7 +8163,8 @@ function buildLive() {
       name: 'nickname',
       in: 'query',
       schema: { type: 'string', maxLength: 50 },
-      description: '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；uid 只从 Authorization 解析（D96）',
+      description:
+        '默认「观众」；小程序已按展示昵称规则算好并拼进 web-view URL；username 只从 Authorization JWT 解析（D96/D118）',
     },
   ]
   const activityAccessHeader = {
@@ -8449,11 +8492,11 @@ function buildLive() {
         summary: '观看 SDK 签名与初始化载荷',
         description: [
           '旧路径 GET /api/v1/watch/sdk/{id} 已删除。',
-          'Query 仅 id + 可选 nickname；uid 只从 Authorization 观众 JWT 解析（D96）；无有效 JWT → 400「请先登录」。',
-          '仅返回 id / provider / uid / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
+          'Query 仅 id + 可选 nickname；username 只从 Authorization 观众 JWT 解析（D96/D118）；无有效 JWT → 400「请先登录」。',
+          '仅返回 id / provider / username / nickname / sdk（D95）；页壳字段见 /watch/summary/{id}。',
           '不下发 guestId / scriptUrl / jqueryUrl / embedUrl / title / state / playback*（D92/D93/D94/D95）。',
           '签名路径不调微吼 fetchRoom。未过售卖门禁 → 403。',
-          '头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={uid}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。',
+          '头像链接拼接（sdk.head）：取 viewer.avatar_url 绝对地址（去空白）；空白则用默认底座 https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png（ZHIBO_DEFAULT_AVATAR_URL / zhibo.default-avatar-url）。本接口不做「CDN 域名 + 相对 objectKey」拼接。统一去掉 #fragment 与已有 v 参数后追加 ?v={username}（已有其它 query 则 &v=）；响应始终非空并参与签名。前端 new VhallSDK 原样传 head（D111）。',
         ].join('\n'),
         operationId: 'getWatchSdkSign',
         security: viewerBearer,
@@ -8634,7 +8677,7 @@ function buildLive() {
         tags: ['用户运营'],
         summary: '邀请归因',
         description: [
-          '须观众 Authorization（D97）；被邀请观众 id 只从 JWT 取，Body 不传 uid；无票 → 401。',
+          '须观众 Authorization（D97/D118）；被邀请观众 username 只从 JWT 取，Body 不传 username；无票 → 401。',
           '区分邀请人类型 inviterKind：employee 员工 / audience 观众。',
           'employee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。',
           'audience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。',
@@ -8657,7 +8700,7 @@ function buildLive() {
         tags: ['用户运营'],
         summary: '课程分享链进房 enroll',
         description: [
-          '路径 {id}=课程 UUID。须观众 JWT；uid 只从 JWT 取，Body 不接受 uid。',
+          '路径 {id}=课程 UUID。须观众 JWT；username 只从 JWT 取，Body 不接受 username。',
           '无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。',
           '课程不存在/已软删或观众不存在 → 400；无票 → 401。',
         ].join(''),

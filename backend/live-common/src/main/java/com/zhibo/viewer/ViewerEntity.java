@@ -34,16 +34,16 @@ public class ViewerEntity {
 
     /**
      * 同步自用户中心 {@code LoginVo.uid}（钱坤云 /oauth/wechat/register）。
-     * 业务用户主键：JWT {@code sub}、业务表 {@code uid}、订单中心 {@code third_user_id}（D117）。
+     * 仅备查，非业务身份（D118）。
      */
     @Column
     private Long uid;
 
     /**
      * 同步自用户中心 {@code LoginVo.username}。
-     * 跨系统账号名与订单中心 JWT {@code username}；本站展示昵称仍用 {@link #nickname}。
+     * 业务用户主键：JWT {@code sub}、业务表 {@code username}、订单中心 {@code third_user_id}（D118）。
      */
-    @Column(length = 64)
+    @Column(length = 16)
     private String username;
 
     /**

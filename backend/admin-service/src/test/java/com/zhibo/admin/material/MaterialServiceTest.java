@@ -74,14 +74,14 @@ class MaterialServiceTest {
 
     @Test
     void listGroups_returnsCount() {
-        MaterialGroupEntity g = group("g1", "image", "默认分组", true);
+        MaterialGroupEntity g = group("11111111111111111111111111111111", "image", "默认分组", true);
         when(groupRepository.findByTypeOrderByDefaultGroupDescSortOrderAscCreatedTimeAsc("image"))
                 .thenReturn(List.of(g));
-        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("g1")).thenReturn(3L);
+        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("11111111111111111111111111111111")).thenReturn(3L);
 
         List<MaterialGroupResponse> list = materialService.listGroups("image");
         assertEquals(1, list.size());
-        assertEquals("g1", list.get(0).getId());
+        assertEquals("11111111111111111111111111111111", list.get(0).getId());
         assertEquals(3, list.get(0).getCount());
         assertTrue(list.get(0).isDefault());
     }
@@ -100,36 +100,36 @@ class MaterialServiceTest {
 
     @Test
     void deleteGroup_rejectsDefault() {
-        MaterialGroupEntity g = group("g1", "image", "默认分组", true);
-        when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
+        MaterialGroupEntity g = group("11111111111111111111111111111111", "image", "默认分组", true);
+        when(groupRepository.findById("11111111111111111111111111111111")).thenReturn(Optional.of(g));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.deleteGroup("g1"));
+                () -> materialService.deleteGroup("11111111111111111111111111111111"));
         assertEquals("默认分组不可删除", ex.getMessage());
         verify(groupRepository, never()).delete(any());
     }
 
     @Test
     void deleteGroup_rejectsWhenHasMaterials() {
-        MaterialGroupEntity g = group("g2", "image", "宣传", false);
-        when(groupRepository.findById("g2")).thenReturn(Optional.of(g));
-        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("g2")).thenReturn(1L);
+        MaterialGroupEntity g = group("22222222222222222222222222222222", "image", "宣传", false);
+        when(groupRepository.findById("22222222222222222222222222222222")).thenReturn(Optional.of(g));
+        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("22222222222222222222222222222222")).thenReturn(1L);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.deleteGroup("g2"));
+                () -> materialService.deleteGroup("22222222222222222222222222222222"));
         assertEquals("分组下仍有素材", ex.getMessage());
     }
 
     @Test
     void renameGroup_ok() {
-        MaterialGroupEntity g = group("g2", "image", "旧名", false);
-        when(groupRepository.findById("g2")).thenReturn(Optional.of(g));
+        MaterialGroupEntity g = group("22222222222222222222222222222222", "image", "旧名", false);
+        when(groupRepository.findById("22222222222222222222222222222222")).thenReturn(Optional.of(g));
         when(groupRepository.existsByTypeAndName("image", "新名")).thenReturn(false);
-        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("g2")).thenReturn(0L);
+        when(materialRepository.countByGroupIdAndDeletedTimeIsNull("22222222222222222222222222222222")).thenReturn(0L);
 
         RenameMaterialGroupRequest req = new RenameMaterialGroupRequest();
         req.setName(" 新名 ");
-        MaterialGroupResponse resp = materialService.renameGroup("g2", req);
+        MaterialGroupResponse resp = materialService.renameGroup("22222222222222222222222222222222", req);
         assertEquals("新名", resp.getName());
         assertEquals("新名", g.getName());
     }
@@ -143,7 +143,7 @@ class MaterialServiceTest {
 
     @Test
     void list_mapsThumbUrlForImage() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setCreatedTime(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
         when(materialRepository.search(
                         eq("image"), isNull(), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
@@ -158,8 +158,8 @@ class MaterialServiceTest {
 
     @Test
     void register_batchPersists() {
-        MaterialGroupEntity g = group("g1", "image", "默认分组", true);
-        when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
+        MaterialGroupEntity g = group("11111111111111111111111111111111", "image", "默认分组", true);
+        when(groupRepository.findById("11111111111111111111111111111111")).thenReturn(Optional.of(g));
         when(materialRepository.existsByObjectKeyAndDeletedTimeIsNull(any())).thenReturn(false);
         when(materialRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
         SysUserAccountEntity user = uploader(10001L, "张三",
@@ -168,7 +168,7 @@ class MaterialServiceTest {
 
         RegisterMaterialsRequest req = new RegisterMaterialsRequest();
         req.setType("image");
-        req.setGroupId("g1");
+        req.setGroupId("11111111111111111111111111111111");
         RegisterMaterialsRequest.RegisterMaterialItem item =
                 new RegisterMaterialsRequest.RegisterMaterialItem();
         item.setName("封面.jpg");
@@ -201,14 +201,14 @@ class MaterialServiceTest {
 
     @Test
     void updateAiAudit_setsPassed() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setAiAuditStatus(0);
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
         req.setStatus(1);
-        MaterialItemResponse resp = materialService.updateAiAudit("m1", req, 10001L);
+        MaterialItemResponse resp = materialService.updateAiAudit("44444444444444444444444444444444", req, 10001L);
 
         assertEquals(1, resp.getAiAuditStatus());
         assertEquals(1, m.getAiAuditStatus());
@@ -218,14 +218,14 @@ class MaterialServiceTest {
 
     @Test
     void updateRiskAudit_setsRejected() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setRiskAuditStatus(1);
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
         req.setStatus(2);
-        MaterialItemResponse resp = materialService.updateRiskAudit("m1", req, 10001L);
+        MaterialItemResponse resp = materialService.updateRiskAudit("44444444444444444444444444444444", req, 10001L);
 
         assertEquals(2, resp.getRiskAuditStatus());
         assertEquals(2, m.getRiskAuditStatus());
@@ -234,27 +234,27 @@ class MaterialServiceTest {
 
     @Test
     void updateAiAudit_rejectsPending() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
 
         UpdateMaterialAuditRequest req = new UpdateMaterialAuditRequest();
         req.setStatus(0);
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.updateAiAudit("m1", req, 10001L));
+                () -> materialService.updateAiAudit("44444444444444444444444444444444", req, 10001L));
         assertEquals("status 须为 1 或 2", ex.getMessage());
     }
 
     @Test
     void listAudits_synthesizesSubmitWhenMissing() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setUploaderId(10001L);
         m.setUploaderName("张三");
         m.setDepartmentName("研究部");
         m.setCreatedTime(LocalDateTime.of(2026, 10, 20, 14, 20, 0));
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
-        when(auditLogRepository.findByMaterialIdOrderByCreatedTimeDesc("m1")).thenReturn(List.of());
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
+        when(auditLogRepository.findByMaterialIdOrderByCreatedTimeDesc("44444444444444444444444444444444")).thenReturn(List.of());
 
-        var resp = materialService.listAudits("m1");
+        var resp = materialService.listAudits("44444444444444444444444444444444");
         assertEquals(1, resp.getList().size());
         assertEquals("submit", resp.getList().get(0).getAction());
         assertEquals("张三", resp.getList().get(0).getOperatorName());
@@ -264,15 +264,15 @@ class MaterialServiceTest {
 
     @Test
     void register_rejectsDuplicateObjectKey() {
-        MaterialGroupEntity g = group("g1", "image", "默认分组", true);
-        when(groupRepository.findById("g1")).thenReturn(Optional.of(g));
+        MaterialGroupEntity g = group("11111111111111111111111111111111", "image", "默认分组", true);
+        when(groupRepository.findById("11111111111111111111111111111111")).thenReturn(Optional.of(g));
         when(materialRepository.existsByObjectKeyAndDeletedTimeIsNull("material/image/1.jpg"))
                 .thenReturn(true);
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         RegisterMaterialsRequest req = new RegisterMaterialsRequest();
         req.setType("image");
-        req.setGroupId("g1");
+        req.setGroupId("11111111111111111111111111111111");
         RegisterMaterialsRequest.RegisterMaterialItem item =
                 new RegisterMaterialsRequest.RegisterMaterialItem();
         item.setName("a.jpg");
@@ -291,7 +291,7 @@ class MaterialServiceTest {
 
         RegisterMaterialsRequest req = new RegisterMaterialsRequest();
         req.setType("image");
-        req.setGroupId("g1");
+        req.setGroupId("11111111111111111111111111111111");
         req.setItems(List.of());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
@@ -301,15 +301,15 @@ class MaterialServiceTest {
 
     @Test
     void rename_updatesNameOnly() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setObjectKey("material/image/1_a.jpg");
         m.setUrl("https://cdn/a.jpg");
         m.setCreatedTime(LocalDateTime.of(2026, 10, 12, 14, 0, 0));
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
 
         RenameMaterialRequest req = new RenameMaterialRequest();
         req.setName(" 新封面.jpg ");
-        MaterialItemResponse resp = materialService.rename("m1", req);
+        MaterialItemResponse resp = materialService.rename("44444444444444444444444444444444", req);
 
         assertEquals("新封面.jpg", resp.getName());
         assertEquals("新封面.jpg", m.getName());
@@ -321,34 +321,34 @@ class MaterialServiceTest {
 
     @Test
     void rename_rejectsBlankName() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
 
         RenameMaterialRequest req = new RenameMaterialRequest();
         req.setName("   ");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.rename("m1", req));
+                () -> materialService.rename("44444444444444444444444444444444", req));
         assertEquals("name 不能为空", ex.getMessage());
     }
 
     @Test
     void rename_rejectsDeleted() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setDeletedTime(LocalDateTime.now());
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
 
         RenameMaterialRequest req = new RenameMaterialRequest();
         req.setName("b.jpg");
-        assertThrows(IllegalArgumentException.class, () -> materialService.rename("m1", req));
+        assertThrows(IllegalArgumentException.class, () -> materialService.rename("44444444444444444444444444444444", req));
     }
 
     @Test
     void softDelete_setsActorAndTime() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
         when(userRepository.findById(7L)).thenReturn(Optional.of(uploader(7L, "审核员", null)));
 
-        assertEquals("m1", materialService.softDelete("m1", 7L).getId());
+        assertEquals("44444444444444444444444444444444", materialService.softDelete("44444444444444444444444444444444", 7L).getId());
         assertTrue(m.getDeletedTime() != null);
         assertEquals(7L, m.getDeletedBy());
         assertEquals("审核员", m.getDeletedByName());
@@ -357,23 +357,23 @@ class MaterialServiceTest {
 
     @Test
     void softDelete_alreadyDeleted_rejects() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setDeletedTime(LocalDateTime.now());
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
 
-        assertThrows(IllegalArgumentException.class, () -> materialService.softDelete("m1", 7L));
+        assertThrows(IllegalArgumentException.class, () -> materialService.softDelete("44444444444444444444444444444444", 7L));
     }
 
     @Test
     void createArticle_writesTitleAuthorAndSnapshot() {
-        MaterialGroupEntity g = group("g-article", "article", "默认分组", true);
-        when(groupRepository.findById("g-article")).thenReturn(Optional.of(g));
+        MaterialGroupEntity g = group("33333333333333333333333333333333", "article", "默认分组", true);
+        when(groupRepository.findById("33333333333333333333333333333333")).thenReturn(Optional.of(g));
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
         when(materialRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(articleRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         CreateArticleRequest req = new CreateArticleRequest();
-        req.setGroupId("g-article");
+        req.setGroupId("33333333333333333333333333333333");
         req.setTitle("  这里是文章的标题  ");
         req.setAuthor(" 作者 ");
         req.setContent("<p>正文</p>");
@@ -382,7 +382,7 @@ class MaterialServiceTest {
 
         assertEquals("这里是文章的标题", resp.getName());
         assertEquals("article", resp.getType());
-        assertEquals("g-article", resp.getGroupId());
+        assertEquals("33333333333333333333333333333333", resp.getGroupId());
         assertEquals(0, resp.getAiAuditStatus());
         assertEquals(0, resp.getRiskAuditStatus());
         assertEquals(10001L, resp.getUploaderId());
@@ -400,12 +400,12 @@ class MaterialServiceTest {
 
     @Test
     void createArticle_rejectsEmptyHtml() {
-        MaterialGroupEntity g = group("g-article", "article", "默认分组", true);
-        when(groupRepository.findById("g-article")).thenReturn(Optional.of(g));
+        MaterialGroupEntity g = group("33333333333333333333333333333333", "article", "默认分组", true);
+        when(groupRepository.findById("33333333333333333333333333333333")).thenReturn(Optional.of(g));
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
 
         CreateArticleRequest req = new CreateArticleRequest();
-        req.setGroupId("g-article");
+        req.setGroupId("33333333333333333333333333333333");
         req.setTitle("标题");
         req.setAuthor("作者");
         req.setContent("<p><br></p>");
@@ -419,11 +419,11 @@ class MaterialServiceTest {
     @Test
     void createArticle_rejectsLongTitleAndWrongGroup() {
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
-        MaterialGroupEntity image = group("g1", "image", "默认分组", true);
-        when(groupRepository.findById("g1")).thenReturn(Optional.of(image));
+        MaterialGroupEntity image = group("11111111111111111111111111111111", "image", "默认分组", true);
+        when(groupRepository.findById("11111111111111111111111111111111")).thenReturn(Optional.of(image));
 
         CreateArticleRequest wrongGroup = new CreateArticleRequest();
-        wrongGroup.setGroupId("g1");
+        wrongGroup.setGroupId("11111111111111111111111111111111");
         wrongGroup.setTitle("标题");
         wrongGroup.setAuthor("作者");
         wrongGroup.setContent("<p>正文</p>");
@@ -431,10 +431,10 @@ class MaterialServiceTest {
                 () -> materialService.createArticle(wrongGroup, 10001L));
         assertEquals("分组类型与素材类型不一致", groupEx.getMessage());
 
-        MaterialGroupEntity article = group("g-article", "article", "默认分组", true);
-        when(groupRepository.findById("g-article")).thenReturn(Optional.of(article));
+        MaterialGroupEntity article = group("33333333333333333333333333333333", "article", "默认分组", true);
+        when(groupRepository.findById("33333333333333333333333333333333")).thenReturn(Optional.of(article));
         CreateArticleRequest longTitle = new CreateArticleRequest();
-        longTitle.setGroupId("g-article");
+        longTitle.setGroupId("33333333333333333333333333333333");
         longTitle.setTitle("标".repeat(46));
         longTitle.setAuthor("作者");
         longTitle.setContent("<p>正文</p>");
@@ -448,7 +448,7 @@ class MaterialServiceTest {
         when(userRepository.findById(10001L)).thenReturn(Optional.of(uploader(10001L, "张三", null)));
         RegisterMaterialsRequest req = new RegisterMaterialsRequest();
         req.setType("article");
-        req.setGroupId("g1");
+        req.setGroupId("11111111111111111111111111111111");
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> materialService.register(req, 10001L));
@@ -467,54 +467,54 @@ class MaterialServiceTest {
 
     @Test
     void move_changesGroupWithoutTouchingAudit() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setAiAuditStatus(1);
         m.setRiskAuditStatus(2);
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
-        when(groupRepository.findById("g2")).thenReturn(Optional.of(group("g2", "image", "分组2", false)));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
+        when(groupRepository.findById("22222222222222222222222222222222")).thenReturn(Optional.of(group("22222222222222222222222222222222", "image", "分组2", false)));
 
         MoveMaterialRequest req = new MoveMaterialRequest();
-        req.setGroupId("g2");
-        MaterialItemResponse resp = materialService.move("m1", req);
+        req.setGroupId("22222222222222222222222222222222");
+        MaterialItemResponse resp = materialService.move("44444444444444444444444444444444", req);
 
-        assertEquals("g2", resp.getGroupId());
+        assertEquals("22222222222222222222222222222222", resp.getGroupId());
         assertEquals(1, resp.getAiAuditStatus());
         assertEquals(2, resp.getRiskAuditStatus());
     }
 
     @Test
     void move_rejectsDifferentType() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
-        when(groupRepository.findById("g-article")).thenReturn(
-                Optional.of(group("g-article", "article", "默认分组", true)));
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
+        when(groupRepository.findById("33333333333333333333333333333333")).thenReturn(
+                Optional.of(group("33333333333333333333333333333333", "article", "默认分组", true)));
 
         MoveMaterialRequest req = new MoveMaterialRequest();
-        req.setGroupId("g-article");
+        req.setGroupId("33333333333333333333333333333333");
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.move("m1", req));
+                () -> materialService.move("44444444444444444444444444444444", req));
         assertEquals("分组类型与素材类型不一致", ex.getMessage());
     }
 
     @Test
     void replaceImage_pendingRejects() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
         ReplaceImageRequest req = new ReplaceImageRequest();
         req.setUrl("https://cdn/b.jpg");
         req.setObjectKey("material/image/2_b.jpg");
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.replaceImage("m1", req));
+                () -> materialService.replaceImage("44444444444444444444444444444444", req));
         assertEquals("审核中不可编辑", ex.getMessage());
     }
 
     @Test
     void replaceImage_passedResetsAudit() {
-        MaterialEntity m = material("m1", "image", "g1", "a.jpg");
+        MaterialEntity m = material("44444444444444444444444444444444", "image", "11111111111111111111111111111111", "a.jpg");
         m.setAiAuditStatus(1);
         m.setRiskAuditStatus(1);
-        when(materialRepository.findById("m1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("44444444444444444444444444444444")).thenReturn(Optional.of(m));
         when(materialRepository.existsByObjectKeyAndDeletedTimeIsNull("material/image/2_b.jpg"))
                 .thenReturn(false);
 
@@ -523,7 +523,7 @@ class MaterialServiceTest {
         req.setObjectKey("material/image/2_b.jpg");
         req.setFileSize(12L);
         req.setMeta("100*80");
-        MaterialItemResponse resp = materialService.replaceImage("m1", req);
+        MaterialItemResponse resp = materialService.replaceImage("44444444444444444444444444444444", req);
 
         assertEquals("https://cdn/b.jpg", resp.getUrl());
         assertEquals(0, resp.getAiAuditStatus());
@@ -533,35 +533,35 @@ class MaterialServiceTest {
 
     @Test
     void updateArticle_pendingRejects() {
-        MaterialEntity m = material("a1", "article", "g-article", "标题");
-        when(materialRepository.findById("a1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("55555555555555555555555555555555", "article", "33333333333333333333333333333333", "标题");
+        when(materialRepository.findById("55555555555555555555555555555555")).thenReturn(Optional.of(m));
         CreateArticleRequest req = new CreateArticleRequest();
         req.setTitle("新标题");
         req.setAuthor("作者");
         req.setContent("<p>新正文</p>");
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.updateArticle("a1", req));
+                () -> materialService.updateArticle("55555555555555555555555555555555", req));
         assertEquals("审核中不可编辑", ex.getMessage());
     }
 
     @Test
     void updateArticle_passedResetsAudit() {
-        MaterialEntity m = material("a1", "article", "g-article", "标题");
+        MaterialEntity m = material("55555555555555555555555555555555", "article", "33333333333333333333333333333333", "标题");
         m.setAiAuditStatus(1);
         m.setRiskAuditStatus(2);
         MaterialArticleEntity body = new MaterialArticleEntity();
-        body.setId("a1");
+        body.setId("55555555555555555555555555555555");
         body.setAuthor("旧作者");
         body.setContent("<p>旧</p>");
-        when(materialRepository.findById("a1")).thenReturn(Optional.of(m));
-        when(articleRepository.findById("a1")).thenReturn(Optional.of(body));
+        when(materialRepository.findById("55555555555555555555555555555555")).thenReturn(Optional.of(m));
+        when(articleRepository.findById("55555555555555555555555555555555")).thenReturn(Optional.of(body));
 
         CreateArticleRequest req = new CreateArticleRequest();
         req.setTitle("新标题");
         req.setAuthor("新作者");
         req.setContent("<p>新正文</p>");
-        MaterialItemResponse resp = materialService.updateArticle("a1", req);
+        MaterialItemResponse resp = materialService.updateArticle("55555555555555555555555555555555", req);
 
         assertEquals("新标题", resp.getName());
         assertEquals(0, resp.getAiAuditStatus());
@@ -572,17 +572,17 @@ class MaterialServiceTest {
 
     @Test
     void getArticle_returnsBody() {
-        MaterialEntity m = material("a1", "article", "g-article", "标题");
+        MaterialEntity m = material("55555555555555555555555555555555", "article", "33333333333333333333333333333333", "标题");
         m.setAiAuditStatus(1);
         m.setRiskAuditStatus(1);
         MaterialArticleEntity body = new MaterialArticleEntity();
-        body.setId("a1");
+        body.setId("55555555555555555555555555555555");
         body.setAuthor("作者");
         body.setContent("<p>正文</p>");
-        when(materialRepository.findById("a1")).thenReturn(Optional.of(m));
-        when(articleRepository.findById("a1")).thenReturn(Optional.of(body));
+        when(materialRepository.findById("55555555555555555555555555555555")).thenReturn(Optional.of(m));
+        when(articleRepository.findById("55555555555555555555555555555555")).thenReturn(Optional.of(body));
 
-        ArticleDetailResponse detail = materialService.getArticle("a1");
+        ArticleDetailResponse detail = materialService.getArticle("55555555555555555555555555555555");
         assertEquals("标题", detail.getTitle());
         assertEquals("作者", detail.getAuthor());
         assertEquals("<p>正文</p>", detail.getContent());
@@ -591,7 +591,7 @@ class MaterialServiceTest {
 
     @Test
     void toItem_documentOmitsThumb() {
-        MaterialEntity m = material("m1", "document", "g1", "a.pdf");
+        MaterialEntity m = material("44444444444444444444444444444444", "document", "11111111111111111111111111111111", "a.pdf");
         m.setCreatedTime(LocalDateTime.now());
         when(materialRepository.search(
                         eq("document"), isNull(), isNull(), isNull(), eq(false), eq(PageRequest.of(0, 20))))
@@ -635,13 +635,13 @@ class MaterialServiceTest {
 
     @Test
     void startVhallTranscode_ok() {
-        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
-        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("66666666666666666666666666666666", "video", "11111111111111111111111111111111", "成片.mp4");
+        when(materialRepository.findById("66666666666666666666666666666666")).thenReturn(Optional.of(m));
         when(providerRegistry.require(VhallLiveProvider.CODE)).thenReturn(liveProvider);
         when(liveProvider.createVideoByUrl("https://cdn/成片.mp4", "成片.mp4")).thenReturn("vid-99");
         when(materialRepository.save(any(MaterialEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        MaterialItemResponse resp = materialService.startVhallTranscode("v1");
+        MaterialItemResponse resp = materialService.startVhallTranscode("66666666666666666666666666666666");
 
         assertEquals("vid-99", resp.getVhallVideoId());
         assertEquals(0, resp.getVhallTranscodeProgress());
@@ -653,52 +653,52 @@ class MaterialServiceTest {
 
     @Test
     void startVhallTranscode_rejectsNonVideo() {
-        MaterialEntity m = material("i1", "image", "g1", "a.jpg");
-        when(materialRepository.findById("i1")).thenReturn(Optional.of(m));
+        MaterialEntity m = material("77777777777777777777777777777777", "image", "11111111111111111111111111111111", "a.jpg");
+        when(materialRepository.findById("77777777777777777777777777777777")).thenReturn(Optional.of(m));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.startVhallTranscode("i1"));
+                () -> materialService.startVhallTranscode("77777777777777777777777777777777"));
         assertEquals("仅视频可上传到微吼转码", ex.getMessage());
         verify(providerRegistry, never()).require(any());
     }
 
     @Test
     void startVhallTranscode_rejectsWhenPending() {
-        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        MaterialEntity m = material("66666666666666666666666666666666", "video", "11111111111111111111111111111111", "成片.mp4");
         m.setVhallVideoId("old");
         m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_PENDING);
-        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("66666666666666666666666666666666")).thenReturn(Optional.of(m));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.startVhallTranscode("v1"));
+                () -> materialService.startVhallTranscode("66666666666666666666666666666666"));
         assertEquals("转码中，请稍候", ex.getMessage());
         verify(providerRegistry, never()).require(any());
     }
 
     @Test
     void startVhallTranscode_rejectsWhenOk() {
-        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        MaterialEntity m = material("66666666666666666666666666666666", "video", "11111111111111111111111111111111", "成片.mp4");
         m.setVhallVideoId("old");
         m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_OK);
-        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("66666666666666666666666666666666")).thenReturn(Optional.of(m));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> materialService.startVhallTranscode("v1"));
+                () -> materialService.startVhallTranscode("66666666666666666666666666666666"));
         assertEquals("已转码成功，无需重复上传", ex.getMessage());
     }
 
     @Test
     void startVhallTranscode_allowsRetryAfterFail() {
-        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        MaterialEntity m = material("66666666666666666666666666666666", "video", "11111111111111111111111111111111", "成片.mp4");
         m.setVhallVideoId("old-fail");
         m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_FAIL);
         m.setVhallTranscodeProgress(40);
-        when(materialRepository.findById("v1")).thenReturn(Optional.of(m));
+        when(materialRepository.findById("66666666666666666666666666666666")).thenReturn(Optional.of(m));
         when(providerRegistry.require(VhallLiveProvider.CODE)).thenReturn(liveProvider);
         when(liveProvider.createVideoByUrl("https://cdn/成片.mp4", "成片.mp4")).thenReturn("vid-new");
         when(materialRepository.save(any(MaterialEntity.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        MaterialItemResponse resp = materialService.startVhallTranscode("v1");
+        MaterialItemResponse resp = materialService.startVhallTranscode("66666666666666666666666666666666");
 
         assertEquals("vid-new", resp.getVhallVideoId());
         assertEquals(0, resp.getVhallTranscodeProgress());
@@ -707,7 +707,7 @@ class MaterialServiceTest {
 
     @Test
     void list_includesVhallFieldsForVideo() {
-        MaterialEntity m = material("v1", "video", "g1", "成片.mp4");
+        MaterialEntity m = material("66666666666666666666666666666666", "video", "11111111111111111111111111111111", "成片.mp4");
         m.setVhallVideoId("vid-1");
         m.setVhallTranscodeProgress(45);
         m.setVhallTranscodeStatus(MaterialService.VHALL_TRANSCODE_PENDING);

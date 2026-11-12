@@ -9,5 +9,5 @@ public class CreateAudienceRequest {
     private String phone;
 
     /** 与 phone 二选一；viewer 数字主键 */
-    private Long uid;
+    private String username;
 }

@@ -47,8 +47,8 @@ class RoomUserDataCalculatorTest {
         activity.setLiveActualStartTime(LocalDateTime.of(2026, 10, 29, 10, 0));
         activity.setLiveActualEndTime(LocalDateTime.of(2026, 10, 29, 11, 0));
 
-        RoomReplayWatchEntity r1 = replay(12L, "2026-10-29 12:00:00", "2026-10-29 12:03:00");
-        RoomReplayWatchEntity r2 = replay(99L, "2026-10-29 12:00:00", "2026-10-29 12:01:00");
+        RoomReplayWatchEntity r1 = replay("12", "2026-10-29 12:00:00", "2026-10-29 12:03:00");
+        RoomReplayWatchEntity r2 = replay("user99", "2026-10-29 12:00:00", "2026-10-29 12:01:00");
 
         RoomUserDataCalculator.Result result = RoomUserDataCalculator.compute(
                 activity,
@@ -100,9 +100,9 @@ class RoomUserDataCalculatorTest {
         return entity;
     }
 
-    private static RoomReplayWatchEntity replay(long viewerId, String start, String last) {
+    private static RoomReplayWatchEntity replay(String viewerUsername, String start, String last) {
         RoomReplayWatchEntity row = new RoomReplayWatchEntity();
-        row.setUid(viewerId);
+        row.setUsername(viewerUsername);
         row.setStartTime(LocalDateTime.parse(start.replace(' ', 'T')));
         row.setLastReportTime(LocalDateTime.parse(last.replace(' ', 'T')));
         return row;

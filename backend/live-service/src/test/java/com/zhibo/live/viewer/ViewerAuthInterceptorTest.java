@@ -56,12 +56,12 @@ class ViewerAuthInterceptorTest {
         assertFalse(interceptor.preHandle(request, response, new Object()));
         assertTrue(response.getContentAsString().contains("\"code\":401"));
 
-        String access = jwtTokenService.issueAccess(8L);
+        String access = jwtTokenService.issueAccess("u8");
         MockHttpServletRequest authed = new MockHttpServletRequest("POST", "/api/v1/watch/replay/heartbeat/" + "a".repeat(32));
         authed.addHeader("Authorization", "Bearer " + access);
         MockHttpServletResponse ok = new MockHttpServletResponse();
         assertTrue(interceptor.preHandle(authed, ok, new Object()));
-        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_UID));
+        assertEquals("u8", authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME));
     }
 
     @Test
@@ -72,13 +72,13 @@ class ViewerAuthInterceptorTest {
         assertFalse(interceptor.preHandle(request, response, new Object()));
         assertTrue(response.getContentAsString().contains("\"code\":401"));
 
-        String access = jwtTokenService.issueAccess(8L);
+        String access = jwtTokenService.issueAccess("u8");
         MockHttpServletRequest authed = new MockHttpServletRequest(
                 "POST", "/api/v1/watch/audience/attribute/" + "a".repeat(32));
         authed.addHeader("Authorization", "Bearer " + access);
         MockHttpServletResponse ok = new MockHttpServletResponse();
         assertTrue(interceptor.preHandle(authed, ok, new Object()));
-        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_UID));
+        assertEquals("u8", authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME));
     }
 
     @Test
@@ -89,18 +89,18 @@ class ViewerAuthInterceptorTest {
         assertFalse(interceptor.preHandle(request, response, new Object()));
         assertTrue(response.getContentAsString().contains("\"code\":401"));
 
-        String access = jwtTokenService.issueAccess(8L);
+        String access = jwtTokenService.issueAccess("u8");
         MockHttpServletRequest authed = new MockHttpServletRequest(
                 "POST", "/api/v1/watch/comments/report/" + "a".repeat(32));
         authed.addHeader("Authorization", "Bearer " + access);
         MockHttpServletResponse ok = new MockHttpServletResponse();
         assertTrue(interceptor.preHandle(authed, ok, new Object()));
-        assertEquals(8L, authed.getAttribute(ViewerAuthInterceptor.ATTR_UID));
+        assertEquals("u8", authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME));
     }
 
     @Test
     void refreshTokenAsBearer_rejectedOnMe() throws Exception {
-        String refresh = jwtTokenService.issueRefresh(8L);
+        String refresh = jwtTokenService.issueRefresh("u8");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/user-info");
         request.addHeader("Authorization", "Bearer " + refresh);
         MockHttpServletResponse response = new MockHttpServletResponse();

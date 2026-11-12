@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 public class UpdateViewerBlacklistResponse {
 
     /** 用户中心 uid */
-    private Long uid;
+    private String username;
     private int banComment;
     private int banPurchase;
     private int banAccess;

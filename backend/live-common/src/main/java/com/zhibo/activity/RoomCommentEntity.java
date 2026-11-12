@@ -33,9 +33,9 @@ public class RoomCommentEntity {
     @Column(name = "room_id", length = 64)
     private String roomId;
 
-    /** 用户中心 uid；中控台发券等可空。 */
-    @Column(name = "uid")
-    private Long uid;
+    /** 用户中心 username；中控台发券等可空。 */
+    @Column(name = "username", length = 16)
+    private String username;
 
     @Column(name = "guest_id", length = 64)
     private String guestId;

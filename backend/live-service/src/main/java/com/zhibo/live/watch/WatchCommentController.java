@@ -29,8 +29,8 @@ public class WatchCommentController {
             @PathVariable String id,
             @Valid @RequestBody ReportCommentRequest request,
             HttpServletRequest httpRequest) {
-        long viewerId = requireViewerId(httpRequest);
-        return ApiResponse.ok(watchCommentService.report(id, viewerId, request));
+        String viewerUsername = ViewerAuthInterceptor.requireViewerUsername(httpRequest);
+        return ApiResponse.ok(watchCommentService.report(id, viewerUsername, request));
     }
 
     /** 提问回复 upsert（D107）；任意已登录观众可上报，按微吼提问 id 幂等。 */
@@ -39,7 +39,7 @@ public class WatchCommentController {
             @PathVariable String id,
             @Valid @RequestBody UpsertQuestionAnswerRequest request,
             HttpServletRequest httpRequest) {
-        requireViewerId(httpRequest);
+        ViewerAuthInterceptor.requireViewerUsername(httpRequest);
         return ApiResponse.ok(watchCommentService.upsertQuestionAnswer(id, request));
     }
 
@@ -48,15 +48,7 @@ public class WatchCommentController {
             @PathVariable String id,
             @Valid @RequestBody DeleteCommentRequest request,
             HttpServletRequest httpRequest) {
-        requireViewerId(httpRequest);
+        ViewerAuthInterceptor.requireViewerUsername(httpRequest);
         return ApiResponse.ok(watchCommentService.softDelete(id, request));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null || viewerId <= 0) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
     }
 }

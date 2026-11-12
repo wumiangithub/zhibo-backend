@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
  * 观看 / 中控台 SDK 签名用的头像 URL（D111）。
  * <p>
  * <strong>有无真实头像都拼</strong> {@code ?v=}（已有 {@code v} 则覆盖），取值与进房 email 本地部分一致：
- * 观众 {@code {uid}}、中控台 {@code z{员工id}}、角色 {@code e{员工id}}（若走同类签名）。
+ * 观众 {@code {username}}、中控台 {@code z{员工id}}、角色 {@code e{员工id}}（若走同类签名）。
  * 无真实头像时用默认底座再拼 query。
  * <p>
  * 进房签名另有 {@code account} = 第三方用户唯一标识（同本地部分）；聊天回包未必带回 account，
@@ -21,19 +21,19 @@ public final class SdkAvatarHeads {
     public static final String PLACEHOLDER_BASE_URL =
             "https://qklive-testcos.cjs99.com/viewer/avatar/default-avatar.png";
 
-    /** 与 PresenceUserIds / email 本地部分 / sdk.account 一致：观众数字、{@code z*}/{@code e*}。 */
-    private static final Pattern IDENTITY =
-            Pattern.compile("^(?:[1-9]\\d{0,18}|[ze][1-9]\\d{0,18})$", Pattern.CASE_INSENSITIVE);
+    /** 与 PresenceUserIds / email 本地部分 / sdk.account 一致：观众 username、{@code z*}/{@code e*}。 */
+    private static final Pattern IDENTITY = Pattern.compile(
+            "^(?:[A-Za-z0-9_\\-]{1,16}|[ze][1-9]\\d{0,18})$", Pattern.CASE_INSENSITIVE);
 
     private SdkAvatarHeads() {
     }
 
-    /** 观众身份：{@code v={uid}}。 */
-    public static String resolveForViewer(String avatarUrl, long uid, String defaultBaseUrl) {
-        if (uid <= 0) {
-            throw new IllegalArgumentException("uid 无效");
+    /** 观众身份：{@code v={username}}。 */
+    public static String resolveForViewer(String avatarUrl, String username, String defaultBaseUrl) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("username 无效");
         }
-        return resolveForSign(avatarUrl, Long.toString(uid), defaultBaseUrl);
+        return resolveForSign(avatarUrl, username.trim(), defaultBaseUrl);
     }
 
     /** 中控台身份：{@code v=z{员工id}}（与 {@code z{id}@qkzb.com} / account {@code z{id}} 一致）。 */
@@ -71,7 +71,7 @@ public final class SdkAvatarHeads {
      */
     @Deprecated
     public static String resolveForSign(String avatarUrl, long userId, String defaultBaseUrl) {
-        return resolveForViewer(avatarUrl, userId, defaultBaseUrl);
+        return resolveForViewer(avatarUrl, Long.toString(userId), defaultBaseUrl);
     }
 
     /** 在 URL 后拼 {@code ?v=} / {@code &v=}（已有 {@code v} 则替换）。 */

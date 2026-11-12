@@ -67,7 +67,7 @@ class WatchAccessServiceTest {
     void free_withJwt_ok() {
         ActivityEntity a = base("free", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_OK, r.getAccessState());
     }
 
@@ -83,7 +83,7 @@ class WatchAccessServiceTest {
     void sellAloneFalse_withJwt_okEvenEncrypted() {
         ActivityEntity a = base("encrypted", false);
         when(watchService.requireActivity("aid")).thenReturn(a);
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_OK, r.getAccessState());
     }
 
@@ -91,7 +91,7 @@ class WatchAccessServiceTest {
     void paid_withJwt_ok() {
         ActivityEntity a = base("paid", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_OK, r.getAccessState());
     }
 
@@ -109,7 +109,7 @@ class WatchAccessServiceTest {
         ActivityEntity a = base("encrypted", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
         when(activityAccessTokenService.isValidForActivity(null, "aid")).thenReturn(false);
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_NEED_PASSWORD, r.getAccessState());
     }
 
@@ -118,7 +118,7 @@ class WatchAccessServiceTest {
         ActivityEntity a = base("encrypted", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
         when(activityAccessTokenService.isValidForActivity("tok", "aid")).thenReturn(true);
-        WatchAccessResponse r = service.access("aid", 9L, "tok");
+        WatchAccessResponse r = service.access("aid", "9", "tok");
         assertEquals(WatchAccessService.STATE_OK, r.getAccessState());
     }
 
@@ -130,7 +130,7 @@ class WatchAccessServiceTest {
         a.setLiveActualEndTime(null);
         when(watchService.requireActivity("aid")).thenReturn(a);
         when(activityAccessTokenService.isValidForActivity(null, "aid")).thenReturn(false);
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_NEED_PASSWORD, r.getAccessState());
         assertEquals(false, r.getAccessExpired());
     }
@@ -142,7 +142,7 @@ class WatchAccessServiceTest {
         a.setAccessValidityDays(7);
         a.setLiveActualEndTime(LocalDateTime.of(2026, 10, 1, 12, 0));
         when(watchService.requireActivity("aid")).thenReturn(a);
-        WatchAccessResponse r = service.access("aid", 9L, "tok");
+        WatchAccessResponse r = service.access("aid", "9", "tok");
         assertEquals(WatchAccessService.STATE_EXPIRED, r.getAccessState());
         verify(activityAccessTokenService, never()).isValidForActivity(any(), any());
     }
@@ -159,8 +159,8 @@ class WatchAccessServiceTest {
     void specified_forbidden() {
         ActivityEntity a = base("specified", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
-        when(audienceRepository.findByActivityIdAndUid("aid", 9L)).thenReturn(Optional.empty());
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        when(audienceRepository.findByActivityIdAndUsername("aid", "9")).thenReturn(Optional.empty());
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_FORBIDDEN, r.getAccessState());
     }
 
@@ -170,8 +170,8 @@ class WatchAccessServiceTest {
         when(watchService.requireActivity("aid")).thenReturn(a);
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setEntitlementStatus(1);
-        when(audienceRepository.findByActivityIdAndUid("aid", 9L)).thenReturn(Optional.of(row));
-        WatchAccessResponse r = service.access("aid", 9L, null);
+        when(audienceRepository.findByActivityIdAndUsername("aid", "9")).thenReturn(Optional.of(row));
+        WatchAccessResponse r = service.access("aid", "9", null);
         assertEquals(WatchAccessService.STATE_OK, r.getAccessState());
     }
 
@@ -193,7 +193,7 @@ class WatchAccessServiceTest {
         when(sellPasswordCrypto.decrypt("cipher")).thenReturn("123456");
         when(activityAccessTokenService.defaultExpireSeconds()).thenReturn(86400);
         when(activityAccessTokenService.issue(eq("aid"), anyInt())).thenReturn("jwt");
-        VerifyPasswordResponse r = service.verifyPassword("aid", 9L, "123456");
+        VerifyPasswordResponse r = service.verifyPassword("aid", "9", "123456");
         assertEquals("jwt", r.getAccessToken());
         assertEquals(86400, r.getExpiresIn());
     }
@@ -206,7 +206,7 @@ class WatchAccessServiceTest {
         when(sellPasswordCrypto.decrypt("cipher")).thenReturn("123456");
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
-                () -> service.verifyPassword("aid", 9L, "000000"));
+                () -> service.verifyPassword("aid", "9", "000000"));
         assertEquals("密码错误", ex.getMessage());
     }
 
@@ -225,7 +225,7 @@ class WatchAccessServiceTest {
     void assertAllowed_freeWithJwt_ok() {
         ActivityEntity a = base("free", true);
         when(watchService.requireActivity("aid")).thenReturn(a);
-        service.assertAllowed("aid", 9L, null);
+        service.assertAllowed("aid", "9", null);
     }
 
     @Test
@@ -235,7 +235,7 @@ class WatchAccessServiceTest {
         when(activityAccessTokenService.isValidForActivity(null, "aid")).thenReturn(false);
         WatchAccessException ex = assertThrows(
                 WatchAccessException.class,
-                () -> service.assertAllowed("aid", 9L, null));
+                () -> service.assertAllowed("aid", "9", null));
         assertEquals(403, ex.getCode());
         assertEquals("请输入观看密码", ex.getMessage());
     }

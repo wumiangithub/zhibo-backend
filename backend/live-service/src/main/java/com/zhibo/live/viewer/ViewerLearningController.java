@@ -31,7 +31,7 @@ public class ViewerLearningController {
             @RequestParam(required = false) Integer state,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(
-                learningService.listEntitledLives(requireViewerId(httpRequest), page, pageSize, state));
+                learningService.listEntitledLives(ViewerAuthInterceptor.requireViewerUsername(httpRequest), page, pageSize, state));
     }
 
     @GetMapping("/courses")
@@ -40,14 +40,14 @@ public class ViewerLearningController {
             @RequestParam(defaultValue = "20") int pageSize,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(
-                learningService.listEntitledCourses(requireViewerId(httpRequest), page, pageSize));
+                learningService.listEntitledCourses(ViewerAuthInterceptor.requireViewerUsername(httpRequest), page, pageSize));
     }
 
     @GetMapping("/courses/detail/{courseId}")
     public ApiResponse<ViewerLearningCourseDetailResponse> courseDetail(
             @PathVariable String courseId, HttpServletRequest httpRequest) {
         return ApiResponse.ok(
-                learningService.getCourseDetail(requireViewerId(httpRequest), courseId));
+                learningService.getCourseDetail(ViewerAuthInterceptor.requireViewerUsername(httpRequest), courseId));
     }
 
     @GetMapping("/courses/lessons/{courseId}/{lessonNodeId}")
@@ -57,14 +57,6 @@ public class ViewerLearningController {
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(
                 learningService.getLessonContent(
-                        requireViewerId(httpRequest), courseId, lessonNodeId));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
+                        ViewerAuthInterceptor.requireViewerUsername(httpRequest), courseId, lessonNodeId));
     }
 }

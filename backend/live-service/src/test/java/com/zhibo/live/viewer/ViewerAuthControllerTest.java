@@ -53,7 +53,7 @@ class ViewerAuthControllerTest {
     @Test
     void wechatLogin_withoutPhone_omitsPhoneMasked() throws Exception {
         ViewerUserResponse user = new ViewerUserResponse();
-        user.setUid(1L);
+        user.setUsername("1");
         user.setHasPhone(false);
         ViewerAuthResponse response = new ViewerAuthResponse();
         response.setAccessToken("access");
@@ -68,7 +68,7 @@ class ViewerAuthControllerTest {
                         .content("{\"code\":\"abc\",\"type\":\"phone\",\"agreed\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.user.uid").value(1))
+                .andExpect(jsonPath("$.data.user.username").value("1"))
                 .andExpect(jsonPath("$.data.user.hasPhone").value(false))
                 .andExpect(jsonPath("$.data.user.phoneMasked").doesNotExist())
                 .andExpect(jsonPath("$.data.expiresIn").value(7200));
@@ -90,7 +90,7 @@ class ViewerAuthControllerTest {
     @Test
     void devPhoneLogin_localOrTest_ok() throws Exception {
         ViewerUserResponse user = new ViewerUserResponse();
-        user.setUid(9L);
+        user.setUsername("9");
         user.setHasPhone(true);
         user.setPhoneMasked("138****8000");
         ViewerAuthResponse response = new ViewerAuthResponse();
@@ -106,7 +106,7 @@ class ViewerAuthControllerTest {
                         .content("{\"phone\":\"13800138000\",\"agreed\":true,\"clientType\":\"phone\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.user.uid").value(9))
+                .andExpect(jsonPath("$.data.user.username").value("9"))
                 .andExpect(jsonPath("$.data.user.phoneMasked").value("138****8000"));
     }
 }

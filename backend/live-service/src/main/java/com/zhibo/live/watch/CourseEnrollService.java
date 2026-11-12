@@ -26,24 +26,24 @@ public class CourseEnrollService {
     private final ViewerRepository viewerRepository;
 
     @Transactional
-    public EnrollCourseResponse enroll(String courseId, long viewerId, EnrollCourseRequest request) {
-        if (viewerId <= 0) {
+    public EnrollCourseResponse enroll(String courseId, String viewerUsername, EnrollCourseRequest request) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
             throw new IllegalArgumentException("uid 无效");
         }
         CourseEntity course = requireCourse(courseId);
-        if (!viewerRepository.existsByUid(viewerId)) {
+        if (!viewerRepository.existsByUsername(viewerUsername)) {
             throw new IllegalArgumentException("观众不存在");
         }
 
         boolean created = false;
         CourseUserEntity row = courseUserRepository
-                .findByCourseIdAndUid(course.getId(), viewerId)
+                .findByCourseIdAndUsername(course.getId(), viewerUsername)
                 .orElse(null);
         if (row == null) {
             LocalDateTime now = LocalDateTime.now();
             row = new CourseUserEntity();
             row.setCourseId(course.getId());
-            row.setUid(viewerId);
+            row.setUsername(viewerUsername);
             row.setEntitlementStatus(1);
             row.setAcquireWay("purchase");
             row.setEntitlementExpireTime(CourseEntitlementSupport.expireAtJoin(course, now));
@@ -66,7 +66,7 @@ public class CourseEnrollService {
         }
 
         return new EnrollCourseResponse(
-                row.getId(), row.getUid(), course.getId(), created, course.getTitle());
+                row.getId(), row.getUsername(), course.getId(), created, course.getTitle());
     }
 
     private CourseEntity requireCourse(String courseId) {

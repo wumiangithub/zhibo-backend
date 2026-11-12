@@ -63,9 +63,9 @@ public class PresenceWriteService {
 
         String resolvedNick = nickname;
         String resolvedAvatar = avatarUrl;
-        Long vid = PresenceUserIds.viewerId(userId);
-        if (vid != null) {
-            ViewerProfile profile = resolveViewerProfile(vid);
+        String viewerUsername = PresenceUserIds.viewerUsername(userId);
+        if (viewerUsername != null) {
+            ViewerProfile profile = resolveViewerProfile(viewerUsername);
             resolvedNick = profile.nickname();
             if (profile.avatarUrl() != null) {
                 resolvedAvatar = profile.avatarUrl();
@@ -112,10 +112,10 @@ public class PresenceWriteService {
         return new LeaveResult(roster, eventInserted, false);
     }
 
-    private ViewerProfile resolveViewerProfile(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
+    private ViewerProfile resolveViewerProfile(String viewerUsername) {
+        ViewerEntity viewer = viewerRepository.findByUsername(viewerUsername).orElse(null);
         if (viewer == null) {
-            return new ViewerProfile(ViewerDisplayNames.displayNicknameForId(viewerId), null);
+            return new ViewerProfile(ViewerDisplayNames.displayNicknameForUsername(viewerUsername), null);
         }
         String nick = ViewerDisplayNames.displayNickname(viewer);
         String avatar = viewer.getAvatarUrl();

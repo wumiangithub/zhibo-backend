@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class CourseAnalyticsUserItem {
 
-    private long uid;
+    private String username;
     private String nickname;
     private String avatarUrl;
     /** 0 未开始 / 1 进行中 / 2 已完成 */

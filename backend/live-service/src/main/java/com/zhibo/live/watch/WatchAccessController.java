@@ -31,8 +31,8 @@ public class WatchAccessController {
             @RequestHeader(value = WatchAccessService.HEADER_ACTIVITY_ACCESS, required = false)
                     String activityAccess,
             HttpServletRequest request) {
-        Long viewerId = tryParseViewerId(request);
-        return ApiResponse.ok(watchAccessService.access(id, viewerId, activityAccess));
+        String viewerUsername = tryParseViewerUsername(request);
+        return ApiResponse.ok(watchAccessService.access(id, viewerUsername, activityAccess));
     }
 
     @PostMapping("/verify-password/{id}")
@@ -40,11 +40,11 @@ public class WatchAccessController {
             @PathVariable String id,
             @Valid @RequestBody VerifyPasswordRequest body,
             HttpServletRequest request) {
-        Long viewerId = tryParseViewerId(request);
-        return ApiResponse.ok(watchAccessService.verifyPassword(id, viewerId, body.getPassword()));
+        String viewerUsername = tryParseViewerUsername(request);
+        return ApiResponse.ok(watchAccessService.verifyPassword(id, viewerUsername, body.getPassword()));
     }
 
-    private Long tryParseViewerId(HttpServletRequest request) {
+    private String tryParseViewerUsername(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
         if (header == null || header.isBlank()) {
             return null;
@@ -58,7 +58,7 @@ public class WatchAccessController {
             return null;
         }
         try {
-            return viewerJwtTokenService.parseUserId(token);
+            return viewerJwtTokenService.parseUsername(token);
         } catch (RuntimeException ex) {
             return null;
         }

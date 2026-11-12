@@ -54,10 +54,10 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
     @Query("SELECT a FROM ActivityEntity a WHERE "
             + "a.deletedTime IS NULL AND "
             + "EXISTS (SELECT 1 FROM ActivityAudienceEntity aa WHERE aa.activityId = a.id "
-            + "AND aa.uid = :uid AND aa.entitlementStatus = 1) AND "
+            + "AND aa.username = :username AND aa.entitlementStatus = 1) AND "
             + "(:statesEmpty = true OR a.state IN :states)")
     Page<ActivityEntity> searchEntitledForViewer(
-            @Param("uid") long viewerId,
+            @Param("username") String viewerUsername,
             @Param("statesEmpty") boolean statesEmpty,
             @Param("states") Collection<Integer> states,
             Pageable pageable);

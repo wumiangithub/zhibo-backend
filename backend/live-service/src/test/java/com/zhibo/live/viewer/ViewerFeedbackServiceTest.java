@@ -52,7 +52,7 @@ class ViewerFeedbackServiceTest {
         viewer.setStatus(ViewerStatus.NORMAL);
         viewer.setAgreedTime(LocalDateTime.now());
         viewer.setLastLoginTime(LocalDateTime.now());
-        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUsername("9")).thenReturn(Optional.of(viewer));
         when(feedbackRepository.save(any()))
                 .thenAnswer(
                         inv -> {
@@ -68,7 +68,7 @@ class ViewerFeedbackServiceTest {
         ViewerFeedbackSubmitRequest req = new ViewerFeedbackSubmitRequest();
         req.setCategory(ViewerFeedbackCategory.COURSE_BENEFIT);
         req.setContent(" 课程看不了 ");
-        ViewerFeedbackSubmitResponse resp = service.submit(9L, req);
+        ViewerFeedbackSubmitResponse resp = service.submit("9", req);
         assertEquals(100L, resp.getId());
     }
 
@@ -82,7 +82,7 @@ class ViewerFeedbackServiceTest {
         req.setContent("建议");
         req.setContactPhone("13800138000");
         req.setImages(List.of(img));
-        assertEquals(100L, service.submit(9L, req).getId());
+        assertEquals(100L, service.submit("9", req).getId());
     }
 
     @Test
@@ -91,7 +91,7 @@ class ViewerFeedbackServiceTest {
         req.setCategory(1);
         req.setContent("  ");
         ViewerAuthException ex =
-                assertThrows(ViewerAuthException.class, () -> service.submit(9L, req));
+                assertThrows(ViewerAuthException.class, () -> service.submit("9", req));
         assertEquals(400, ex.getCode());
     }
 
@@ -101,7 +101,7 @@ class ViewerFeedbackServiceTest {
         req.setCategory(1);
         req.setContent("有问题");
         req.setContactPhone("123");
-        assertThrows(ViewerAuthException.class, () -> service.submit(9L, req));
+        assertThrows(ViewerAuthException.class, () -> service.submit("9", req));
     }
 
     @Test
@@ -110,7 +110,7 @@ class ViewerFeedbackServiceTest {
         req.setCategory(4);
         req.setContent("其他");
         req.setContactPhone("  ");
-        assertEquals(100L, service.submit(9L, req).getId());
+        assertEquals(100L, service.submit("9", req).getId());
         ArgumentCaptor<ViewerFeedbackEntity> captor =
                 ArgumentCaptor.forClass(ViewerFeedbackEntity.class);
         verify(feedbackRepository).save(captor.capture());
@@ -121,16 +121,16 @@ class ViewerFeedbackServiceTest {
     void list_ok() {
         ViewerFeedbackEntity row = new ViewerFeedbackEntity();
         row.setId(100L);
-        row.setUid(9L);
+        row.setUsername("9");
         row.setCategory(ViewerFeedbackCategory.COURSE_BENEFIT);
         row.setContent("课程权益无法使用");
         row.setImagesJson(
                 "[{\"url\":\"https://qklive-testcos.cjs99.com/viewer/feedback/9_1.jpg\",\"objectKey\":\"viewer/feedback/9_1.jpg\"}]");
         row.setCreatedTime(LocalDateTime.of(2026, 10, 26, 18, 0, 0));
-        when(feedbackRepository.findByUidOrderByCreatedTimeDesc(any(), any()))
+        when(feedbackRepository.findByUsernameOrderByCreatedTimeDesc(any(), any()))
                 .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1));
 
-        ViewerFeedbackListResponse resp = service.list(9L, 1, 20);
+        ViewerFeedbackListResponse resp = service.list("9", 1, 20);
         assertEquals(1, resp.getTotal());
         assertEquals(1, resp.getList().size());
         assertEquals("课程权益", resp.getList().get(0).getCategoryLabel());
@@ -142,14 +142,14 @@ class ViewerFeedbackServiceTest {
     void detail_ok() {
         ViewerFeedbackEntity row = new ViewerFeedbackEntity();
         row.setId(100L);
-        row.setUid(9L);
+        row.setUsername("9");
         row.setCategory(2);
         row.setContent("卡顿");
         row.setContactPhone("13800138000");
         row.setCreatedTime(LocalDateTime.of(2026, 10, 26, 18, 0, 0));
-        when(feedbackRepository.findByIdAndUid(100L, 9L)).thenReturn(Optional.of(row));
+        when(feedbackRepository.findByIdAndUsername(100L, "9")).thenReturn(Optional.of(row));
 
-        ViewerFeedbackDetailResponse d = service.detail(9L, 100L);
+        ViewerFeedbackDetailResponse d = service.detail("9", 100L);
         assertEquals(100L, d.getId());
         assertEquals("视频播放", d.getCategoryLabel());
         assertEquals("13800138000", d.getContactPhone());
@@ -157,9 +157,9 @@ class ViewerFeedbackServiceTest {
 
     @Test
     void detail_notFound() {
-        when(feedbackRepository.findByIdAndUid(1L, 9L)).thenReturn(Optional.empty());
+        when(feedbackRepository.findByIdAndUsername(1L, "9")).thenReturn(Optional.empty());
         ViewerAuthException ex =
-                assertThrows(ViewerAuthException.class, () -> service.detail(9L, 1L));
+                assertThrows(ViewerAuthException.class, () -> service.detail("9", 1L));
         assertEquals(404, ex.getCode());
     }
 }

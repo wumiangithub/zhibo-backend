@@ -12,13 +12,24 @@ import org.springframework.web.servlet.HandlerInterceptor;
 /**
  * 观众接口 Bearer 鉴权。挂 {@code /api/v1/viewer/**}、回放上报 {@code /api/v1/watch/replay/**}、
  * 邀请归因 {@code /api/v1/watch/audience/**}、评论上报 {@code /api/v1/watch/comments/**}。
- * 白名单是登录和刷新；其它观看与回调不进这里。
  */
 @Component
 public class ViewerAuthInterceptor implements HandlerInterceptor {
 
-    /** 请求属性：用户中心 uid（JWT sub）。 */
-    public static final String ATTR_UID = "uid";
+    /** 请求属性：用户中心 username（JWT sub，D118）。 */
+    public static final String ATTR_VIEWER_USERNAME = "viewerUsername";
+
+    /** 从拦截器写入的请求属性读取观众 username；缺失或空白 → 401。 */
+    public static String requireViewerUsername(HttpServletRequest request) {
+        if (request == null) {
+            throw new ViewerAuthException(401, "未登录");
+        }
+        String username = (String) request.getAttribute(ATTR_VIEWER_USERNAME);
+        if (username == null || username.isBlank()) {
+            throw new ViewerAuthException(401, "未登录");
+        }
+        return username.trim();
+    }
 
     private final ViewerJwtTokenService jwtTokenService;
     private final ObjectMapper objectMapper;
@@ -40,8 +51,8 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
         }
         String token = extractBearer(request.getHeader("Authorization"));
         try {
-            long uid = jwtTokenService.parseUid(token);
-            request.setAttribute(ATTR_UID, uid);
+            String username = jwtTokenService.parseUsername(token);
+            request.setAttribute(ATTR_VIEWER_USERNAME, username);
             return true;
         } catch (ViewerAuthException ex) {
             writeFail(response, ex.getCode(), ex.getMessage());
@@ -49,7 +60,6 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
         }
     }
 
-    /** 观众业务路径。普通 watch / callback 不是；回放、邀请归因、课程 enroll、评论上报需要登录。 */
     static boolean isViewerApi(String path) {
         return path != null && (path.equals("/api/v1/viewer")
                 || path.startsWith("/api/v1/viewer/")
@@ -59,7 +69,6 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
                 || path.startsWith("/api/v1/watch/comments/"));
     }
 
-    /** 白名单 POST：微信一键、手机号授权、local/test 明文手机号、刷新。{@code /user-info} 不在里面。 */
     static boolean isWhitelisted(HttpServletRequest request) {
         if (request == null || !"POST".equalsIgnoreCase(request.getMethod())) {
             return false;

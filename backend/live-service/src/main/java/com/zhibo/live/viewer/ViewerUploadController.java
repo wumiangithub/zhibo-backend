@@ -30,7 +30,7 @@ public class ViewerUploadController {
     /** 直传临时凭证，对齐管理端：无 Query biz；前缀由前端拼 objectKey。 */
     @GetMapping("/tos-sts")
     public ApiResponse<ViewerTosStsResponse> tosSts(HttpServletRequest request) {
-        requireViewerId(request);
+        ViewerAuthInterceptor.requireViewerUsername(request);
         return ApiResponse.ok(viewerTosStsService.issueCredentials());
     }
 
@@ -45,18 +45,10 @@ public class ViewerUploadController {
             @RequestParam(value = "contentType", required = false) String contentType,
             @RequestPart(value = "file", required = false) MultipartFile file,
             HttpServletRequest request) {
-        requireViewerId(request);
+        ViewerAuthInterceptor.requireViewerUsername(request);
         if (biz == null) {
             throw new ViewerAuthException(400, "请指定上传用途");
         }
         return ApiResponse.ok(viewerFileUploadService.upload(biz, objectKey, file, contentType));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
     }
 }

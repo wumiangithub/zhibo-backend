@@ -7,15 +7,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CourseUserRepository extends JpaRepository<CourseUserEntity, Long> {
 
-    Optional<CourseUserEntity> findByCourseIdAndUid(String courseId, Long uid);
+    Optional<CourseUserEntity> findByCourseIdAndUsername(String courseId, String username);
 
     List<CourseUserEntity> findByCourseIdOrderByCreatedTimeDescIdDesc(String courseId);
 
-    List<CourseUserEntity> findByCourseIdAndUidInOrderByCreatedTimeDescIdDesc(
-            String courseId, Collection<Long> uids);
+    List<CourseUserEntity> findByCourseIdAndUsernameInOrderByCreatedTimeDescIdDesc(
+            String courseId, Collection<String> usernames);
 
     List<CourseUserEntity> findByCourseIdAndEntitlementExpireTimeIsNull(String courseId);
 
-    Optional<CourseUserEntity> findByCourseIdAndUidAndEntitlementStatus(
-            String courseId, Long uid, int entitlementStatus);
+    Optional<CourseUserEntity> findByCourseIdAndUsernameAndEntitlementStatus(
+            String courseId, String username, int entitlementStatus);
 }

@@ -60,7 +60,7 @@ public class ViewerLearningService {
     private final MaterialArticleRepository materialArticleRepository;
 
     @Transactional(readOnly = true)
-    public WatchActivityListResponse listEntitledLives(long viewerId, int page, int pageSize, Integer state) {
+    public WatchActivityListResponse listEntitledLives(String viewerUsername, int page, int pageSize, Integer state) {
         assertPage(page, pageSize);
         boolean statesEmpty = state == null || state == 0;
         List<Integer> statesParam = statesEmpty ? List.of(0) : List.of(state);
@@ -69,7 +69,7 @@ public class ViewerLearningService {
                 pageSize,
                 Sort.by(Sort.Order.desc("startTime"), Sort.Order.desc("createdTime")));
         Page<ActivityEntity> result =
-                activityRepository.searchEntitledForViewer(viewerId, statesEmpty, statesParam, pageable);
+                activityRepository.searchEntitledForViewer(viewerUsername, statesEmpty, statesParam, pageable);
 
         WatchActivityListResponse response = new WatchActivityListResponse();
         response.setTotal(result.getTotalElements());
@@ -78,22 +78,22 @@ public class ViewerLearningService {
     }
 
     @Transactional(readOnly = true)
-    public ViewerLearningCourseListResponse listEntitledCourses(long viewerId, int page, int pageSize) {
+    public ViewerLearningCourseListResponse listEntitledCourses(String viewerUsername, int page, int pageSize) {
         assertPage(page, pageSize);
         LocalDateTime now = LocalDateTime.now();
         PageRequest pageable = PageRequest.of(page - 1, pageSize);
-        Page<CourseEntity> result = courseRepository.searchEntitledForViewer(viewerId, now, pageable);
+        Page<CourseEntity> result = courseRepository.searchEntitledForViewer(viewerUsername, now, pageable);
 
         ViewerLearningCourseListResponse response = new ViewerLearningCourseListResponse();
         response.setTotal(result.getTotalElements());
         response.setList(
-                result.getContent().stream().map(course -> toCourseItem(course, viewerId)).toList());
+                result.getContent().stream().map(course -> toCourseItem(course, viewerUsername)).toList());
         return response;
     }
 
     @Transactional(readOnly = true)
-    public ViewerLearningCourseDetailResponse getCourseDetail(long viewerId, String courseIdRaw) {
-        CourseEntity course = requireEntitledCourse(viewerId, courseIdRaw);
+    public ViewerLearningCourseDetailResponse getCourseDetail(String viewerUsername, String courseIdRaw) {
+        CourseEntity course = requireEntitledCourse(viewerUsername, courseIdRaw);
         String courseId = course.getId();
 
         List<CourseCatalogNodeEntity> ordered =
@@ -143,7 +143,7 @@ public class ViewerLearningService {
         }
 
         Map<Long, CourseLessonProgressEntity> progressByLesson = new HashMap<>();
-        for (CourseLessonProgressEntity p : progressRepository.findByCourseIdAndUid(courseId, viewerId)) {
+        for (CourseLessonProgressEntity p : progressRepository.findByCourseIdAndUsername(courseId, viewerUsername)) {
             progressByLesson.put(p.getLessonNodeId(), p);
         }
 
@@ -177,11 +177,11 @@ public class ViewerLearningService {
 
     @Transactional(readOnly = true)
     public ViewerLearningLessonContentResponse getLessonContent(
-            long viewerId, String courseIdRaw, long lessonNodeId) {
+            String viewerUsername, String courseIdRaw, long lessonNodeId) {
         if (lessonNodeId <= 0) {
             throw new IllegalArgumentException("小节 id 无效");
         }
-        CourseEntity course = requireEntitledCourse(viewerId, courseIdRaw);
+        CourseEntity course = requireEntitledCourse(viewerUsername, courseIdRaw);
         String courseId = course.getId();
         CourseCatalogNodeEntity lesson =
                 catalogNodeRepository
@@ -207,7 +207,7 @@ public class ViewerLearningService {
         resp.setContentId(contentId);
 
         progressRepository
-                .findByCourseIdAndLessonNodeIdAndUid(courseId, lesson.getId(), viewerId)
+                .findByCourseIdAndLessonNodeIdAndUsername(courseId, lesson.getId(), viewerUsername)
                 .ifPresentOrElse(
                         p -> {
                             resp.setParticipateStatus(p.getParticipateStatus());
@@ -243,14 +243,14 @@ public class ViewerLearningService {
         return resp;
     }
 
-    private CourseEntity requireEntitledCourse(long viewerId, String courseIdRaw) {
+    private CourseEntity requireEntitledCourse(String viewerUsername, String courseIdRaw) {
         String courseId = UuidIds.require(courseIdRaw, "课程 id 不能为空", "课程 id 无效");
         CourseEntity course = courseRepository
                 .findById(courseId)
                 .filter(c -> c.getDeletedTime() == null)
                 .orElseThrow(() -> new IllegalArgumentException("课程不存在"));
         CourseUserEntity row = courseUserRepository
-                .findByCourseIdAndUidAndEntitlementStatus(courseId, viewerId, 1)
+                .findByCourseIdAndUsernameAndEntitlementStatus(courseId, viewerUsername, 1)
                 .orElseThrow(() -> new IllegalArgumentException("无观看权限"));
         LocalDateTime now = LocalDateTime.now();
         String state = CourseEntitlementSupport.resolveState(
@@ -337,7 +337,7 @@ public class ViewerLearningService {
         return null;
     }
 
-    private ViewerLearningCourseItem toCourseItem(CourseEntity course, long viewerId) {
+    private ViewerLearningCourseItem toCourseItem(CourseEntity course, String viewerUsername) {
         ViewerLearningCourseItem item = new ViewerLearningCourseItem();
         item.setId(course.getId());
         item.setTitle(course.getTitle());
@@ -348,7 +348,7 @@ public class ViewerLearningService {
                         catalogNodeRepository.countActiveByCourseIdAndNodeType(
                                 course.getId(), CourseCatalogNodeType.SUBCOURSE));
         courseUserRepository
-                .findByCourseIdAndUidAndEntitlementStatus(course.getId(), viewerId, 1)
+                .findByCourseIdAndUsernameAndEntitlementStatus(course.getId(), viewerUsername, 1)
                 .map(CourseUserEntity::getCreatedTime)
                 .ifPresent(t -> item.setAcquiredTime(t.format(TIME_FMT)));
         return item;

@@ -600,16 +600,16 @@ class VhallLiveProviderTest {
     @Test
     void buildWatchSdk_signsHeadUrlAndOmitsEmpty() {
         WatchSdkBundle withHead = provider.buildWatchSdk(
-                new WatchSdkCommand("1001", "观众", 12L, " https://cdn.example/a.png "));
+                new WatchSdkCommand("1001", "观众", "12", " https://cdn.example/a.png "));
         assertEquals("https://cdn.example/a.png", withHead.getSdk().getHead());
         assertEquals("12@qkzb.com", withHead.getSdk().getEmail());
         assertEquals(expectedWatchSign(withHead, "https://cdn.example/a.png"), withHead.getSdk().getSign());
 
-        WatchSdkBundle empty = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", 12L, "  "));
+        WatchSdkBundle empty = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", "12", "  "));
         assertEquals("", empty.getSdk().getHead());
         assertEquals(expectedWatchSign(empty, null), empty.getSdk().getSign());
 
-        WatchSdkBundle missing = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", 12L, null));
+        WatchSdkBundle missing = provider.buildWatchSdk(new WatchSdkCommand("1001", "观众", "12", null));
         assertEquals("", missing.getSdk().getHead());
         assertEquals(expectedWatchSign(missing, null), missing.getSdk().getSign());
     }
@@ -630,15 +630,15 @@ class VhallLiveProviderTest {
 
     @Test
     void resolveWatchEmail_usesViewerIdWhenPresent() {
-        assertEquals("12@qkzb.com", VhallLiveProvider.resolveWatchEmail(12L, "guest1"));
+        assertEquals("12@qkzb.com", VhallLiveProvider.resolveWatchEmail("12", "guest1"));
         assertEquals("guest1@zhibo.local", VhallLiveProvider.resolveWatchEmail(null, "guest1"));
-        assertThrows(IllegalArgumentException.class, () -> VhallLiveProvider.resolveWatchEmail(0L, "guest1"));
+        assertEquals("guest1@zhibo.local", VhallLiveProvider.resolveWatchEmail("", "guest1"));
     }
 
     @Test
     void buildWatchSdk_consoleEmailOverride() {
         WatchSdkBundle console = provider.buildWatchSdk(
-                new WatchSdkCommand("1001", "助理", 10001L, "", "z10001@qkzb.com"));
+                new WatchSdkCommand("1001", "助理", "10001", "", "z10001@qkzb.com"));
         assertEquals("z10001@qkzb.com", console.getSdk().getEmail());
         assertEquals("z10001", console.getSdk().getAccount());
         assertEquals("助理", console.getSdk().getUsername());

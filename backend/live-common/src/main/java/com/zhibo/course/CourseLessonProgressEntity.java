@@ -29,9 +29,9 @@ public class CourseLessonProgressEntity {
     @Column(name = "lesson_node_id", nullable = false)
     private Long lessonNodeId;
 
-    /** 用户中心 uid（viewer.uid）。 */
-    @Column(name = "uid", nullable = false)
-    private Long uid;
+    /** 用户中心 username（viewer.username）。 */
+    @Column(name = "username", nullable = false, length = 16)
+    private String username;
 
     /** {@link CourseLessonParticipateStatus} */
     @Column(name = "participate_status", nullable = false)

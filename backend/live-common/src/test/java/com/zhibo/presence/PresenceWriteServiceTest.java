@@ -50,7 +50,7 @@ class PresenceWriteServiceTest {
     void join_guestUserIdSkippedEntirely() {
         PresenceWriteService.JoinResult result = writeService.applyJoin(
                 ROOM,
-                "guest1",
+                "guest!invalid",
                 AttendanceTimes.parse("2026-09-30 11:00:00", "t"),
                 "随便",
                 null,
@@ -71,7 +71,8 @@ class PresenceWriteServiceTest {
         ViewerEntity viewer = new ViewerEntity();
         viewer.setId(12L);
         viewer.setPhone("13612348079");
-        when(viewerRepository.findByUid(12L)).thenReturn(Optional.of(viewer));
+        viewer.setUsername("12");
+        when(viewerRepository.findByUsername("12")).thenReturn(Optional.of(viewer));
         when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER)).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(RoomAttendanceEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -96,7 +97,7 @@ class PresenceWriteServiceTest {
     @Test
     void join_staleEventStillInsertsEventButSkipsRoster() {
         RoomAttendanceEntity existing = row(1L, VIEWER, "2026-09-30 11:00:00", null);
-        when(viewerRepository.findByUid(12L)).thenReturn(Optional.empty());
+        when(viewerRepository.findByUsername("12")).thenReturn(Optional.empty());
         when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER))
                 .thenReturn(Optional.of(existing));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -152,7 +153,7 @@ class PresenceWriteServiceTest {
     void leave_guestSkipped() {
         PresenceWriteService.LeaveResult result = writeService.applyLeave(
                 ROOM,
-                "guest1",
+                "guest!invalid",
                 AttendanceTimes.parse("2026-09-30 10:20:00", "t"),
                 null,
                 "mid-g",

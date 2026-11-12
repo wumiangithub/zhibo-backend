@@ -37,11 +37,11 @@ class ViewerProfileServiceTest {
 
         viewer = new ViewerEntity();
         viewer.setId(9L);
-        viewer.setUid(9L);
+        viewer.setUsername("9");
         viewer.setStatus(ViewerStatus.NORMAL);
         viewer.setAgreedTime(LocalDateTime.now(clock));
         viewer.setLastLoginTime(LocalDateTime.now(clock));
-        when(viewerRepository.findByUid(9L)).thenReturn(Optional.of(viewer));
+        when(viewerRepository.findByUsername("9")).thenReturn(Optional.of(viewer));
         when(viewerRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -49,7 +49,7 @@ class ViewerProfileServiceTest {
     void update_nickname() {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setNickname(" 钱坤用户 ");
-        ViewerUserResponse user = service.update(9L, req);
+        ViewerUserResponse user = service.update("9", req);
         assertEquals("钱坤用户", user.getNickname());
         assertEquals("钱坤用户", viewer.getNickname());
     }
@@ -58,7 +58,7 @@ class ViewerProfileServiceTest {
     void update_rejectsEmptyNickname() {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setNickname("  ");
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update(9L, req));
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update("9", req));
         assertEquals(400, ex.getCode());
         assertEquals("请输入昵称", ex.getMessage());
     }
@@ -67,7 +67,7 @@ class ViewerProfileServiceTest {
     void update_rejectsTooLongNickname() {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setNickname("一二三四五六七八九十一二三四五六七");
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update(9L, req));
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update("9", req));
         assertEquals("昵称最多16字", ex.getMessage());
     }
 
@@ -77,7 +77,7 @@ class ViewerProfileServiceTest {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setAvatarUrl("https://evil.example/viewer/avatar/9_1.png");
         req.setAvatarObjectKey("viewer/avatar/9_1.png");
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update(9L, req));
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update("9", req));
         assertEquals("头像地址无效", ex.getMessage());
     }
 
@@ -85,7 +85,7 @@ class ViewerProfileServiceTest {
     void update_avatarRequiresObjectKey() {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setAvatarUrl("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png");
-        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update(9L, req));
+        ViewerAuthException ex = assertThrows(ViewerAuthException.class, () -> service.update("9", req));
         assertEquals("请同时提交头像地址和对象键", ex.getMessage());
     }
 
@@ -95,7 +95,7 @@ class ViewerProfileServiceTest {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setAvatarUrl("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png");
         req.setAvatarObjectKey("viewer/avatar/9_1.png");
-        ViewerUserResponse user = service.update(9L, req);
+        ViewerUserResponse user = service.update("9", req);
         assertEquals("viewer/avatar/9_1.png", user.getAvatarObjectKey());
         assertEquals(req.getAvatarUrl(), user.getAvatarUrl());
         assertEquals("viewer/avatar/9_1.png", viewer.getAvatarObjectKey());

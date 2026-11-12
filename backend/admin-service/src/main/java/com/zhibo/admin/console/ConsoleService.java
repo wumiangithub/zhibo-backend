@@ -189,7 +189,8 @@ public class ConsoleService {
         String email = PresenceUserIds.consoleEmail(employeeId);
 
         WatchSdkBundle bundle = providerRegistry.require(entity.getProvider())
-                .buildWatchSdk(new WatchSdkCommand(roomId, nickname, employeeId, head, email));
+                .buildWatchSdk(new WatchSdkCommand(
+                        roomId, nickname, Long.toString(employeeId), head, email));
 
         ConsoleSdkSignResponse response = new ConsoleSdkSignResponse();
         response.setId(entity.getId());
@@ -301,8 +302,8 @@ public class ConsoleService {
         ConsoleQuestionHistoryItem item = new ConsoleQuestionHistoryItem();
         String questionId = blankToNull(c.getQuestionId());
         item.setQuestionId(questionId);
-        if (c.getUid() != null && c.getUid() > 0) {
-            item.setSenderId(Long.toString(c.getUid()));
+        if (c.getUsername() != null && !c.getUsername().isBlank()) {
+            item.setSenderId(c.getUsername().trim());
         }
         String nick = blankToNull(c.getNickname());
         item.setSenderName(nick != null ? nick : "观众");

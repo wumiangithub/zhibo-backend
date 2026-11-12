@@ -57,8 +57,8 @@ public class WatchQuestionHistoryService {
         WatchQuestionHistoryItem item = new WatchQuestionHistoryItem();
         String questionId = blankToNull(c.getQuestionId());
         item.setQuestionId(questionId);
-        if (c.getUid() != null && c.getUid() > 0) {
-            item.setSenderId(Long.toString(c.getUid()));
+        if (c.getUsername() != null && !c.getUsername().isBlank()) {
+            item.setSenderId(c.getUsername().trim());
         }
         String nick = blankToNull(c.getNickname());
         item.setSenderName(nick != null ? nick : "观众");

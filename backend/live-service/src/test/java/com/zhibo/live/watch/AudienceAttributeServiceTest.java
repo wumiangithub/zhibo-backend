@@ -71,7 +71,7 @@ class AudienceAttributeServiceTest {
     @Test
     void attribute_employee_writesInviterWhenEmpty() {
         stubActivityAndViewer();
-        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUsername(AID, "12")).thenReturn(Optional.empty());
         when(audienceRepository.save(any())).thenAnswer(inv -> {
             ActivityAudienceEntity row = inv.getArgument(0);
             row.setId(99L);
@@ -82,9 +82,9 @@ class AudienceAttributeServiceTest {
         req.setInviterId(10001L);
         req.setInviterKind("employee");
 
-        var res = service.attribute(AID, 12L, req);
+        var res = service.attribute(AID, "12", req);
         assertEquals(99L, res.getId());
-        assertEquals(12L, res.getUid());
+        assertEquals("12", res.getUsername());
 
         ArgumentCaptor<ActivityAudienceEntity> cap =
                 ArgumentCaptor.forClass(ActivityAudienceEntity.class);
@@ -102,7 +102,7 @@ class AudienceAttributeServiceTest {
 
         IllegalArgumentException ex =
                 assertThrows(
-                        IllegalArgumentException.class, () -> service.attribute(AID, 12L, req));
+                        IllegalArgumentException.class, () -> service.attribute(AID, "12", req));
         assertEquals("不记录观众邀请", ex.getMessage());
         verify(audienceRepository, never()).save(any());
     }
@@ -117,7 +117,7 @@ class AudienceAttributeServiceTest {
 
         IllegalArgumentException ex =
                 assertThrows(
-                        IllegalArgumentException.class, () -> service.attribute(AID, 12L, req));
+                        IllegalArgumentException.class, () -> service.attribute(AID, "12", req));
         assertEquals("inviterKind 须为 employee 或 audience", ex.getMessage());
     }
 
@@ -127,10 +127,10 @@ class AudienceAttributeServiceTest {
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setEmployeeInviterId(277L);
         row.setImporterId(20002L);
-        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.of(row));
+        when(audienceRepository.findByActivityIdAndUsername(AID, "12")).thenReturn(Optional.of(row));
         stubInviter(277L, 12476L, HR_IDENTIFIER, 94L);
 
-        var res = service.resolveSalesman(AID, 12L);
+        var res = service.resolveSalesman(AID, "12");
         assertEquals(HR_IDENTIFIER, res.getSalesmanId());
         assertEquals(94L, res.getSalesmanDeptId());
     }
@@ -140,9 +140,9 @@ class AudienceAttributeServiceTest {
         stubActivityOnly();
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setImporterId(20002L);
-        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.of(row));
+        when(audienceRepository.findByActivityIdAndUsername(AID, "12")).thenReturn(Optional.of(row));
 
-        var res = service.resolveSalesman(AID, 12L);
+        var res = service.resolveSalesman(AID, "12");
         assertNull(res.getSalesmanId());
         assertNull(res.getSalesmanDeptId());
         verify(employeeAccountRepository, never()).findById(any());
@@ -151,9 +151,9 @@ class AudienceAttributeServiceTest {
     @Test
     void resolveSalesman_nullWhenNoRow() {
         stubActivityOnly();
-        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.empty());
+        when(audienceRepository.findByActivityIdAndUsername(AID, "12")).thenReturn(Optional.empty());
 
-        var res = service.resolveSalesman(AID, 12L);
+        var res = service.resolveSalesman(AID, "12");
         assertNull(res.getSalesmanId());
         assertNull(res.getSalesmanDeptId());
     }
@@ -163,7 +163,7 @@ class AudienceAttributeServiceTest {
         stubActivityOnly();
         ActivityAudienceEntity row = new ActivityAudienceEntity();
         row.setEmployeeInviterId(277L);
-        when(audienceRepository.findByActivityIdAndUid(AID, 12L)).thenReturn(Optional.of(row));
+        when(audienceRepository.findByActivityIdAndUsername(AID, "12")).thenReturn(Optional.of(row));
         EmployeeAccountEntity acc = new EmployeeAccountEntity();
         acc.setId(277L);
         acc.setYhid(12476L);
@@ -174,7 +174,7 @@ class AudienceAttributeServiceTest {
         when(hrEmployeeRepository.findById(12476L)).thenReturn(Optional.of(hr));
         when(hrEmployeePostRepository.findActiveWithDeptByYhid(12476L)).thenReturn(List.of());
 
-        var res = service.resolveSalesman(AID, 12L);
+        var res = service.resolveSalesman(AID, "12");
         assertEquals(HR_IDENTIFIER, res.getSalesmanId());
         assertNull(res.getSalesmanDeptId());
     }
@@ -206,6 +206,6 @@ class AudienceAttributeServiceTest {
         ActivityEntity activity = new ActivityEntity();
         activity.setId(AID);
         when(activityRepository.findById(AID)).thenReturn(Optional.of(activity));
-        when(viewerRepository.existsByUid(12L)).thenReturn(true);
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
     }
 }

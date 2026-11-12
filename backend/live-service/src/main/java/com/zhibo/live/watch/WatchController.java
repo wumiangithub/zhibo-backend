@@ -47,8 +47,8 @@ public class WatchController {
             @PathVariable String id,
             @RequestParam(required = false) String guestId,
             @RequestParam(required = false) String nickname,
-            @RequestParam(required = false) Long uid) {
-        return ApiResponse.ok(watchService.watch(id, guestId, nickname, uid));
+            @RequestParam(required = false) String username) {
+        return ApiResponse.ok(watchService.watch(id, guestId, nickname, username));
     }
 
     /** 观看页壳摘要（D95）；须过售卖门禁。 */
@@ -56,8 +56,8 @@ public class WatchController {
     public ApiResponse<WatchSummaryResponse> summary(
             @PathVariable String id,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchService.summary(id));
     }
 
@@ -67,7 +67,7 @@ public class WatchController {
             @RequestParam String id,
             @RequestParam(required = false) String nickname,
             HttpServletRequest request) {
-        Long resolvedViewer = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
+        String resolvedViewer = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
         watchAccessService.assertAllowed(
                 id, resolvedViewer, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchSdkService.sdk(id, nickname, resolvedViewer));
@@ -78,8 +78,8 @@ public class WatchController {
     public ApiResponse<WatchProductListResponse> products(
             @PathVariable String id,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchService.listProducts(id));
     }
 
@@ -88,8 +88,8 @@ public class WatchController {
     public ApiResponse<WatchRecordListResponse> records(
             @PathVariable String id,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchService.listRecords(id));
     }
 
@@ -99,8 +99,8 @@ public class WatchController {
             @PathVariable String id,
             @RequestParam(defaultValue = "1") int page,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchChatHistoryService.list(id, page));
     }
 
@@ -109,8 +109,8 @@ public class WatchController {
     public ApiResponse<WatchQuestionHistoryResponse> questionHistory(
             @PathVariable String id,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchQuestionHistoryService.list(id));
     }
 
@@ -119,8 +119,8 @@ public class WatchController {
     public ApiResponse<WatchCouponListResponse> coupons(
             @PathVariable String id,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchCouponService.listCoupons(id));
     }
 
@@ -129,8 +129,8 @@ public class WatchController {
     public ApiResponse<WatchCouponHistoryResponse> couponHistory(
             @PathVariable String id,
             HttpServletRequest request) {
-        Long viewerId = WatchAccessHeaders.tryUid(request, viewerJwtTokenService);
-        watchAccessService.assertAllowed(id, viewerId, WatchAccessHeaders.activityAccess(request));
+        String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchCouponService.history(id));
     }
 }

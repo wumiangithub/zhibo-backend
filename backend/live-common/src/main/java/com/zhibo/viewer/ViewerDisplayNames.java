@@ -26,11 +26,24 @@ public final class ViewerDisplayNames {
                 return "用户" + tail;
             }
         }
+        String username = viewer.getUsername();
+        if (username != null && !username.isBlank()) {
+            return "用户_" + username.trim();
+        }
         Long id = viewer.getId();
         return "用户_" + (id != null ? id : 0);
     }
 
     /** 无实体行时仍给出可展示的兜底（缺库行 / 已删）。 */
+    public static String displayNicknameForUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return "用户_0";
+        }
+        return "用户_" + username.trim();
+    }
+
+    /** @deprecated 用 {@link #displayNicknameForUsername(String)}。 */
+    @Deprecated
     public static String displayNicknameForId(long viewerId) {
         if (viewerId <= 0) {
             return "用户_0";

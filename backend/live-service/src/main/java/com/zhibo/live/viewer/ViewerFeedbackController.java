@@ -28,7 +28,7 @@ public class ViewerFeedbackController {
     @PostMapping("/submit")
     public ApiResponse<ViewerFeedbackSubmitResponse> submit(
             @RequestBody ViewerFeedbackSubmitRequest request, HttpServletRequest httpRequest) {
-        return ApiResponse.ok(viewerFeedbackService.submit(requireViewerId(httpRequest), request));
+        return ApiResponse.ok(viewerFeedbackService.submit(ViewerAuthInterceptor.requireViewerUsername(httpRequest), request));
     }
 
     @GetMapping("/list")
@@ -37,20 +37,12 @@ public class ViewerFeedbackController {
             @RequestParam(value = "pageSize", required = false) Integer pageSize,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(
-                viewerFeedbackService.list(requireViewerId(httpRequest), page, pageSize));
+                viewerFeedbackService.list(ViewerAuthInterceptor.requireViewerUsername(httpRequest), page, pageSize));
     }
 
     @GetMapping("/detail/{id}")
     public ApiResponse<ViewerFeedbackDetailResponse> detail(
             @PathVariable("id") long id, HttpServletRequest httpRequest) {
-        return ApiResponse.ok(viewerFeedbackService.detail(requireViewerId(httpRequest), id));
-    }
-
-    private static long requireViewerId(HttpServletRequest request) {
-        Long viewerId = (Long) request.getAttribute(ViewerAuthInterceptor.ATTR_UID);
-        if (viewerId == null) {
-            throw new ViewerAuthException(401, "未登录");
-        }
-        return viewerId;
+        return ApiResponse.ok(viewerFeedbackService.detail(ViewerAuthInterceptor.requireViewerUsername(httpRequest), id));
     }
 }

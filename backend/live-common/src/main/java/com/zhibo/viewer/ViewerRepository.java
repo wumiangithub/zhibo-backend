@@ -12,9 +12,12 @@ public interface ViewerRepository extends JpaRepository<ViewerEntity, Long>, Jpa
 
     Optional<ViewerEntity> findByPhone(String phone);
 
-    Optional<ViewerEntity> findByUid(Long uid);
+    Optional<ViewerEntity> findByUsername(String username);
 
-    boolean existsByUid(Long uid);
+    boolean existsByUsername(String username);
+
+    /** 备查：按用户中心 uid 反查行（非业务主路径）。 */
+    Optional<ViewerEntity> findByUid(Long uid);
 
     List<ViewerEntity> findByPhoneIn(Collection<String> phones);
 
@@ -22,5 +25,5 @@ public interface ViewerRepository extends JpaRepository<ViewerEntity, Long>, Jpa
 
     List<ViewerEntity> findByIdIn(Collection<Long> ids);
 
-    List<ViewerEntity> findByUidIn(Collection<Long> uids);
+    List<ViewerEntity> findByUsernameIn(Collection<String> usernames);
 }

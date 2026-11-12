@@ -106,11 +106,11 @@ public class ViewerAdminService {
             return emptyPage(page, pageSize);
         }
 
-        if ("id".equals(type) && !kw.isEmpty()) {
-            Long idExact = parsePositiveLong(kw);
-            if (idExact == null) {
-                return emptyPage(page, pageSize);
-            }
+        if ("id".equals(type) && kw.length() > 16) {
+            return emptyPage(page, pageSize);
+        }
+        if ("id".equals(type) && !kw.isEmpty() && parsePositiveLong(kw) == null) {
+            return emptyPage(page, pageSize);
         }
 
         Sort sortSpec = resolveSort(sort, order);
@@ -118,7 +118,7 @@ public class ViewerAdminService {
             List<Predicate> preds = new ArrayList<>();
             if (!kw.isEmpty()) {
                 switch (type) {
-                    case "id" -> preds.add(cb.equal(root.get("uid"), Long.parseLong(kw)));
+                    case "id" -> preds.add(cb.equal(root.get("username"), kw));
                     case "phone" -> preds.add(cb.like(root.get("phone"), "%" + kw + "%"));
                     default -> preds.add(cb.like(root.get("nickname"), "%" + kw + "%"));
                 }
@@ -141,14 +141,14 @@ public class ViewerAdminService {
         };
 
         Page<ViewerEntity> result = viewerRepository.findAll(spec, PageRequest.of(page - 1, pageSize, sortSpec));
-        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(result.getContent());
+        Map<String, List<TagRef>> tagsByViewer = loadTagsByViewer(result.getContent());
 
         ViewerListResponse response = new ViewerListResponse();
         response.setPage(page);
         response.setPageSize(pageSize);
         response.setTotal(result.getTotalElements());
         for (ViewerEntity row : result.getContent()) {
-            response.getList().add(toItem(row, tagsByViewer.getOrDefault(row.getUid(), List.of())));
+            response.getList().add(toItem(row, tagsByViewer.getOrDefault(row.getUsername(), List.of())));
         }
         return response;
     }
@@ -185,14 +185,14 @@ public class ViewerAdminService {
         Sort sortSpec = resolveLearningSort(sort, order);
         Specification<ViewerEntity> spec = viewerKeywordTagSpec(type, kw, filterTagIds, match);
         Page<ViewerEntity> result = viewerRepository.findAll(spec, PageRequest.of(page - 1, pageSize, sortSpec));
-        Map<Long, List<TagRef>> tagsByViewer = loadTagsByViewer(result.getContent());
+        Map<String, List<TagRef>> tagsByViewer = loadTagsByViewer(result.getContent());
 
         LearningSummaryListResponse response = new LearningSummaryListResponse();
         response.setPage(page);
         response.setPageSize(pageSize);
         response.setTotal(result.getTotalElements());
         for (ViewerEntity row : result.getContent()) {
-            response.getList().add(toLearningSummaryItem(row, tagsByViewer.getOrDefault(row.getUid(), List.of())));
+            response.getList().add(toLearningSummaryItem(row, tagsByViewer.getOrDefault(row.getUsername(), List.of())));
         }
         return response;
     }
@@ -218,38 +218,42 @@ public class ViewerAdminService {
         }
 
         boolean filterViewers = !kw.isEmpty() || !filterTagIds.isEmpty();
-        List<Long> viewerIdFilter = null;
+        List<String> viewerUsernameFilter = null;
         if (filterViewers) {
             List<ViewerEntity> matched =
                     viewerRepository.findAll(viewerKeywordTagSpec(type, kw, filterTagIds, match));
             if (matched.isEmpty()) {
                 return emptyLearningCourses(page, pageSize);
             }
-            viewerIdFilter = matched.stream().map(ViewerEntity::getUid).filter(java.util.Objects::nonNull).toList();
+            viewerUsernameFilter = matched.stream()
+                    .map(ViewerEntity::getUsername)
+                    .filter(u -> u != null && !u.isBlank())
+                    .map(String::trim)
+                    .toList();
         }
 
-        List<Long> finalViewerIds = viewerIdFilter;
+        List<String> finalViewerUsernames = viewerUsernameFilter;
         Specification<CourseLessonProgressEntity> progressSpec = (root, query, cb) -> {
-            if (finalViewerIds == null) {
+            if (finalViewerUsernames == null) {
                 return cb.conjunction();
             }
-            return root.get("uid").in(finalViewerIds);
+            return root.get("username").in(finalViewerUsernames);
         };
         Page<CourseLessonProgressEntity> result = courseLessonProgressRepository.findAll(
                 progressSpec, PageRequest.of(page - 1, pageSize, Sort.by(Sort.Direction.DESC, "id")));
 
         List<CourseLessonProgressEntity> rows = result.getContent();
-        Set<Long> viewerIds = rows.stream().map(CourseLessonProgressEntity::getUid).collect(Collectors.toSet());
+        Set<String> viewerUsernames = rows.stream().map(CourseLessonProgressEntity::getUsername).collect(Collectors.toSet());
         Set<Long> lessonIds =
                 rows.stream().map(CourseLessonProgressEntity::getLessonNodeId).collect(Collectors.toSet());
 
-        Map<Long, ViewerEntity> viewersById = new HashMap<>();
-        if (!viewerIds.isEmpty()) {
-            for (ViewerEntity v : viewerRepository.findByUidIn(viewerIds)) {
-                viewersById.put(v.getUid(), v);
+        Map<String, ViewerEntity> viewersById = new HashMap<>();
+        if (!viewerUsernames.isEmpty()) {
+            for (ViewerEntity v : viewerRepository.findByUsernameIn(viewerUsernames)) {
+                viewersById.put(v.getUsername(), v);
             }
         }
-        Map<Long, List<TagRef>> tagsByViewer =
+        Map<String, List<TagRef>> tagsByViewer =
                 loadTagsByViewer(new ArrayList<>(viewersById.values()));
 
         Map<Long, CourseCatalogNodeEntity> nodesById = new HashMap<>();
@@ -279,13 +283,13 @@ public class ViewerAdminService {
         response.setPageSize(pageSize);
         response.setTotal(result.getTotalElements());
         for (CourseLessonProgressEntity row : rows) {
-            ViewerEntity viewer = viewersById.get(row.getUid());
+            ViewerEntity viewer = viewersById.get(row.getUsername());
             CourseCatalogNodeEntity node = nodesById.get(row.getLessonNodeId());
             response.getList()
                     .add(toLearningCourseItem(
                             row,
                             viewer,
-                            tagsByViewer.getOrDefault(row.getUid(), List.of()),
+                            tagsByViewer.getOrDefault(row.getUsername(), List.of()),
                             node,
                             materialsById));
         }
@@ -300,14 +304,14 @@ public class ViewerAdminService {
             Map<String, MaterialEntity> materialsById) {
         LearningCourseListItem item = new LearningCourseListItem();
         item.setId(row.getId());
-        item.setUid(row.getUid());
+        item.setUsername(row.getUsername());
         if (viewer != null) {
             item.setNickname(displayNickname(viewer));
             if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
                 item.setAvatarUrl(viewer.getAvatarUrl().trim());
             }
         } else {
-            item.setNickname("用户_" + row.getUid());
+            item.setNickname("用户_" + row.getUsername());
         }
         List<Long> tagIds = new ArrayList<>();
         List<String> tagLabels = new ArrayList<>();
@@ -412,18 +416,18 @@ public class ViewerAdminService {
         Root<ViewerTagMemberEntity> m = sq.from(ViewerTagMemberEntity.class);
         sq.select(m.get("id"));
         sq.where(
-                cb.equal(m.get("uid"), root.get("uid")),
+                cb.equal(m.get("username"), root.get("username")),
                 m.get("tagId").in(tagIds));
         return cb.exists(sq);
     }
 
     @Transactional
     public UpdateViewerBlacklistResponse updateBlacklist(
-            long id, int banComment, int banPurchase, int banAccess) {
+            String username, int banComment, int banPurchase, int banAccess) {
         requireFlag(banComment, "banComment");
         requireFlag(banPurchase, "banPurchase");
         requireFlag(banAccess, "banAccess");
-        ViewerEntity viewer = requireViewer(id);
+        ViewerEntity viewer = requireViewer(username);
         viewer.setBanComment(banComment);
         viewer.setBanPurchase(banPurchase);
         viewer.setBanAccess(banAccess);
@@ -431,7 +435,7 @@ public class ViewerAdminService {
         viewer.setUpdatedTime(LocalDateTime.now());
         viewerRepository.save(viewer);
         return new UpdateViewerBlacklistResponse(
-                viewer.getUid(),
+                viewer.getUsername(),
                 viewer.getBanComment(),
                 viewer.getBanPurchase(),
                 viewer.getBanAccess(),
@@ -439,11 +443,11 @@ public class ViewerAdminService {
     }
 
     @Transactional
-    public UpdateViewerTagsResponse updateTags(long id, List<Long> tagIds) {
-        ViewerEntity viewer = requireViewer(id);
-        Long memberUid = viewer.getUid();
-        if (memberUid == null || memberUid <= 0) {
-            throw new IllegalArgumentException("观众 uid 无效");
+    public UpdateViewerTagsResponse updateTags(String username, List<Long> tagIds) {
+        ViewerEntity viewer = requireViewer(username);
+        String memberUsername = viewer.getUsername();
+        if (memberUsername == null || memberUsername.isBlank()) {
+            throw new IllegalArgumentException("观众 username 无效");
         }
         List<Long> requested = normalizeTagIds(tagIds);
         Map<Long, ViewerTagEntity> tagMap = loadActiveTags(requested);
@@ -457,7 +461,7 @@ public class ViewerAdminService {
             }
         }
 
-        List<ViewerTagMemberEntity> existing = viewerTagMemberRepository.findByUid(memberUid);
+        List<ViewerTagMemberEntity> existing = viewerTagMemberRepository.findByUsername(memberUsername);
         Set<Long> existingTagIds = new HashSet<>();
         for (ViewerTagMemberEntity m : existing) {
             existingTagIds.add(m.getTagId());
@@ -475,14 +479,14 @@ public class ViewerAdminService {
         for (Long tagId : requested) {
             ViewerTagMemberEntity row = new ViewerTagMemberEntity();
             row.setTagId(tagId);
-            row.setUid(memberUid);
+            row.setUsername(memberUsername);
             row.setCreatedTime(now);
             viewerTagMemberRepository.save(row);
         }
 
-        List<TagRef> all = resolveTags(viewerTagMemberRepository.findByUid(memberUid));
+        List<TagRef> all = resolveTags(viewerTagMemberRepository.findByUsername(memberUsername));
         UpdateViewerTagsResponse res = new UpdateViewerTagsResponse();
-        res.setUid(id);
+        res.setUsername(memberUsername);
         for (TagRef ref : all) {
             res.getTagIds().add(ref.tagId());
             res.getTagLabels().add(ref.name());
@@ -539,21 +543,21 @@ public class ViewerAdminService {
         return Sort.by(dir, property).and(Sort.by(Sort.Direction.DESC, "id"));
     }
 
-    private Map<Long, List<TagRef>> loadTagsByViewer(List<ViewerEntity> viewers) {
+    private Map<String, List<TagRef>> loadTagsByViewer(List<ViewerEntity> viewers) {
         if (viewers.isEmpty()) {
             return Map.of();
         }
-        List<Long> viewerIds = viewers.stream()
-                .map(ViewerEntity::getUid)
+        List<String> viewerUsernames = viewers.stream()
+                .map(ViewerEntity::getUsername)
                 .filter(java.util.Objects::nonNull)
                 .toList();
-        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByUidIn(viewerIds);
+        List<ViewerTagMemberEntity> members = viewerTagMemberRepository.findByUsernameIn(viewerUsernames);
         if (members.isEmpty()) {
             return Map.of();
         }
-        Map<Long, List<TagRef>> grouped = new HashMap<>();
+        Map<String, List<TagRef>> grouped = new HashMap<>();
         for (TagRefWithViewer ref : resolveTagsWithViewer(members)) {
-            grouped.computeIfAbsent(ref.uid(), k -> new ArrayList<>())
+            grouped.computeIfAbsent(ref.username(), k -> new ArrayList<>())
                     .add(new TagRef(ref.tagId(), ref.name()));
         }
         return grouped;
@@ -582,7 +586,7 @@ public class ViewerAdminService {
             if (tag == null) {
                 continue;
             }
-            out.add(new TagRefWithViewer(m.getUid(), tag.getId(), tag.getName()));
+            out.add(new TagRefWithViewer(m.getUsername(), tag.getId(), tag.getName()));
         }
         return out;
     }
@@ -639,7 +643,7 @@ public class ViewerAdminService {
             List<Predicate> preds = new ArrayList<>();
             if (!kw.isEmpty()) {
                 switch (type) {
-                    case "id" -> preds.add(cb.equal(root.get("uid"), Long.parseLong(kw)));
+                    case "id" -> preds.add(cb.equal(root.get("username"), kw));
                     case "phone" -> preds.add(cb.like(root.get("phone"), "%" + kw + "%"));
                     default -> preds.add(cb.like(root.get("nickname"), "%" + kw + "%"));
                 }
@@ -680,8 +684,8 @@ public class ViewerAdminService {
 
     private static LearningSummaryListItem toLearningSummaryItem(ViewerEntity viewer, List<TagRef> tags) {
         LearningSummaryListItem item = new LearningSummaryListItem();
-        if (viewer.getUid() != null) {
-            item.setUid(viewer.getUid());
+        if (viewer.getUsername() != null) {
+            item.setUsername(viewer.getUsername());
         }
         item.setNickname(displayNickname(viewer));
         if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
@@ -720,8 +724,8 @@ public class ViewerAdminService {
 
     private static ViewerListItem toItem(ViewerEntity viewer, List<TagRef> tags) {
         ViewerListItem item = new ViewerListItem();
-        if (viewer.getUid() != null) {
-            item.setUid(viewer.getUid());
+        if (viewer.getUsername() != null) {
+            item.setUsername(viewer.getUsername());
         }
         item.setNickname(displayNickname(viewer));
         if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
@@ -758,10 +762,13 @@ public class ViewerAdminService {
         return item;
     }
 
-    /** @param uid 用户中心 uid（列表/路径上的用户 id） */
-    private ViewerEntity requireViewer(long uid) {
+    /** @param username 用户中心 username（业务用户 id） */
+    private ViewerEntity requireViewer(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("观众不存在");
+        }
         return viewerRepository
-                .findByUid(uid)
+                .findByUsername(username.trim())
                 .orElseThrow(() -> new IllegalArgumentException("观众不存在"));
     }
 
@@ -867,5 +874,5 @@ public class ViewerAdminService {
 
     private record TagRef(long tagId, String name) {}
 
-    private record TagRefWithViewer(long uid, long tagId, String name) {}
+    private record TagRefWithViewer(String username, long tagId, String name) {}
 }

@@ -26,9 +26,9 @@ public class CourseUserEntity {
     @Column(name = "course_id", nullable = false, length = 32)
     private String courseId;
 
-    /** 用户中心 uid（viewer.uid）。 */
-    @Column(name = "uid", nullable = false)
-    private Long uid;
+    /** 用户中心 username（viewer.username）。 */
+    @Column(name = "username", nullable = false, length = 16)
+    private String username;
 
     /** 1 有权 / 0 已取消。 */
     @Column(name = "entitlement_status", nullable = false)

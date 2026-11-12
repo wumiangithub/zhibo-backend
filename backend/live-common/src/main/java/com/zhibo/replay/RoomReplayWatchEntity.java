@@ -26,9 +26,9 @@ public class RoomReplayWatchEntity {
     @Column(name = "room_id", nullable = false, length = 32)
     private String roomId;
 
-    /** 用户中心 uid（viewer.uid）。 */
-    @Column(name = "uid", nullable = false)
-    private Long uid;
+    /** 用户中心 username（viewer.username）。 */
+    @Column(name = "username", nullable = false, length = 16)
+    private String username;
 
     @Column(name = "record_id", nullable = false)
     private Long recordId;

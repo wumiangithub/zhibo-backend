@@ -181,15 +181,15 @@ public class WatchService {
                 && (state == STATE_ENDED || state == STATE_VOD || state == STATE_REPLAY);
     }
 
-    public WatchResponse watch(String activityId, String guestId, String nickname, Long viewerId) {
+    public WatchResponse watch(String activityId, String guestId, String nickname, String viewerUsername) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
         LiveProvider provider = providerRegistry.require(entity.getProvider());
 
         String resolvedGuestId = VhallLiveProvider.resolveGuestId(guestId);
-        // 与 /watch/sdk-sign 一致：有 viewerId 时优先用客户端展示昵称（小程序 URL）
-        String resolvedNickname = WatchSdkService.resolveSdkNickname(nickname, viewerId);
-        String email = VhallLiveProvider.resolveWatchEmail(viewerId, resolvedGuestId);
+        // 与 /watch/sdk-sign 一致：有 viewerUsername 时优先用客户端展示昵称（小程序 URL）
+        String resolvedNickname = WatchSdkService.resolveSdkNickname(nickname, viewerUsername);
+        String email = VhallLiveProvider.resolveWatchEmail(viewerUsername, resolvedGuestId);
 
         ProviderRoomSnapshot info = provider.fetchRoom(entity.getProviderRoomId());
         String baseEmbed = info.fullEmbedShareLink();

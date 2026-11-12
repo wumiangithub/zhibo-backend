@@ -61,6 +61,7 @@ class AuthInterceptorTest {
         assertFalse(AuthInterceptor.isWhitelisted("/api/v1/auth/me"));
         assertTrue(AuthInterceptor.isWhitelisted("/api/v1/auth/login"));
         assertTrue(AuthInterceptor.isWhitelisted("/api/v1/auth/refresh"));
+        assertTrue(AuthInterceptor.isWhitelisted("/api/v1/auth/dev-account-login"));
     }
 
     @Test

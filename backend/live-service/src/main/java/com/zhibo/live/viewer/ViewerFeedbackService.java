@@ -62,8 +62,8 @@ public class ViewerFeedbackService {
     }
 
     @Transactional
-    public ViewerFeedbackSubmitResponse submit(long viewerId, ViewerFeedbackSubmitRequest request) {
-        requireViewer(viewerId);
+    public ViewerFeedbackSubmitResponse submit(String viewerUsername, ViewerFeedbackSubmitRequest request) {
+        requireViewer(viewerUsername);
         if (request == null) {
             throw new ViewerAuthException(400, "请填写反馈内容");
         }
@@ -81,7 +81,7 @@ public class ViewerFeedbackService {
         List<ViewerFeedbackImageItem> images = normalizeImages(request.getImages());
 
         ViewerFeedbackEntity row = new ViewerFeedbackEntity();
-        row.setUid(viewerId);
+        row.setUsername(viewerUsername);
         row.setCategory(request.getCategory());
         row.setContent(content);
         row.setContactPhone(phone);
@@ -91,8 +91,8 @@ public class ViewerFeedbackService {
     }
 
     @Transactional(readOnly = true)
-    public ViewerFeedbackListResponse list(long viewerId, Integer page, Integer pageSize) {
-        requireViewer(viewerId);
+    public ViewerFeedbackListResponse list(String viewerUsername, Integer page, Integer pageSize) {
+        requireViewer(viewerUsername);
         int p = page == null ? DEFAULT_PAGE : page;
         int size = pageSize == null ? DEFAULT_PAGE_SIZE : pageSize;
         if (p < 1) {
@@ -102,8 +102,8 @@ public class ViewerFeedbackService {
             throw new ViewerAuthException(400, "每页条数无效");
         }
         Page<ViewerFeedbackEntity> result =
-                feedbackRepository.findByUidOrderByCreatedTimeDesc(
-                        viewerId, PageRequest.of(p - 1, size));
+                feedbackRepository.findByUsernameOrderByCreatedTimeDesc(
+                        viewerUsername, PageRequest.of(p - 1, size));
         List<ViewerFeedbackListItem> list = new ArrayList<>(result.getContent().size());
         for (ViewerFeedbackEntity e : result.getContent()) {
             list.add(toListItem(e));
@@ -112,17 +112,17 @@ public class ViewerFeedbackService {
     }
 
     @Transactional(readOnly = true)
-    public ViewerFeedbackDetailResponse detail(long viewerId, long id) {
-        requireViewer(viewerId);
+    public ViewerFeedbackDetailResponse detail(String viewerUsername, long id) {
+        requireViewer(viewerUsername);
         ViewerFeedbackEntity row =
                 feedbackRepository
-                        .findByIdAndUid(id, viewerId)
+                        .findByIdAndUsername(id, viewerUsername)
                         .orElseThrow(() -> new ViewerAuthException(404, "反馈不存在"));
         return toDetail(row);
     }
 
-    private ViewerEntity requireViewer(long viewerId) {
-        ViewerEntity viewer = viewerRepository.findByUid(viewerId).orElse(null);
+    private ViewerEntity requireViewer(String viewerUsername) {
+        ViewerEntity viewer = viewerRepository.findByUsername(viewerUsername).orElse(null);
         if (viewer == null) {
             throw new ViewerAuthException(401, "未登录");
         }
