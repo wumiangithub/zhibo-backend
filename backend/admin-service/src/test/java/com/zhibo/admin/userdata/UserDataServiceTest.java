@@ -94,7 +94,7 @@ class UserDataServiceTest {
     private static PresenceEventEntity event(String userId, String type, String socketId, String time) {
         PresenceEventEntity entity = new PresenceEventEntity();
         entity.setId((long) Math.abs((userId + type + socketId + time).hashCode()));
-        entity.setUserId(userId);
+        entity.setUsername(userId);
         entity.setType(type);
         entity.setSocketId(socketId);
         entity.setEventTime(LocalDateTime.parse(time.replace(' ', 'T')));

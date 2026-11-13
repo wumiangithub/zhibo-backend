@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DashboardBusinessService {
 
     /** 已支付：2已付款 / 3退款中 / 4部分退款 / 5全部退款；不含 1待付款。 */
-    static final List<Integer> PAID_STATUSES = List.of(2, 3, 4, 5);
+    public static final List<Integer> PAID_STATUSES = List.of(2, 3, 4, 5);
 
     static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
@@ -71,7 +71,7 @@ public class DashboardBusinessService {
     }
 
     /** 空金额按 0；固定两位小数、直接进制，不走科学计数法。 */
-    static String formatAmount(BigDecimal amount) {
+    public static String formatAmount(BigDecimal amount) {
         if (amount == null) {
             return "0.00";
         }

@@ -40,6 +40,7 @@ import com.zhibo.admin.activity.dto.UpdateActivityMemberRequest;
 import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.notification.AdminNotificationService;
 import com.zhibo.activity.RecordDemandFinalizeService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
@@ -132,6 +133,8 @@ class ActivityServiceTest {
     private ActivityRecordTosIngestService activityRecordTosIngestService;
     @Mock
     private com.zhibo.activity.cloud.ActivityCloudSyncService activityCloudSyncService;
+    @Mock
+    private AdminNotificationService adminNotificationService;
 
     @InjectMocks
     private ActivityService activityService;

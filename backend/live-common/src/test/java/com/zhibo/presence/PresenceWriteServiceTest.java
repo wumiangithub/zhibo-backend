@@ -73,7 +73,7 @@ class PresenceWriteServiceTest {
         viewer.setPhone("13612348079");
         viewer.setUsername("12");
         when(viewerRepository.findByUsername("12")).thenReturn(Optional.of(viewer));
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER)).thenReturn(Optional.empty());
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, VIEWER)).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(RoomAttendanceEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -98,7 +98,7 @@ class PresenceWriteServiceTest {
     void join_staleEventStillInsertsEventButSkipsRoster() {
         RoomAttendanceEntity existing = row(1L, VIEWER, "2026-09-30 11:00:00", null);
         when(viewerRepository.findByUsername("12")).thenReturn(Optional.empty());
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER))
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, VIEWER))
                 .thenReturn(Optional.of(existing));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
 
@@ -129,7 +129,7 @@ class PresenceWriteServiceTest {
     @Test
     void join_midDuplicateIsFullyIdempotent() {
         when(eventRepository.existsByMid("mid-dup")).thenReturn(true);
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, VIEWER))
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, VIEWER))
                 .thenReturn(Optional.of(row(1L, VIEWER, "2026-09-30 11:00:00", null)));
 
         PresenceWriteService.JoinResult result = writeService.applyJoin(
@@ -167,7 +167,7 @@ class PresenceWriteServiceTest {
 
     @Test
     void leave_missingStillInsertsEvent() {
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, STAFF)).thenReturn(Optional.empty());
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, STAFF)).thenReturn(Optional.empty());
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
 
         PresenceWriteService.LeaveResult result = writeService.applyLeave(
@@ -187,7 +187,7 @@ class PresenceWriteServiceTest {
     @Test
     void leave_alreadyLeftStillInsertsEventButSkipsRoster() {
         RoomAttendanceEntity existing = row(1L, STAFF, "2026-09-30 10:00:00", "2026-09-30 10:05:00");
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, STAFF))
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, STAFF))
                 .thenReturn(Optional.of(existing));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
 
@@ -209,9 +209,9 @@ class PresenceWriteServiceTest {
     @Test
     void leave_otherSocketStillOpenSkipsRoster() {
         RoomAttendanceEntity existing = row(1L, STAFF, "2026-09-30 10:00:00", null);
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, STAFF))
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, STAFF))
                 .thenReturn(Optional.of(existing));
-        when(eventRepository.findByRoomIdAndUserIdOrderByEventTimeAscIdAsc(ROOM, STAFF))
+        when(eventRepository.findByRoomIdAndUsernameOrderByEventTimeAscIdAsc(ROOM, STAFF))
                 .thenReturn(List.of(event(STAFF, PresenceEventEntity.TYPE_JOIN, "sock-a", "2026-09-30 10:00:00")));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
 
@@ -233,7 +233,7 @@ class PresenceWriteServiceTest {
     @Test
     void leave_duplicateEventInsertReturnsOkAsSkippedPathUsesInserterFalse() {
         RoomAttendanceEntity existing = row(1L, STAFF, "2026-09-30 10:00:00", null);
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, STAFF))
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, STAFF))
                 .thenReturn(Optional.of(existing));
         when(attendanceRepository.save(any(RoomAttendanceEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -262,7 +262,7 @@ class PresenceWriteServiceTest {
 
     @Test
     void join_firstTimeInsertsRosterAndEvent_staffKeepsContextNick() {
-        when(attendanceRepository.findByRoomIdAndUserId(ROOM, STAFF)).thenReturn(Optional.empty());
+        when(attendanceRepository.findByRoomIdAndUsername(ROOM, STAFF)).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(RoomAttendanceEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(eventInserter.insert(any(), any(), any(), any(), any(), any(), any())).thenReturn(true);
@@ -282,7 +282,7 @@ class PresenceWriteServiceTest {
         ArgumentCaptor<RoomAttendanceEntity> row = ArgumentCaptor.forClass(RoomAttendanceEntity.class);
         verify(attendanceRepository).save(row.capture());
         assertEquals(result.attendanceId(), row.getValue().getId());
-        assertEquals(STAFF, row.getValue().getUserId());
+        assertEquals(STAFF, row.getValue().getUsername());
         assertEquals("助理甲", row.getValue().getNickname());
         assertNull(row.getValue().getLeaveTime());
         verify(viewerRepository, never()).findById(any());
@@ -292,7 +292,7 @@ class PresenceWriteServiceTest {
         RoomAttendanceEntity entity = new RoomAttendanceEntity();
         entity.setId(id);
         entity.setRoomId(ROOM);
-        entity.setUserId(userId);
+        entity.setUsername(userId);
         entity.setEnterTime(AttendanceTimes.parse(enter, "enter"));
         if (leave != null) {
             entity.setLeaveTime(AttendanceTimes.parse(leave, "leave"));
@@ -304,7 +304,7 @@ class PresenceWriteServiceTest {
         PresenceEventEntity entity = new PresenceEventEntity();
         entity.setId((long) Math.abs((type + "-" + socketId + "-" + time).hashCode()));
         entity.setRoomId(ROOM);
-        entity.setUserId(userId);
+        entity.setUsername(userId);
         entity.setType(type);
         entity.setSocketId(socketId);
         entity.setEventTime(AttendanceTimes.parse(time, "t"));

@@ -1,10 +1,13 @@
 package com.zhibo.live.watch;
 
+import com.zhibo.live.viewer.ViewerAuthInterceptor;
 import com.zhibo.live.viewer.ViewerJwtTokenService;
 import com.zhibo.live.watch.dto.WatchActivityListResponse;
 import com.zhibo.live.watch.dto.WatchChatHistoryResponse;
 import com.zhibo.live.watch.dto.WatchCouponHistoryResponse;
 import com.zhibo.live.watch.dto.WatchCouponListResponse;
+import com.zhibo.live.watch.dto.WatchProductClickRequest;
+import com.zhibo.live.watch.dto.WatchProductClickResponse;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchQuestionHistoryResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
@@ -13,9 +16,12 @@ import com.zhibo.live.watch.dto.WatchSdkResponse;
 import com.zhibo.live.watch.dto.WatchSummaryResponse;
 import com.zhibo.live.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,6 +38,7 @@ public class WatchController {
     private final WatchChatHistoryService watchChatHistoryService;
     private final WatchQuestionHistoryService watchQuestionHistoryService;
     private final WatchCouponService watchCouponService;
+    private final ProductClickService productClickService;
     private final ViewerJwtTokenService viewerJwtTokenService;
 
     @GetMapping("/activities")
@@ -81,6 +88,17 @@ public class WatchController {
         String viewerUsername = WatchAccessHeaders.tryUsername(request, viewerJwtTokenService);
         watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
         return ApiResponse.ok(watchService.listProducts(id));
+    }
+
+    /** 小黄车「去抢购」点击埋点；须观众 JWT + 售卖门禁。 */
+    @PostMapping("/products/click/{id}")
+    public ApiResponse<WatchProductClickResponse> productClick(
+            @PathVariable String id,
+            @Valid @RequestBody WatchProductClickRequest body,
+            HttpServletRequest request) {
+        String viewerUsername = ViewerAuthInterceptor.requireViewerUsername(request);
+        watchAccessService.assertAllowed(id, viewerUsername, WatchAccessHeaders.activityAccess(request));
+        return ApiResponse.ok(productClickService.click(id, viewerUsername, body.getSpuId()));
     }
 
     /** 回放 id 列表；须过售卖门禁（D90）。 */

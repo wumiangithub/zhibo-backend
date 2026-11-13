@@ -7,7 +7,7 @@ import java.util.Optional;
 
 public interface RoomAttendanceRepository extends JpaRepository<RoomAttendanceEntity, String> {
 
-    Optional<RoomAttendanceEntity> findByRoomIdAndUserId(String roomId, String userId);
+    Optional<RoomAttendanceEntity> findByRoomIdAndUsername(String roomId, String username);
 
     List<RoomAttendanceEntity> findByRoomId(String roomId);
 }

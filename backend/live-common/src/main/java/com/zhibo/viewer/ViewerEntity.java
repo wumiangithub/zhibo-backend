@@ -69,10 +69,6 @@ public class ViewerEntity {
     @Column(name = "avatar_url", length = 512)
     private String avatarUrl;
 
-    /** 头像 TOS 对象键，与 avatarUrl 成对。 */
-    @Column(name = "avatar_object_key", length = 1024)
-    private String avatarObjectKey;
-
     /** {@link ViewerStatus#NORMAL} / {@link ViewerStatus#DISABLED}。与 {@link #banAccess} 同步。 */
     @Column(nullable = false)
     private int status = ViewerStatus.NORMAL;

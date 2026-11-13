@@ -181,6 +181,7 @@
           "观众资料"
         ],
         "summary": "更新昵称/头像",
+        "description": "至少传 nickname 或成对的 avatarUrl+avatarObjectKey。头像只落库 avatar_url；avatarObjectKey 仅校验。成功 data 只回 nickname 与 avatarUrl（有则回），不回完整 user。",
         "operationId": "viewerProfileUpdate",
         "security": [
           {
@@ -203,7 +204,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponseViewerUserInfo"
+                  "$ref": "#/components/schemas/ApiResponseViewerProfileUpdate"
                 }
               }
             }
@@ -3300,12 +3301,8 @@
           },
           "avatarUrl": {
             "type": "string",
-            "description": "头像 URL；库：VARCHAR(512)",
+            "description": "头像访问地址（库列 avatar_url）。无头像时省略。；库：VARCHAR(512)",
             "maxLength": 512
-          },
-          "avatarObjectKey": {
-            "type": "string",
-            "description": "头像对象存储 key"
           }
         }
       },
@@ -3458,17 +3455,33 @@
           "nickname": {
             "type": "string",
             "maxLength": 16,
-            "description": "昵称；库：VARCHAR(16)"
+            "description": "有则 trim 后写入。空 → 400「请输入昵称」；超 16 → 400「昵称最多16字」。省略则不改。；库：VARCHAR(16)"
           },
           "avatarUrl": {
             "type": "string",
             "maxLength": 512,
-            "description": "头像 URL；库：VARCHAR(512)"
+            "description": "与 avatarObjectKey 成对。校验通过后写入 viewer.avatar_url。空、超 512、host 非本站 CDN/桶、或路径不是该对象键 → 400「头像地址无效」。；库：VARCHAR(512)"
           },
           "avatarObjectKey": {
             "type": "string",
             "maxLength": 1024,
-            "description": "头像对象存储 key；库：VARCHAR(1024)"
+            "description": "与 avatarUrl 成对。须以 viewer/avatar/ 开头，且 avatarUrl 以 /{avatarObjectKey} 结尾。仅请求校验，不落库、不回。；库：VARCHAR(1024)"
+          }
+        }
+      },
+      "ViewerProfileUpdateData": {
+        "type": "object",
+        "description": "资料更新成功 data。只含昵称与头像；无则省略。不回 username / miniOpenid / hasPhone / phoneMasked / avatarObjectKey。",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "description": "当前昵称。库无昵称时省略。；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "当前头像访问地址（库列 avatar_url）。库无头像时省略。；库：VARCHAR(512)",
+            "maxLength": 512
           }
         }
       },
@@ -4645,6 +4658,22 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/ViewerUserInfo"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseViewerProfileUpdate": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ViewerProfileUpdateData"
               }
             }
           }

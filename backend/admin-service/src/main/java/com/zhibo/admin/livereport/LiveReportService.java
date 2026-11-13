@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.notification.AdminNotificationService;
 import com.zhibo.common.UuidIds;
 import com.zhibo.livereport.*;
 import com.zhibo.material.MaterialAudit;
@@ -36,6 +37,7 @@ public class LiveReportService {
     private final MaterialRepository materials;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final AdminNotificationService adminNotificationService;
 
     /**
      * 一次提交 1～10 段计划时间。校验通过后按段各插入一条报备：各自 UUID、各自一段计划时间、
@@ -135,7 +137,10 @@ public class LiveReportService {
         String reason=req.reason()==null?null:req.reason().trim();
         if ("rejected".equals(req.result()) && (reason==null || reason.isEmpty())) throw new IllegalArgumentException("驳回原因不能为空");
         SysUserAccountEntity operator=user(userId,"当前员工不存在"); e.setStatus(req.result()); reports.save(e);
-        addAudit(id,"audit",req.result(),reason,operator); return new LiveReportDtos.Result(id,e.getStatus());
+        addAudit(id,"audit",req.result(),reason,operator);
+        adminNotificationService.notifyLiveReportAuditQuietly(
+                e.getId(), e.getTitle(), req.result(), e.getSubmitterId());
+        return new LiveReportDtos.Result(id,e.getStatus());
     }
 
     /**

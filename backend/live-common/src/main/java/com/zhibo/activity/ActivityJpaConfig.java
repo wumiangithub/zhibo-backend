@@ -13,8 +13,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  */
 @AutoConfiguration
 @EnableConfigurationProperties(SellPasswordProperties.class)
-@EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer", "com.zhibo.dict"})
-@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer", "com.zhibo.dict"})
+@EntityScan({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer", "com.zhibo.dict", "com.zhibo.notification"})
+@EnableJpaRepositories({"com.zhibo.activity", "com.zhibo.presence", "com.zhibo.replay", "com.zhibo.material", "com.zhibo.liveaccount", "com.zhibo.liverole", "com.zhibo.livereport", "com.zhibo.course", "com.zhibo.viewer", "com.zhibo.dict", "com.zhibo.notification"})
 @ComponentScan(
         basePackages = {
             "com.zhibo.liveprovider",

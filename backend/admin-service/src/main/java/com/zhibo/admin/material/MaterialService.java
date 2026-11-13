@@ -19,6 +19,7 @@ import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.notification.AdminNotificationService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.material.MaterialArticleEntity;
@@ -76,6 +77,7 @@ public class MaterialService {
     private final MaterialAuditLogRepository auditLogRepository;
     private final SysUserAccountRepository userRepository;
     private final LiveProviderRegistry providerRegistry;
+    private final AdminNotificationService adminNotificationService;
 
     public List<MaterialGroupResponse> listGroups(String type) {
         String t = requireType(type);
@@ -449,6 +451,8 @@ public class MaterialService {
         entity.setAiAuditStatus(status);
         materialRepository.save(entity);
         addAuditLog(entity.getId(), "ai", status, requireOperator(operatorId));
+        adminNotificationService.notifyMaterialAuditQuietly(
+                entity.getId(), entity.getName(), "ai", status, entity.getUploaderId());
         return toItemResponse(entity);
     }
 
@@ -459,6 +463,8 @@ public class MaterialService {
         entity.setRiskAuditStatus(status);
         materialRepository.save(entity);
         addAuditLog(entity.getId(), "risk", status, requireOperator(operatorId));
+        adminNotificationService.notifyMaterialAuditQuietly(
+                entity.getId(), entity.getName(), "risk", status, entity.getUploaderId());
         return toItemResponse(entity);
     }
 

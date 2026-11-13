@@ -31,8 +31,9 @@ public class PresenceEventEntity {
     @Column(name = "room_id", nullable = false, length = 32)
     private String roomId;
 
-    @Column(name = "user_id", nullable = false, length = 128)
-    private String userId;
+    /** 邮箱本地部分：观众 username / e{员工id} / z{员工id}。 */
+    @Column(nullable = false, length = 128)
+    private String username;
 
     @Column(name = "socket_id", length = 64)
     private String socketId;

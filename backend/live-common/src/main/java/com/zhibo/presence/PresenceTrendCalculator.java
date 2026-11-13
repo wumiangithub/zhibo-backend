@@ -15,7 +15,7 @@ import java.util.Set;
  * 把进出事件聚合成时间桶。
  * <ul>
  *   <li>{@code enter}/{@code leave}：该桶内 Join/Leave <strong>事件条数</strong></li>
- *   <li>{@code online}：桶结束时「当前在房」人数——按 {@code user_id} 去重。
+ *   <li>{@code online}：桶结束时「当前在房」人数——按 {@code username} 去重。
  *       有 {@code socket_id} 时，Leave 只在该人没有其它未闭合连接时移出</li>
  * </ul>
  */
@@ -89,23 +89,23 @@ public final class PresenceTrendCalculator {
     }
 
     private static void applyToOnlineSet(Map<String, Set<String>> openSockets, PresenceEventEntity event) {
-        String userId = event.getUserId();
-        if (userId == null || userId.isBlank()) {
+        String username = event.getUsername();
+        if (username == null || username.isBlank()) {
             return;
         }
         String socketKey = event.getSocketId() == null || event.getSocketId().isBlank()
                 ? "_legacy"
                 : event.getSocketId().trim();
         if (PresenceEventEntity.TYPE_JOIN.equals(event.getType())) {
-            openSockets.computeIfAbsent(userId, k -> new HashSet<>()).add(socketKey);
+            openSockets.computeIfAbsent(username, k -> new HashSet<>()).add(socketKey);
         } else if (PresenceEventEntity.TYPE_LEAVE.equals(event.getType())) {
-            Set<String> sockets = openSockets.get(userId);
+            Set<String> sockets = openSockets.get(username);
             if (sockets == null) {
                 return;
             }
             sockets.remove(socketKey);
             if (sockets.isEmpty()) {
-                openSockets.remove(userId);
+                openSockets.remove(username);
             }
         }
     }

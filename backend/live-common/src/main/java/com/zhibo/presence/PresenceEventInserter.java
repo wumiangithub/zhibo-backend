@@ -23,7 +23,7 @@ public class PresenceEventInserter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean insert(
             String roomId,
-            String userId,
+            String username,
             String type,
             LocalDateTime eventTime,
             String mid,
@@ -35,16 +35,16 @@ public class PresenceEventInserter {
         }
         String normalizedSocket = blankToNull(socketId);
         boolean duplicate = normalizedSocket == null
-                ? eventRepository.existsByRoomIdAndUserIdAndTypeAndEventTimeAndSource(
-                        roomId, userId, type, eventTime, source)
-                : eventRepository.existsByRoomIdAndUserIdAndTypeAndEventTimeAndSourceAndSocketId(
-                        roomId, userId, type, eventTime, source, normalizedSocket);
+                ? eventRepository.existsByRoomIdAndUsernameAndTypeAndEventTimeAndSource(
+                        roomId, username, type, eventTime, source)
+                : eventRepository.existsByRoomIdAndUsernameAndTypeAndEventTimeAndSourceAndSocketId(
+                        roomId, username, type, eventTime, source, normalizedSocket);
         if (duplicate) {
             return false;
         }
         PresenceEventEntity event = new PresenceEventEntity();
         event.setRoomId(roomId);
-        event.setUserId(userId);
+        event.setUsername(username);
         event.setSocketId(normalizedSocket);
         event.setType(type);
         event.setEventTime(eventTime);

@@ -99,6 +99,23 @@ class ViewerAuthInterceptorTest {
     }
 
     @Test
+    void productClick_requiresViewerAccess() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST", "/api/v1/watch/products/click/" + "a".repeat(32));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertFalse(interceptor.preHandle(request, response, new Object()));
+        assertTrue(response.getContentAsString().contains("\"code\":401"));
+
+        String access = jwtTokenService.issueAccess("u8");
+        MockHttpServletRequest authed = new MockHttpServletRequest(
+                "POST", "/api/v1/watch/products/click/" + "a".repeat(32));
+        authed.addHeader("Authorization", "Bearer " + access);
+        MockHttpServletResponse ok = new MockHttpServletResponse();
+        assertTrue(interceptor.preHandle(authed, ok, new Object()));
+        assertEquals("u8", authed.getAttribute(ViewerAuthInterceptor.ATTR_VIEWER_USERNAME));
+    }
+
+    @Test
     void refreshTokenAsBearer_rejectedOnMe() throws Exception {
         String refresh = jwtTokenService.issueRefresh("u8");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/viewer/auth/user-info");

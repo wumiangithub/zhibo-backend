@@ -45,9 +45,9 @@ public class AttendeeRoster {
 
         Map<String, RoomAttendanceEntity> byUser = new LinkedHashMap<>();
         for (RoomAttendanceEntity row : attendanceRepository.findByRoomId(activity.getId())) {
-            RoomAttendanceEntity current = byUser.get(row.getUserId());
+            RoomAttendanceEntity current = byUser.get(row.getUsername());
             if (current == null || isLaterVisit(row, current)) {
-                byUser.put(row.getUserId(), row);
+                byUser.put(row.getUsername(), row);
             }
         }
 
@@ -58,7 +58,7 @@ public class AttendeeRoster {
                 continue;
             }
             boolean online = resolveOnline(row, forceOffline);
-            onlineByUser.put(row.getUserId(), online);
+            onlineByUser.put(row.getUsername(), online);
             if ("online".equals(normalizedTab) && !online) {
                 continue;
             }
@@ -73,7 +73,7 @@ public class AttendeeRoster {
         int to = (int) Math.min(from + (long) pageSize, matched.size());
         List<AttendeeRow> pageItems = new ArrayList<>();
         for (RoomAttendanceEntity row : matched.subList(from, to)) {
-            pageItems.add(toRow(row, onlineByUser.getOrDefault(row.getUserId(), false)));
+            pageItems.add(toRow(row, onlineByUser.getOrDefault(row.getUsername(), false)));
         }
         return new AttendeePage(activity.getState(), matched.size(), page, pageSize, pageItems);
     }
@@ -119,7 +119,7 @@ public class AttendeeRoster {
 
     private static AttendeeRow toRow(RoomAttendanceEntity row, boolean online) {
         return new AttendeeRow(
-                row.getUserId(),
+                row.getUsername(),
                 emptyToNull(row.getNickname()),
                 emptyToNull(row.getAvatarUrl()),
                 AttendanceTimes.format(row.getEnterTime()),

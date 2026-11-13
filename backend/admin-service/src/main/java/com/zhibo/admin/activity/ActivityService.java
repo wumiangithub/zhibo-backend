@@ -56,6 +56,7 @@ import com.zhibo.admin.activity.dto.UpdateActivityRequest;
 import com.zhibo.admin.auth.AuthService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.notification.AdminNotificationService;
 import com.zhibo.admin.material.MaterialService;
 import com.zhibo.activity.ActivityReady;
 import com.zhibo.activity.ActivityRecordEntity;
@@ -151,6 +152,7 @@ public class ActivityService {
     private final ActivityRecordTosIngestService activityRecordTosIngestService;
     private final ActivityRecordListSyncService activityRecordListSyncService;
     private final ActivityCloudSyncService activityCloudSyncService;
+    private final AdminNotificationService adminNotificationService;
 
     @Transactional
     public CreateActivityResponse create(CreateActivityRequest request, long operatorId) {
@@ -770,6 +772,12 @@ public class ActivityService {
         }
         activityRepository.save(entity);
         addAudit(entity.getId(), "audit", result, reason, operator);
+        List<Long> ownerIds = ownerRepository.findByActivityIds(List.of(entity.getId())).stream()
+                .map(row -> row.getId().getUserId())
+                .filter(Objects::nonNull)
+                .toList();
+        adminNotificationService.notifyLiveAuditQuietly(
+                entity.getId(), entity.getTitle(), result, ownerIds);
         return new AuditResultResponse(entity.getId(), entity.getRiskStatus(), entity.getShelfStatus());
     }
 

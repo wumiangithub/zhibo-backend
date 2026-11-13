@@ -29,9 +29,9 @@ public class RoomAttendanceEntity {
     @Column(name = "room_id", nullable = false, length = 32)
     private String roomId;
 
-    /** 邮箱里的用户 id（观众数字 / 员工 e{id}）。 */
-    @Column(name = "user_id", nullable = false, length = 128)
-    private String userId;
+    /** 邮箱本地部分：观众 username / e{员工id} / z{员工id}。 */
+    @Column(nullable = false, length = 128)
+    private String username;
 
     @Column(length = 128)
     private String nickname;

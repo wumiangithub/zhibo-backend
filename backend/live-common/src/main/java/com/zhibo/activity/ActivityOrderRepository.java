@@ -3,6 +3,7 @@ package com.zhibo.activity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -33,4 +34,13 @@ public interface ActivityOrderRepository extends JpaRepository<ActivityOrderEnti
     @Query("SELECT COALESCE(SUM(o.payAmount), 0) FROM ActivityOrderEntity o "
             + "WHERE o.orderStatus IN :statuses")
     BigDecimal sumPayAmountByStatuses(@Param("statuses") Collection<Integer> statuses);
+
+    /** 按商品聚合本场已支付订单：productId / 去重 username / pay_amount 求和。product_id 空的行不计入。 */
+    @Query("SELECT o.productId, COUNT(DISTINCT o.username), COALESCE(SUM(o.payAmount), 0) "
+            + "FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderStatus IN :statuses AND o.productId IS NOT NULL "
+            + "GROUP BY o.productId")
+    List<Object[]> aggregatePaidByProduct(
+            @Param("activityId") String activityId,
+            @Param("statuses") Collection<Integer> statuses);
 }

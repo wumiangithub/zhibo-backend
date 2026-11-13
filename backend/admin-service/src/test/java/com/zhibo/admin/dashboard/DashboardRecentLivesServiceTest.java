@@ -80,8 +80,8 @@ class DashboardRecentLivesServiceTest {
 
     @Test
     void normalizePageSize_defaultsAndCaps() {
-        assertEquals(20, DashboardRecentLivesService.normalizePageSize(null));
-        assertEquals(20, DashboardRecentLivesService.normalizePageSize(20));
+        assertEquals(10, DashboardRecentLivesService.normalizePageSize(null));
+        assertEquals(10, DashboardRecentLivesService.normalizePageSize(10));
         assertEquals(50, DashboardRecentLivesService.normalizePageSize(50));
         assertThrows(IllegalArgumentException.class, () -> DashboardRecentLivesService.normalizePageSize(0));
         assertThrows(IllegalArgumentException.class, () -> DashboardRecentLivesService.normalizePageSize(51));
@@ -95,29 +95,29 @@ class DashboardRecentLivesServiceTest {
         when(activityRepository.findRecentWithActualStart(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        RecentLivesResponse resp = service.recentLives(1, 20);
+        RecentLivesResponse resp = service.recentLives(1, 10);
 
         assertTrue(resp.getList().isEmpty());
         assertEquals(1, resp.getPage());
-        assertEquals(20, resp.getPageSize());
+        assertEquals(10, resp.getPageSize());
         assertEquals(0L, resp.getTotal());
-        verify(activityRepository).findRecentWithActualStart(eq(PageRequest.of(0, 20)));
+        verify(activityRepository).findRecentWithActualStart(eq(PageRequest.of(0, 10)));
     }
 
     @Test
     void recentLives_recentDaysEnough_usesWindow() {
         LocalDateTime from = LocalDateTime.of(2026, 11, 11, 0, 0);
         LocalDateTime to = LocalDateTime.of(2026, 11, 14, 0, 0);
-        when(activityRepository.countWithActualStartBetween(eq(from), eq(to))).thenReturn(25L);
+        when(activityRepository.countWithActualStartBetween(eq(from), eq(to))).thenReturn(15L);
         when(activityRepository.findRecentWithActualStartBetween(eq(from), eq(to), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 25L));
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 15L));
 
         RecentLivesResponse resp = service.recentLives(null, null);
 
         assertEquals(0, resp.getList().size());
-        assertEquals(25L, resp.getTotal());
+        assertEquals(15L, resp.getTotal());
         verify(activityRepository)
-                .findRecentWithActualStartBetween(eq(from), eq(to), eq(PageRequest.of(0, 20)));
+                .findRecentWithActualStartBetween(eq(from), eq(to), eq(PageRequest.of(0, 10)));
     }
 
     @Test
@@ -136,7 +136,7 @@ class DashboardRecentLivesServiceTest {
         LocalDateTime to = LocalDateTime.of(2026, 11, 14, 0, 0);
         when(activityRepository.countWithActualStartBetween(eq(from), eq(to))).thenReturn(1L);
         when(activityRepository.findRecentWithActualStart(any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(activity), PageRequest.of(0, 20), 1L));
+                .thenReturn(new PageImpl<>(List.of(activity), PageRequest.of(0, 10), 1L));
         when(liveSessionRepository.findByActivityId(activity.getId())).thenReturn(List.of());
         when(presenceEventRepository.findByRoomId(activity.getId())).thenReturn(List.of(
                 join("u1111111111111", "s1", "2026-11-12 19:10:00"),
@@ -156,7 +156,7 @@ class DashboardRecentLivesServiceTest {
         RecentLivesResponse resp = service.recentLives(null, null);
         assertEquals(1, resp.getList().size());
         assertEquals(1, resp.getPage());
-        assertEquals(20, resp.getPageSize());
+        assertEquals(10, resp.getPageSize());
         assertEquals(1L, resp.getTotal());
         var row = resp.getList().get(0);
         assertEquals(activity.getId(), row.getId());
@@ -174,7 +174,7 @@ class DashboardRecentLivesServiceTest {
         verify(activityCloudSyncService).syncQuietly(
                 eq(activity), eq(ActivityCloudSyncService.Options.sessionsOnly()));
         verify(viewerRepository).findByUsernameIn(any());
-        verify(activityRepository).findRecentWithActualStart(eq(PageRequest.of(0, 20)));
+        verify(activityRepository).findRecentWithActualStart(eq(PageRequest.of(0, 10)));
     }
 
     private static PresenceEventEntity join(String username, String socket, String time) {
@@ -190,7 +190,7 @@ class DashboardRecentLivesServiceTest {
     private static PresenceEventEntity event(String username, String socket, String type, String time) {
         PresenceEventEntity e = new PresenceEventEntity();
         e.setId(nextId++);
-        e.setUserId(username);
+        e.setUsername(username);
         e.setSocketId(socket);
         e.setType(type);
         e.setEventTime(LocalDateTime.parse(time.replace(' ', 'T')));

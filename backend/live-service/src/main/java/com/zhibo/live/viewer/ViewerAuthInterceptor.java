@@ -11,7 +11,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
  * 观众接口 Bearer 鉴权。挂 {@code /api/v1/viewer/**}、回放上报 {@code /api/v1/watch/replay/**}、
- * 邀请归因 {@code /api/v1/watch/audience/**}、评论上报 {@code /api/v1/watch/comments/**}。
+ * 邀请归因 {@code /api/v1/watch/audience/**}、评论上报 {@code /api/v1/watch/comments/**}、
+ * 小黄车点击 {@code /api/v1/watch/products/click/**}。
  */
 @Component
 public class ViewerAuthInterceptor implements HandlerInterceptor {
@@ -66,7 +67,8 @@ public class ViewerAuthInterceptor implements HandlerInterceptor {
                 || path.startsWith("/api/v1/watch/replay/")
                 || path.startsWith("/api/v1/watch/audience/")
                 || path.startsWith("/api/v1/watch/course/")
-                || path.startsWith("/api/v1/watch/comments/"));
+                || path.startsWith("/api/v1/watch/comments/")
+                || path.startsWith("/api/v1/watch/products/click/"));
     }
 
     static boolean isWhitelisted(HttpServletRequest request) {

@@ -1,7 +1,7 @@
 package com.zhibo.live.viewer;
 
 import com.zhibo.live.viewer.dto.ViewerProfileUpdateRequest;
-import com.zhibo.live.viewer.dto.ViewerUserResponse;
+import com.zhibo.live.viewer.dto.ViewerProfileUpdateResponse;
 import com.zhibo.live.volc.ViewerTosUploader;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
@@ -30,7 +30,7 @@ public class ViewerProfileService {
     }
 
     @Transactional
-    public ViewerUserResponse update(String viewerUsername, ViewerProfileUpdateRequest request) {
+    public ViewerProfileUpdateResponse update(String viewerUsername, ViewerProfileUpdateRequest request) {
         ViewerEntity viewer = requireViewer(viewerUsername);
         if (request == null) {
             throw new ViewerAuthException(400, "请填写昵称或头像");
@@ -52,7 +52,7 @@ public class ViewerProfileService {
         }
         viewer.setUpdatedTime(LocalDateTime.now(clock));
         viewerRepository.save(viewer);
-        return toUser(viewer);
+        return toProfile(viewer);
     }
 
     private ViewerEntity requireViewer(String viewerUsername) {
@@ -93,31 +93,16 @@ public class ViewerProfileService {
             throw new ViewerAuthException(400, "头像地址无效");
         }
         viewer.setAvatarUrl(url);
-        viewer.setAvatarObjectKey(objectKey);
     }
 
-    static ViewerUserResponse toUser(ViewerEntity viewer) {
-        ViewerUserResponse user = new ViewerUserResponse();
-        if (viewer.getUsername() != null && !viewer.getUsername().isBlank()) {
-            user.setUsername(viewer.getUsername().trim());
-        }
-        if (viewer.getMiniOpenid() != null && !viewer.getMiniOpenid().isBlank()) {
-            user.setMiniOpenid(viewer.getMiniOpenid().trim());
-        }
-        boolean hasPhone = viewer.getPhone() != null && !viewer.getPhone().isBlank();
-        user.setHasPhone(hasPhone);
-        if (hasPhone) {
-            user.setPhoneMasked(ViewerPhoneMask.mask(viewer.getPhone()));
-        }
+    static ViewerProfileUpdateResponse toProfile(ViewerEntity viewer) {
+        ViewerProfileUpdateResponse data = new ViewerProfileUpdateResponse();
         if (viewer.getNickname() != null && !viewer.getNickname().isBlank()) {
-            user.setNickname(viewer.getNickname().trim());
+            data.setNickname(viewer.getNickname().trim());
         }
         if (viewer.getAvatarUrl() != null && !viewer.getAvatarUrl().isBlank()) {
-            user.setAvatarUrl(viewer.getAvatarUrl().trim());
+            data.setAvatarUrl(viewer.getAvatarUrl().trim());
         }
-        if (viewer.getAvatarObjectKey() != null && !viewer.getAvatarObjectKey().isBlank()) {
-            user.setAvatarObjectKey(viewer.getAvatarObjectKey().trim());
-        }
-        return user;
+        return data;
     }
 }

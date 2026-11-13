@@ -79,7 +79,7 @@ public final class WatchDurationCalculator {
         Map<String, Map<String, LocalDateTime>> open = new LinkedHashMap<>();
         Map<String, Long> seconds = new HashMap<>();
         for (PresenceEventEntity event : ordered(events)) {
-            String viewerUsername = PresenceUserIds.viewerUsername(event.getUserId());
+            String viewerUsername = PresenceUserIds.viewerUsername(event.getUsername());
             String socketId = blankToNull(event.getSocketId());
             LocalDateTime time = event.getEventTime();
             if (viewerUsername == null || socketId == null || time == null) {

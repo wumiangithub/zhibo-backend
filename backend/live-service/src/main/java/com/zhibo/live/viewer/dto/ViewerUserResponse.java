@@ -28,7 +28,4 @@ public class ViewerUserResponse {
     private String nickname;
 
     private String avatarUrl;
-
-    /** 头像 TOS 对象键。没有头像则省略。 */
-    private String avatarObjectKey;
 }

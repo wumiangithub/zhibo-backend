@@ -30,7 +30,7 @@ public class AttendeeService {
         List<AttendeeItem> list = new ArrayList<>();
         for (AttendeeRow row : source.list()) {
             AttendeeItem item = new AttendeeItem();
-            item.setUserId(row.userId());
+            item.setUsername(row.username());
             item.setNickname(row.nickname());
             item.setAvatarUrl(row.avatarUrl());
             item.setEnterTime(row.enterTime());

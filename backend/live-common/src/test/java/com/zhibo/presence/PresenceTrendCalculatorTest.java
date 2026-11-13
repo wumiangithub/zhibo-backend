@@ -95,7 +95,7 @@ class PresenceTrendCalculatorTest {
     private static PresenceEventEntity event(String userId, String type, String time, String socketId) {
         PresenceEventEntity e = new PresenceEventEntity();
         e.setId((long) Math.abs((userId + "-" + type + "-" + time + "-" + socketId).hashCode()));
-        e.setUserId(userId);
+        e.setUsername(userId);
         e.setType(type);
         e.setSocketId(socketId);
         e.setEventTime(LocalDateTime.parse(time.replace(' ', 'T')));

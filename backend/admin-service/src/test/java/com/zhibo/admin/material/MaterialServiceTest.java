@@ -15,6 +15,7 @@ import com.zhibo.admin.material.dto.RenameMaterialRequest;
 import com.zhibo.admin.material.dto.UpdateMaterialAuditRequest;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.admin.notification.AdminNotificationService;
 import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.material.MaterialArticleEntity;
@@ -68,6 +69,8 @@ class MaterialServiceTest {
     private LiveProviderRegistry providerRegistry;
     @Mock
     private LiveProvider liveProvider;
+    @Mock
+    private AdminNotificationService adminNotificationService;
 
     @InjectMocks
     private MaterialService materialService;

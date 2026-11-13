@@ -58,7 +58,15 @@ class LiveReportServiceTest {
     @BeforeEach
     void setUp() {
         Clock fixed = Clock.fixed(NOW.atZone(ZONE).toInstant(), ZONE);
-        service = new LiveReportService(reports, planRows, audits, users, materials, mapper, fixed);
+        service = new LiveReportService(
+                reports,
+                planRows,
+                audits,
+                users,
+                materials,
+                mapper,
+                fixed,
+                mock(com.zhibo.admin.notification.AdminNotificationService.class));
         when(users.findById(7L)).thenReturn(Optional.of(user(7L, "审核员")));
         when(users.findById(8L)).thenReturn(Optional.of(user(8L, "张美丽")));
         when(materials.findById(COVER_MATERIAL_ID)).thenReturn(Optional.of(passedImage(1024L)));

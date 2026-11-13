@@ -1,6 +1,7 @@
 package com.zhibo.live.viewer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -8,7 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.zhibo.live.viewer.dto.ViewerProfileUpdateRequest;
-import com.zhibo.live.viewer.dto.ViewerUserResponse;
+import com.zhibo.live.viewer.dto.ViewerProfileUpdateResponse;
 import com.zhibo.live.volc.ViewerTosUploader;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
@@ -49,8 +50,9 @@ class ViewerProfileServiceTest {
     void update_nickname() {
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setNickname(" 钱坤用户 ");
-        ViewerUserResponse user = service.update("9", req);
-        assertEquals("钱坤用户", user.getNickname());
+        ViewerProfileUpdateResponse data = service.update("9", req);
+        assertEquals("钱坤用户", data.getNickname());
+        assertNull(data.getAvatarUrl());
         assertEquals("钱坤用户", viewer.getNickname());
     }
 
@@ -90,14 +92,14 @@ class ViewerProfileServiceTest {
     }
 
     @Test
-    void update_avatarStoresUrlAndObjectKey() {
+    void update_avatarStoresUrlOnly() {
         when(tosUploader.isAllowedAvatarUrl(anyString())).thenReturn(true);
         ViewerProfileUpdateRequest req = new ViewerProfileUpdateRequest();
         req.setAvatarUrl("https://qklive-testcos.cjs99.com/viewer/avatar/9_1.png");
         req.setAvatarObjectKey("viewer/avatar/9_1.png");
-        ViewerUserResponse user = service.update("9", req);
-        assertEquals("viewer/avatar/9_1.png", user.getAvatarObjectKey());
-        assertEquals(req.getAvatarUrl(), user.getAvatarUrl());
-        assertEquals("viewer/avatar/9_1.png", viewer.getAvatarObjectKey());
+        ViewerProfileUpdateResponse data = service.update("9", req);
+        assertEquals(req.getAvatarUrl(), data.getAvatarUrl());
+        assertNull(data.getNickname());
+        assertEquals(req.getAvatarUrl(), viewer.getAvatarUrl());
     }
 }

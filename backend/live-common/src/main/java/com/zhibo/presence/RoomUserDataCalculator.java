@@ -83,11 +83,11 @@ public final class RoomUserDataCalculator {
         if (windows.isEmpty()) {
             return 0;
         }
-        // 在线：userId → 未闭合 socket 数
+        // 在线：username → 未闭合 socket 数
         Map<String, Integer> openSockets = new HashMap<>();
         int peak = 0;
         for (PresenceEventEntity event : ordered(events)) {
-            String viewerUsername = PresenceUserIds.viewerUsername(event.getUserId());
+            String viewerUsername = PresenceUserIds.viewerUsername(event.getUsername());
             String socketId = blankToNull(event.getSocketId());
             LocalDateTime time = event.getEventTime();
             if (viewerUsername == null || socketId == null || time == null) {
@@ -139,7 +139,7 @@ public final class RoomUserDataCalculator {
         long sessionCount = 0;
 
         for (PresenceEventEntity event : ordered(events)) {
-            String viewerUsername = PresenceUserIds.viewerUsername(event.getUserId());
+            String viewerUsername = PresenceUserIds.viewerUsername(event.getUsername());
             String socketId = blankToNull(event.getSocketId());
             LocalDateTime time = event.getEventTime();
             if (viewerUsername == null || socketId == null || time == null) {

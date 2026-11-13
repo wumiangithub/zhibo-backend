@@ -17,7 +17,7 @@ import java.util.List;
  * 进出双写：名单 {@code room_attendance} + 流水 {@code room_presence_event}。
  * <p>
  * mid 已存在 → 整次幂等。名单按未闭合 {@code socket_id} 决定在线；事件按真实时间落库。
- * 游客 / 无法认人的 userId：不写任何 {@code room_*}。
+ * 游客 / 无法认人的 username：不写任何 {@code room_*}。
  * 观众 Join 的昵称 / 头像从 {@code viewer} 表解析（不认回调 context.nickname）。
  */
 @Service
@@ -45,25 +45,25 @@ public class PresenceWriteService {
     @Transactional
     public JoinResult applyJoin(
             String roomId,
-            String userId,
+            String username,
             LocalDateTime eventTime,
             String nickname,
             String avatarUrl,
             String mid,
             String source,
             String socketId) {
-        if (!PresenceUserIds.mayWriteRoom(userId)) {
+        if (!PresenceUserIds.mayWriteRoom(username)) {
             return new JoinResult(null, false, false, false);
         }
         if (isMidDuplicate(mid)) {
-            return attendanceRepository.findByRoomIdAndUserId(roomId, userId)
+            return attendanceRepository.findByRoomIdAndUsername(roomId, username)
                     .map(row -> new JoinResult(row.getId(), false, false, true))
                     .orElseGet(() -> new JoinResult(null, false, false, true));
         }
 
         String resolvedNick = nickname;
         String resolvedAvatar = avatarUrl;
-        String viewerUsername = PresenceUserIds.viewerUsername(userId);
+        String viewerUsername = PresenceUserIds.viewerUsername(username);
         if (viewerUsername != null) {
             ViewerProfile profile = resolveViewerProfile(viewerUsername);
             resolvedNick = profile.nickname();
@@ -73,27 +73,27 @@ public class PresenceWriteService {
         }
 
         boolean eventInserted = eventInserter.insert(
-                roomId, userId, PresenceEventEntity.TYPE_JOIN, eventTime, mid, source, socketId);
+                roomId, username, PresenceEventEntity.TYPE_JOIN, eventTime, mid, source, socketId);
 
         PresenceEventEntity current = event(
-                roomId, userId, PresenceEventEntity.TYPE_JOIN, eventTime, mid, source, socketId);
-        PresenceSocketRoster.State state = PresenceSocketRoster.compute(mergedEvents(roomId, userId, current));
+                roomId, username, PresenceEventEntity.TYPE_JOIN, eventTime, mid, source, socketId);
+        PresenceSocketRoster.State state = PresenceSocketRoster.compute(mergedEvents(roomId, username, current));
 
-        RoomAttendanceEntity existing = attendanceRepository.findByRoomIdAndUserId(roomId, userId).orElse(null);
+        RoomAttendanceEntity existing = attendanceRepository.findByRoomIdAndUsername(roomId, username).orElse(null);
         return applyJoinRoster(
-                existing, roomId, userId, eventTime, resolvedNick, resolvedAvatar, state, eventInserted);
+                existing, roomId, username, eventTime, resolvedNick, resolvedAvatar, state, eventInserted);
     }
 
     @Transactional
     public LeaveResult applyLeave(
             String roomId,
-            String userId,
+            String username,
             LocalDateTime eventTime,
             LocalDateTime expectedEnterTime,
             String mid,
             String source,
             String socketId) {
-        if (!PresenceUserIds.mayWriteRoom(userId)) {
+        if (!PresenceUserIds.mayWriteRoom(username)) {
             return new LeaveResult(LeaveRosterOutcome.SKIPPED, false, false);
         }
         if (isMidDuplicate(mid)) {
@@ -101,13 +101,13 @@ public class PresenceWriteService {
         }
 
         boolean eventInserted = eventInserter.insert(
-                roomId, userId, PresenceEventEntity.TYPE_LEAVE, eventTime, mid, source, socketId);
+                roomId, username, PresenceEventEntity.TYPE_LEAVE, eventTime, mid, source, socketId);
 
         PresenceEventEntity current = event(
-                roomId, userId, PresenceEventEntity.TYPE_LEAVE, eventTime, mid, source, socketId);
-        PresenceSocketRoster.State state = PresenceSocketRoster.compute(mergedEvents(roomId, userId, current));
+                roomId, username, PresenceEventEntity.TYPE_LEAVE, eventTime, mid, source, socketId);
+        PresenceSocketRoster.State state = PresenceSocketRoster.compute(mergedEvents(roomId, username, current));
 
-        RoomAttendanceEntity row = attendanceRepository.findByRoomIdAndUserId(roomId, userId).orElse(null);
+        RoomAttendanceEntity row = attendanceRepository.findByRoomIdAndUsername(roomId, username).orElse(null);
         LeaveRosterOutcome roster = applyLeaveRoster(row, eventTime, expectedEnterTime, state);
         return new LeaveResult(roster, eventInserted, false);
     }
@@ -128,7 +128,7 @@ public class PresenceWriteService {
     private JoinResult applyJoinRoster(
             RoomAttendanceEntity existing,
             String roomId,
-            String userId,
+            String username,
             LocalDateTime eventTime,
             String nickname,
             String avatarUrl,
@@ -136,7 +136,7 @@ public class PresenceWriteService {
             boolean eventInserted) {
         LocalDateTime enter = state.latestOpenJoin() != null ? state.latestOpenJoin() : eventTime;
         if (existing == null) {
-            RoomAttendanceEntity row = newRoom(roomId, userId, enter, nickname, avatarUrl);
+            RoomAttendanceEntity row = newRoom(roomId, username, enter, nickname, avatarUrl);
             attendanceRepository.save(row);
             return new JoinResult(row.getId(), true, eventInserted, false);
         }
@@ -190,8 +190,9 @@ public class PresenceWriteService {
         return LeaveRosterOutcome.UPDATED;
     }
 
-    private List<PresenceEventEntity> mergedEvents(String roomId, String userId, PresenceEventEntity current) {
-        List<PresenceEventEntity> stored = eventRepository.findByRoomIdAndUserIdOrderByEventTimeAscIdAsc(roomId, userId);
+    private List<PresenceEventEntity> mergedEvents(String roomId, String username, PresenceEventEntity current) {
+        List<PresenceEventEntity> stored =
+                eventRepository.findByRoomIdAndUsernameOrderByEventTimeAscIdAsc(roomId, username);
         List<PresenceEventEntity> events = new ArrayList<>(stored == null ? List.of() : stored);
         if (!contains(events, current)) {
             events.add(current);
@@ -233,7 +234,7 @@ public class PresenceWriteService {
 
     private static PresenceEventEntity event(
             String roomId,
-            String userId,
+            String username,
             String type,
             LocalDateTime eventTime,
             String mid,
@@ -241,7 +242,7 @@ public class PresenceWriteService {
             String socketId) {
         PresenceEventEntity event = new PresenceEventEntity();
         event.setRoomId(roomId);
-        event.setUserId(userId);
+        event.setUsername(username);
         event.setType(type);
         event.setEventTime(eventTime);
         event.setMid(mid == null || mid.isBlank() ? null : mid.trim());
@@ -251,10 +252,10 @@ public class PresenceWriteService {
     }
 
     private static RoomAttendanceEntity newRoom(
-            String roomId, String userId, LocalDateTime enterTime, String nickname, String avatarUrl) {
+            String roomId, String username, LocalDateTime enterTime, String nickname, String avatarUrl) {
         RoomAttendanceEntity row = new RoomAttendanceEntity();
         row.setRoomId(roomId);
-        row.setUserId(userId);
+        row.setUsername(username);
         row.setNickname(nickname);
         row.setAvatarUrl(avatarUrl);
         row.setEnterTime(enterTime);

@@ -45,7 +45,7 @@ class PresenceSocketRosterTest {
     private static PresenceEventEntity event(String type, String socketId, String time) {
         PresenceEventEntity entity = new PresenceEventEntity();
         entity.setId((long) Math.abs((type + "-" + socketId + "-" + time).hashCode()));
-        entity.setUserId("12");
+        entity.setUsername("12");
         entity.setType(type);
         entity.setSocketId(socketId);
         entity.setEventTime(LocalDateTime.parse(time.replace(' ', 'T')));

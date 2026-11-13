@@ -1,7 +1,7 @@
 package com.zhibo.live.viewer;
 
 import com.zhibo.live.viewer.dto.ViewerProfileUpdateRequest;
-import com.zhibo.live.viewer.dto.ViewerUserResponse;
+import com.zhibo.live.viewer.dto.ViewerProfileUpdateResponse;
 import com.zhibo.live.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -21,7 +21,7 @@ public class ViewerProfileController {
     }
 
     @PutMapping("/update")
-    public ApiResponse<ViewerUserResponse> update(
+    public ApiResponse<ViewerProfileUpdateResponse> update(
             @RequestBody ViewerProfileUpdateRequest request, HttpServletRequest httpRequest) {
         return ApiResponse.ok(viewerProfileService.update(ViewerAuthInterceptor.requireViewerUsername(httpRequest), request));
     }

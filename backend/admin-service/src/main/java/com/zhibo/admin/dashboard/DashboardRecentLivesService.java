@@ -43,7 +43,7 @@ public class DashboardRecentLivesService {
     static final int RECENT_NATURAL_DAYS = 3;
 
     static final int DEFAULT_PAGE = 1;
-    static final int DEFAULT_PAGE_SIZE = 20;
+    static final int DEFAULT_PAGE_SIZE = 10;
     static final int MAX_PAGE_SIZE = 50;
 
     private final ActivityRepository activityRepository;
@@ -189,7 +189,7 @@ public class DashboardRecentLivesService {
                 if (event == null) {
                     continue;
                 }
-                String username = PresenceUserIds.viewerUsername(event.getUserId());
+                String username = PresenceUserIds.viewerUsername(event.getUsername());
                 if (username != null) {
                     viewers.add(username);
                 }

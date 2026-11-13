@@ -501,7 +501,8 @@ const FIELD_DESC_BY_NAME = {
   userCount: '覆盖用户数',
   groupName: '标签分组名',
   hasPhone: '是否已绑定手机号',
-  avatarObjectKey: '头像对象存储 key',
+  avatarObjectKey:
+    '头像 TOS 对象键。仅 PUT .../profile/update 请求里与 avatarUrl 成对校验；不落库；不出现在 /user-info 与资料更新成功 data。',
   agreed: '是否同意用户协议',
   loginCode: 'wx.login 临时 code',
   phoneCode: 'getPhoneNumber 返回 code',
@@ -642,6 +643,8 @@ const FIELD_DESC_BY_PATH = {
   'ConsoleQuestionHistoryData.total': '本场未软删提问行数（截断前）',
   'ConsoleQuestionHistoryData.list': '旧→新；最多 500 条；形状同 WatchQuestionHistoryItem',
   'CoursewareItem.id': '素材 UUID',
+  'AttendeeItem.username':
+    '邮箱本地部分（库列 room_attendance.username）。观众为用户中心 username；员工角色 e{员工id}；中控台 z{员工id}。',
   'AttendeeItem.online': '是否在线',
   'PresenceTrendPoint.online': '该桶在线人数',
   'ActivityDetail.price': '售价（元）；非付费可不返回',
@@ -845,6 +848,7 @@ const FIELD_DB_BY_PATH = {
   'ActivityRecordDownloadData.downloadUrl': { db: '微吼透传（不落本站库）' },
   'ActivityRecordDownloadData.status': { db: '微吼透传（不落本站库）' },
   'ActivityRecordDownloadData.progress': { db: '微吼透传（不落本站库）' },
+  'AttendeeItem.username': { db: 'room_attendance.username VARCHAR(128)', maxLength: 128 },
   'AttendeeItem.online': { db: 'TINYINT(1)' },
   'PresenceTrendPoint.online': { db: 'INT' },
   'AuditSubmitRequest.reason': { db: 'VARCHAR(200)', maxLength: 200 },
@@ -2433,9 +2437,14 @@ function buildAdmin() {
     },
     AttendeeItem: {
       type: 'object',
-      required: ['userId', 'enterTime', 'online'],
+      required: ['username', 'enterTime', 'online'],
       properties: {
-        userId: { type: 'string' },
+        username: {
+          type: 'string',
+          maxLength: 128,
+          description:
+            '邮箱本地部分（库列 room_attendance.username）。观众为用户中心 username（如 qk_u_xxx）；员工角色 e{员工id}；中控台 z{员工id}。不是本站自增 id，也不是大智慧 uid。',
+        },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
         enterTime: { type: 'string' },
@@ -3775,6 +3784,66 @@ function buildAdmin() {
         },
       },
     },
+    ActivityCommerceDataRow: {
+      type: 'object',
+      required: [
+        'spuId',
+        'productName',
+        'clickCount',
+        'clickUserCount',
+        'dealUserCount',
+        'dealAmount',
+        'refundAmount',
+      ],
+      properties: {
+        spuId: {
+          type: 'string',
+          description: '订单中心商品 spuId，十进制字符串',
+        },
+        productName: {
+          type: 'string',
+          description: '绑定时商品名称快照',
+        },
+        clickCount: {
+          type: 'integer',
+          description: '点击次数；小黄车「去抢购」埋点流水行数',
+        },
+        clickUserCount: {
+          type: 'integer',
+          description: '点击人数；该 spu 去重 username',
+        },
+        dealUserCount: {
+          type: 'integer',
+          description:
+            '成交人数；本场已支付订单（状态 2/3/4/5）按 username 去重；product_id 对齐 spuId',
+        },
+        dealAmount: {
+          type: 'string',
+          description:
+            '成交金额（元）；已支付订单 pay_amount 求和；十进制字符串两位小数，如 "26800.00"',
+        },
+        refundAmount: {
+          type: 'string',
+          description:
+            '成功退款金额（元）；本轮恒 "0.00"（待订单中心补退款金额字段后再接真）',
+        },
+      },
+    },
+    ActivityCommerceData: {
+      type: 'object',
+      required: ['id', 'list'],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '本站活动 UUID',
+        },
+        list: {
+          type: 'array',
+          description: '本场已绑定商品全量，按 sort_order；无绑 → 空数组',
+          items: { $ref: '#/components/schemas/ActivityCommerceDataRow' },
+        },
+      },
+    },
     DashboardRecentLiveRow: {
       type: 'object',
       required: [
@@ -3869,19 +3938,151 @@ function buildAdmin() {
         },
         pageSize: {
           type: 'integer',
-          description: '回显请求每页条数；默认 20，上限 50',
+          description: '回显请求每页条数；默认 10，上限 50',
         },
         total: {
           type: 'integer',
           format: 'int64',
           description:
-            '当前候选集总条数。候选规则：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次。前端可用 page * pageSize < total 判断是否还有下一页。',
+            '当前候选集总条数。候选规则：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次。默认 pageSize=10 时阈值即 10。前端可用 page * pageSize < total 判断是否还有下一页。',
         },
         list: {
           type: 'array',
           description:
             '本页最近直播行；未软删且已有 live_actual_start_time，按首开时间倒序；无匹配时为空数组。',
           items: { $ref: '#/components/schemas/DashboardRecentLiveRow' },
+        },
+      },
+    },
+    AdminNotificationType: {
+      type: 'integer',
+      enum: [1, 2, 3, 4],
+      description:
+        '1 直播状态异常 / 2 直播报备审核结果 / 3 直播合规审核结果 / 4 素材审核结果；库：INT',
+    },
+    AdminNotificationAuditResult: {
+      type: 'integer',
+      enum: [0, 1, 2],
+      description: '0 无（状态异常类） / 1 已通过 / 2 已驳回；库：INT',
+    },
+    AdminNotificationRefType: {
+      type: 'integer',
+      enum: [1, 2, 3],
+      description: '1 活动 / 2 直播报备 / 3 素材；库：INT',
+    },
+    AdminNotificationItem: {
+      type: 'object',
+      required: [
+        'id',
+        'type',
+        'category',
+        'title',
+        'body',
+        'auditResult',
+        'refType',
+        'refId',
+        'unread',
+        'createdTime',
+      ],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '通知主键 UUID；库：VARCHAR(32)',
+        },
+        type: {
+          $ref: '#/components/schemas/AdminNotificationType',
+          description:
+            '1 直播状态异常 / 2 直播报备审核结果 / 3 直播合规审核结果 / 4 素材审核结果',
+        },
+        category: {
+          type: 'string',
+          maxLength: 32,
+          description:
+            '展示分类，如「直播」「直播报备」「素材库」；拼展示行时用 [category]；库：VARCHAR(32)',
+        },
+        title: {
+          type: 'string',
+          maxLength: 64,
+          description:
+            '展示标题，如「合规风控审核结果通知」「状态异常通知」；库：VARCHAR(64)',
+        },
+        body: {
+          type: 'string',
+          maxLength: 512,
+          description:
+            '冒号后正文，如「风控合规-已驳回」；完整展示行为 [category]title：body；库：VARCHAR(512)',
+        },
+        auditResult: {
+          $ref: '#/components/schemas/AdminNotificationAuditResult',
+          description: '0 无 / 1 已通过 / 2 已驳回',
+        },
+        refType: {
+          $ref: '#/components/schemas/AdminNotificationRefType',
+          description: '1 活动 / 2 直播报备 / 3 素材',
+        },
+        refId: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '关联业务主键 UUID（活动 / 报备 / 素材）',
+        },
+        unread: {
+          type: 'boolean',
+          description:
+            '是否未读。true 表示 admin_notification_inbox.read_time 为空；false 表示已读',
+        },
+        createdTime: {
+          type: 'string',
+          description:
+            '通知创建时刻（Asia/Shanghai），格式 yyyy-MM-dd HH:mm:ss；库：DATETIME(3)',
+        },
+      },
+    },
+    AdminNotificationListData: {
+      type: 'object',
+      required: ['page', 'pageSize', 'total', 'list'],
+      properties: {
+        page: {
+          type: 'integer',
+          description: '回显请求页码，从 1 起',
+        },
+        pageSize: {
+          type: 'integer',
+          description: '回显请求每页条数；默认 10，上限 100',
+        },
+        total: {
+          type: 'integer',
+          format: 'int64',
+          description: '当前筛选下、属于当前登录员工收件箱的通知总条数',
+        },
+        list: {
+          type: 'array',
+          description:
+            '本页通知；仅当前员工 inbox；按创建时间倒序；无匹配时为空数组',
+          items: { $ref: '#/components/schemas/AdminNotificationItem' },
+        },
+      },
+    },
+    AdminNotificationUnreadCountData: {
+      type: 'object',
+      required: ['count'],
+      properties: {
+        count: {
+          type: 'integer',
+          format: 'int64',
+          minimum: 0,
+          description:
+            '当前员工未读条数（inbox.read_time 为空）；顶栏角标；0 时前端不展示角标',
+        },
+      },
+    },
+    AdminNotificationReadAllData: {
+      type: 'object',
+      required: ['count'],
+      properties: {
+        count: {
+          type: 'integer',
+          format: 'int64',
+          minimum: 0,
+          description: '本次新标记为已读的条数；本来无未读时为 0',
         },
       },
     },
@@ -4372,8 +4573,18 @@ function buildAdmin() {
     ApiResponseViewerTagList: { $ref: '#/components/schemas/ViewerTagListData' },
     ApiResponseViewerTagDetail: { $ref: '#/components/schemas/ViewerTagListItem' },
     ApiResponseActivityUserData: { $ref: '#/components/schemas/ActivityUserData' },
+    ApiResponseActivityCommerceData: { $ref: '#/components/schemas/ActivityCommerceData' },
     ApiResponseDashboardRecentLives: {
       $ref: '#/components/schemas/DashboardRecentLivesData',
+    },
+    ApiResponseAdminNotificationList: {
+      $ref: '#/components/schemas/AdminNotificationListData',
+    },
+    ApiResponseAdminNotificationUnreadCount: {
+      $ref: '#/components/schemas/AdminNotificationUnreadCountData',
+    },
+    ApiResponseAdminNotificationReadAll: {
+      $ref: '#/components/schemas/AdminNotificationReadAllData',
     },
     ApiResponseCourseCatalogList: {
       $ref: '#/components/schemas/CourseCatalogListData',
@@ -5381,6 +5592,22 @@ function buildAdmin() {
         responses: ok200('#/components/schemas/ApiResponseActivityUserData'),
       },
     },
+    '/api/v1/activities/commerce-data/{id}': {
+      get: {
+        tags: ['统计'],
+        summary: '直播设置 · 直播带货数据',
+        description:
+          '直播数据页「在线人数趋势」下方「直播带货」表。' +
+          '行=本场 activity_product 已绑定商品全量（按 sort_order）；无绑 → list 空数组。' +
+          '点击次数/人数来自 activity_product_click（小黄车「去抢购」埋点）。' +
+          '成交人数/金额来自 activity_order：本场 activity_id + product_id 对齐 spuId、状态 2/3/4/5，username 去重、pay_amount 求和。' +
+          '成功退款金额本轮恒 "0.00"。不查 OMS。活动不存在 → 业务 400。',
+        operationId: 'getActivityCommerceData',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseActivityCommerceData'),
+      },
+    },
     '/api/v1/dashboard/recent-lives': {
       get: {
         tags: ['统计'],
@@ -5388,8 +5615,8 @@ function buildAdmin() {
         description:
           '管理端工作台「最近直播数据」表格。读本站 activity、activity_live_session、room_presence_event、room_replay_watch、viewer。' +
           '组装本页列表前对每场活动经 ActivityCloudSyncService 旁路 sessionsOnly（get-webinar-switch-list），失败只日志不挡主流程（D120）。' +
-          '分页 page（默认 1）+ pageSize（默认 20，上限 50）。' +
-          '候选集：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次；均按实际首开倒序。' +
+          '分页 page（默认 1）+ pageSize（默认 10，上限 50）。' +
+          '候选集：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次；默认 pageSize=10 时近 3 天不足 10 条则退回全局最近开播；均按实际首开倒序。' +
           'startTime/endTime 为实际首开～末结（计划时间不回）；直播中未闭合时 endTime 为空串。' +
           'roomViewCount/roomVisitorCount/avgWatchDurationSec 对齐用户数据 type=live；' +
           'watchViewCount/watchViewerCount 对齐 type=live_replay；只计观众。' +
@@ -5414,14 +5641,137 @@ function buildAdmin() {
             required: false,
             schema: {
               type: 'integer',
-              default: 20,
+              default: 10,
               minimum: 1,
               maximum: 50,
-              description: '每页条数；默认 20；须在 1～50，越界业务 400',
+              description: '每页条数；默认 10；须在 1～50，越界业务 400',
             },
           },
         ],
         responses: ok200('#/components/schemas/ApiResponseDashboardRecentLives'),
+      },
+    },
+    '/api/v1/notifications/list': {
+      get: {
+        tags: ['工作台'],
+        summary: '通知中心列表',
+        description:
+          '返回当前登录员工收件箱中的通知，按创建时间倒序。' +
+          '只读 admin_notification 与 admin_notification_inbox，不现查审核流水。' +
+          'Query：page（默认 1）、pageSize（默认 10，上限 100）、keyword（匹配 category/title/body）、' +
+          'type（省略或 0=全部，否则 1～4）、auditResult（省略或 0=全部，1 已通过 / 2 已驳回）。' +
+          '工作台侧栏预览传 page=1&pageSize=10。未登录业务码 401。非法分页或枚举 → 400。',
+        operationId: 'listAdminNotifications',
+        security: bearer,
+        parameters: [
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              default: 1,
+              minimum: 1,
+              description: '页码，从 1 起；默认 1；小于 1 时业务 400',
+            },
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              default: 10,
+              minimum: 1,
+              maximum: 100,
+              description: '每页条数；默认 10；须在 1～100，越界业务 400',
+            },
+          },
+          {
+            name: 'keyword',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'string',
+              description:
+                '关键字；匹配 category、title、body（包含，大小写不敏感）；空或省略不过滤',
+            },
+          },
+          {
+            name: 'type',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              enum: [0, 1, 2, 3, 4],
+              description:
+                '0 全部 / 1 直播状态异常 / 2 报备审核 / 3 直播审核 / 4 素材审核。省略等同 0；其它值业务 400。',
+            },
+          },
+          {
+            name: 'auditResult',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              enum: [0, 1, 2],
+              description:
+                '0 全部 / 1 已通过 / 2 已驳回。省略等同 0；筛 1/2 时不含 auditResult=0 的行；其它值业务 400。',
+            },
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseAdminNotificationList'),
+      },
+    },
+    '/api/v1/notifications/unread-count': {
+      get: {
+        tags: ['工作台'],
+        summary: '通知未读数量',
+        description:
+          '返回当前登录员工收件箱中 read_time 为空的条数，供顶栏铃铛角标。' +
+          '无 Query、无 Body。未登录业务码 401。',
+        operationId: 'getAdminNotificationUnreadCount',
+        security: bearer,
+        responses: ok200(
+          '#/components/schemas/ApiResponseAdminNotificationUnreadCount',
+        ),
+      },
+    },
+    '/api/v1/notifications/read/{id}': {
+      post: {
+        tags: ['工作台'],
+        summary: '单条通知已读',
+        description:
+          '将当前员工对该通知的 inbox 行写入 read_time。' +
+          '已是已读则保持原时刻并仍返回成功。无 Body。' +
+          '通知不存在或当前员工收件箱无该通知 → 业务 400「通知不存在」。未登录 → 401。' +
+          '成功 data 为 {id}（通知 UUID）。',
+        operationId: 'readAdminNotification',
+        security: bearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { $ref: '#/components/schemas/BusinessUuid' },
+            description: '通知主键 UUID',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseId'),
+      },
+    },
+    '/api/v1/notifications/read-all': {
+      post: {
+        tags: ['工作台'],
+        summary: '全部通知已读',
+        description:
+          '将当前员工所有未读 inbox 行写入 read_time。无 Query、无 Body。' +
+          '成功 data.count 为本次新标记条数；无未读时为 0。未登录 → 401。',
+        operationId: 'readAllAdminNotifications',
+        security: bearer,
+        responses: ok200(
+          '#/components/schemas/ApiResponseAdminNotificationReadAll',
+        ),
       },
     },
     '/api/v1/activities/attendees/{id}': {
@@ -7256,6 +7606,7 @@ function buildAdmin() {
       { name: '对外课程' },
       { name: '用户管理' },
       { name: '统计' },
+      { name: '工作台' },
       { name: '中控台' },
       { name: '员工组织' },
     ],
@@ -7903,8 +8254,10 @@ function buildLive() {
         hasPhone: { type: 'boolean' },
         phoneMasked: { type: 'string' },
         nickname: { type: 'string' },
-        avatarUrl: { type: 'string' },
-        avatarObjectKey: { type: 'string' },
+        avatarUrl: {
+          type: 'string',
+          description: '头像访问地址（库列 avatar_url）。无头像时省略。',
+        },
       },
     },
     ViewerTokenPairData: {
@@ -7957,9 +8310,38 @@ function buildLive() {
     ViewerProfileUpdateRequest: {
       type: 'object',
       properties: {
-        nickname: { type: 'string', maxLength: 16 },
-        avatarUrl: { type: 'string', maxLength: 512 },
-        avatarObjectKey: { type: 'string', maxLength: 1024 },
+        nickname: {
+          type: 'string',
+          maxLength: 16,
+          description: '有则 trim 后写入。空 → 400「请输入昵称」；超 16 → 400「昵称最多16字」。省略则不改。',
+        },
+        avatarUrl: {
+          type: 'string',
+          maxLength: 512,
+          description:
+            '与 avatarObjectKey 成对。校验通过后写入 viewer.avatar_url。空、超 512、host 非本站 CDN/桶、或路径不是该对象键 → 400「头像地址无效」。',
+        },
+        avatarObjectKey: {
+          type: 'string',
+          maxLength: 1024,
+          description:
+            '与 avatarUrl 成对。须以 viewer/avatar/ 开头，且 avatarUrl 以 /{avatarObjectKey} 结尾。仅请求校验，不落库、不回。',
+        },
+      },
+    },
+    ViewerProfileUpdateData: {
+      type: 'object',
+      description:
+        '资料更新成功 data。只含昵称与头像；无则省略。不回 username / miniOpenid / hasPhone / phoneMasked / avatarObjectKey。',
+      properties: {
+        nickname: {
+          type: 'string',
+          description: '当前昵称。库无昵称时省略。',
+        },
+        avatarUrl: {
+          type: 'string',
+          description: '当前头像访问地址（库列 avatar_url）。库无头像时省略。',
+        },
       },
     },
     ViewerUploadFileData: {
@@ -8062,6 +8444,26 @@ function buildLive() {
       type: 'object',
       properties: {
         list: { type: 'array', items: { $ref: '#/components/schemas/WatchProductItem' } },
+      },
+    },
+    WatchProductClickRequest: {
+      type: 'object',
+      required: ['spuId'],
+      properties: {
+        spuId: {
+          type: 'string',
+          description: '本场已绑定商品 spuId，十进制字符串',
+        },
+      },
+    },
+    WatchProductClickData: {
+      type: 'object',
+      required: ['ok'],
+      properties: {
+        ok: {
+          type: 'boolean',
+          description: '恒为 true；写入 activity_product_click 成功',
+        },
       },
     },
     WatchRecordPlayItem: {
@@ -8327,6 +8729,7 @@ function buildLive() {
 
     ApiResponseViewerTokenPair: { $ref: '#/components/schemas/ViewerTokenPairData' },
     ApiResponseViewerUserInfo: { $ref: '#/components/schemas/ViewerUserInfo' },
+    ApiResponseViewerProfileUpdate: { $ref: '#/components/schemas/ViewerProfileUpdateData' },
     ApiResponseViewerUploadFile: { $ref: '#/components/schemas/ViewerUploadFileData' },
     ApiResponseViewerTosSts: { $ref: '#/components/schemas/ViewerTosStsData' },
     ApiResponseViewerFeedbackId: { $ref: '#/components/schemas/IdDataInt' },
@@ -8334,6 +8737,7 @@ function buildLive() {
     ApiResponseViewerFeedbackDetail: { $ref: '#/components/schemas/ViewerFeedbackDetailData' },
     ApiResponseViewerPresencePing: { $ref: '#/components/schemas/ViewerPresencePingData' },
     ApiResponseWatchProducts: { $ref: '#/components/schemas/WatchProductListData' },
+    ApiResponseWatchProductClick: { $ref: '#/components/schemas/WatchProductClickData' },
     ApiResponseWatchPlayRecords: { $ref: '#/components/schemas/WatchRecordPlayListData' },
     ApiResponseWatchReplayStart: { $ref: '#/components/schemas/WatchReplayStartData' },
     ApiResponseWatchReplayHeartbeat: { $ref: '#/components/schemas/WatchReplayHeartbeatData' },
@@ -8457,6 +8861,8 @@ function buildLive() {
       put: {
         tags: ['观众资料'],
         summary: '更新昵称/头像',
+        description:
+          '至少传 nickname 或成对的 avatarUrl+avatarObjectKey。头像只落库 avatar_url；avatarObjectKey 仅校验。成功 data 只回 nickname 与 avatarUrl（有则回），不回完整 user。',
         operationId: 'viewerProfileUpdate',
         security: viewerBearer,
         requestBody: {
@@ -8465,7 +8871,7 @@ function buildLive() {
             'application/json': { schema: { $ref: '#/components/schemas/ViewerProfileUpdateRequest' } },
           },
         },
-        responses: ok200('#/components/schemas/ApiResponseViewerUserInfo'),
+        responses: ok200('#/components/schemas/ApiResponseViewerProfileUpdate'),
       },
     },
     '/api/v1/viewer/uploads/file': {
@@ -8735,6 +9141,29 @@ function buildLive() {
         operationId: 'getWatchProducts',
         parameters: [watchId, activityAccessHeader],
         responses: ok200('#/components/schemas/ApiResponseWatchProducts'),
+      },
+    },
+    '/api/v1/watch/products/click/{id}': {
+      post: {
+        tags: ['观看'],
+        summary: '小黄车商品点击埋点',
+        description:
+          '直播/回放小黄车点「去抢购」时上报一次，追加 activity_product_click。' +
+          '须观众 JWT，无票 → 401。须过售卖门禁，未过 → 403。' +
+          'Body.spuId 须为本场已绑定商品，否则 400「商品未绑定本场」。' +
+          '打开弹层不计；下架禁点不调。失败不影响下单（前端 fire-and-forget）。',
+        operationId: 'watchProductClick',
+        security: viewerBearer,
+        parameters: [watchId, activityAccessHeader],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/WatchProductClickRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseWatchProductClick'),
       },
     },
     '/api/v1/watch/coupons/{id}': {

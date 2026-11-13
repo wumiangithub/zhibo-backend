@@ -318,9 +318,6 @@ public class ViewerAuthService {
         if (!isBlank(viewer.getAvatarUrl())) {
             user.setAvatarUrl(viewer.getAvatarUrl().trim());
         }
-        if (!isBlank(viewer.getAvatarObjectKey())) {
-            user.setAvatarObjectKey(viewer.getAvatarObjectKey().trim());
-        }
         return user;
     }
 

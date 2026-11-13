@@ -61,7 +61,7 @@ class AttendeeRosterTest {
         assertEquals(1, all.activityState());
         assertEquals(2, all.total());
         assertEquals(1, all.page());
-        assertEquals(List.of("user-a", "user-b"), all.list().stream().map(AttendeeRow::userId).toList());
+        assertEquals(List.of("user-a", "user-b"), all.list().stream().map(AttendeeRow::username).toList());
         assertFalse(all.list().get(0).online());
         assertEquals("2026-09-30 11:30:00", all.list().get(0).leaveTime());
         assertTrue(all.list().get(1).online());
@@ -69,7 +69,7 @@ class AttendeeRosterTest {
 
         AttendeePage online = roster.list(ROOM_ID, "online", 1, 20, null);
         assertEquals(1, online.total());
-        assertEquals("user-b", online.list().get(0).userId());
+        assertEquals("user-b", online.list().get(0).username());
 
         verify(attendanceRepository, never()).save(any());
     }
@@ -84,7 +84,7 @@ class AttendeeRosterTest {
 
         AttendeePage all = roster.list(ROOM_ID, "all", 1, 20, null);
 
-        assertEquals(List.of("user-b", "user-a"), all.list().stream().map(AttendeeRow::userId).toList());
+        assertEquals(List.of("user-b", "user-a"), all.list().stream().map(AttendeeRow::username).toList());
         assertTrue(all.list().get(0).online());
         assertTrue(all.list().get(1).online());
         assertNull(earlier.getLeaveTime());
@@ -149,9 +149,9 @@ class AttendeeRosterTest {
         assertEquals(3, page1.total());
         assertEquals(1, page1.page());
         assertEquals(2, page1.pageSize());
-        assertEquals(List.of("user-a", "user-b"), page1.list().stream().map(AttendeeRow::userId).toList());
+        assertEquals(List.of("user-a", "user-b"), page1.list().stream().map(AttendeeRow::username).toList());
         assertEquals(2, page2.page());
-        assertEquals(List.of("user-c"), page2.list().stream().map(AttendeeRow::userId).toList());
+        assertEquals(List.of("user-c"), page2.list().stream().map(AttendeeRow::username).toList());
     }
 
     private static ActivityEntity activity(int state) {
@@ -176,7 +176,7 @@ class AttendeeRosterTest {
         RoomAttendanceEntity row = new RoomAttendanceEntity();
         row.setId(id);
         row.setRoomId(ROOM_ID);
-        row.setUserId(userId);
+        row.setUsername(userId);
         row.setNickname(nickname);
         row.setEnterTime(AttendanceTimes.parse(enterTime, "enterTime"));
         if (leaveTime != null) {
