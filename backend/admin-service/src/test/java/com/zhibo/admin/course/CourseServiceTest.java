@@ -1,7 +1,10 @@
 package com.zhibo.admin.course;
 
+import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.SellPasswordCryptoService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
+import com.zhibo.admin.org.EmployeeDeptResolver;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.course.dto.CourseAuditRequest;
 import com.zhibo.admin.course.dto.CourseAuditResultResponse;
@@ -15,6 +18,9 @@ import com.zhibo.admin.course.dto.OutsideCourseListRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
 import com.zhibo.admin.course.dto.UpdateCourseRequest;
 import com.zhibo.course.CourseAuditEntity;
+import com.zhibo.course.CourseCatalogContentKind;
+import com.zhibo.course.CourseCatalogNodeEntity;
+import com.zhibo.course.CourseCatalogNodeRepository;
 import com.zhibo.course.CourseAuditRepository;
 import com.zhibo.course.CourseEntity;
 import com.zhibo.course.CourseMaterialRepository;
@@ -38,6 +44,7 @@ import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,6 +80,12 @@ class CourseServiceTest {
     private SellPasswordCryptoService sellPasswordCrypto;
     @Mock
     private CourseUserRepository courseUserRepository;
+    @Mock
+    private EmployeeDeptResolver employeeDeptResolver;
+    @Mock
+    private CourseCatalogNodeRepository catalogNodeRepository;
+    @Mock
+    private ActivityRepository activityRepository;
 
     @InjectMocks
     private CourseService courseService;
@@ -399,82 +413,129 @@ class CourseServiceTest {
         assertTrue(ex.getMessage().contains("风控未通过"));
     }
 
+
     @Test
-    void outsideList_onlyListedAndPassed_returnsOwnerDepartment() throws Exception {
+    void outsideList_default_returnsEnabledAndOff_withPublishedFields() throws Exception {
         CourseEntity listed = outsideCourse("on", "passed", null);
         listed.setTitle("已上架课");
-        listed.setContentCount(3);
-        listed.setEntitledUserCount(4);
-        listed.setTotalUserCount(5);
-        listed.setSalesCount(6);
+        listed.setUpdatedTime(LocalDateTime.of(2026, 11, 5, 11, 30, 1));
 
-        CourseEntity pending = outsideCourse("pending", "passed", null);
-        CourseEntity rejected = outsideCourse("on", "rejected", null);
         CourseEntity off = outsideCourse("off", "passed", null);
-        CourseEntity banned = outsideCourse("banned", "passed", null);
-        CourseEntity deleted = outsideCourse("on", "passed", LocalDateTime.of(2026, 10, 1, 0, 0));
+        off.setTitle("已下架课");
+        off.setUpdatedTime(LocalDateTime.of(2026, 11, 4, 10, 0, 0));
+
         CourseEntity noOwner = outsideCourse("on", "passed", null);
         noOwner.setTitle("无归属人");
-        noOwner.setContentCount(0);
 
-        Pageable requested = org.springframework.data.domain.PageRequest.of(0, 20);
-        when(courseRepository.search(eq("数学"), eq("on"), eq("passed"), any())).thenReturn(
-                new PageImpl<>(List.of(listed, pending, rejected, off, banned, deleted, noOwner), requested, 100));
+        when(courseRepository.searchOutside(eq("数学"), eq(null), eq(true), any(), any()))
+                .thenReturn(new PageImpl<>(
+                        List.of(listed, off, noOwner),
+                        org.springframework.data.domain.PageRequest.of(0, 10),
+                        3));
 
         CourseOwnerEntity owner = new CourseOwnerEntity();
         owner.setId(new CourseOwnerId(listed.getId(), OPERATOR_ID));
         owner.setSortOrder(0);
         when(ownerRepository.findByCourseIds(any())).thenReturn(List.of(owner));
-        SysUserAccountEntity user = operator();
-        user.setQwBmxx("[{\"department_name\":\"教研一部\"},{\"department_name\":\"内容中心\"}]");
-        when(userRepository.findAllById(any())).thenReturn(List.of(user));
+        when(employeeDeptResolver.resolvePrimaryBatch(any()))
+                .thenReturn(Map.of(OPERATOR_ID, new EmployeeDeptResolver.Dept(58L, "技术管理中心")));
+
+        CourseAuditEntity audit = new CourseAuditEntity();
+        audit.setCourseId(listed.getId());
+        audit.setOperatorName("张三");
+        audit.setCreatedTime(LocalDateTime.of(2026, 11, 5, 11, 0, 0));
+        when(auditRepository.findByCourseIdInOrderByCreatedTimeDesc(any())).thenReturn(List.of(audit));
+
+        CourseCatalogNodeEntity liveNode = new CourseCatalogNodeEntity();
+        liveNode.setCourseId(listed.getId());
+        liveNode.setContentKind(CourseCatalogContentKind.LIVE);
+        liveNode.setContentId("act-live");
+        CourseCatalogNodeEntity replayNode = new CourseCatalogNodeEntity();
+        replayNode.setCourseId(listed.getId());
+        replayNode.setContentKind(CourseCatalogContentKind.LIVE);
+        replayNode.setContentId("act-replay");
+        CourseCatalogNodeEntity missing = new CourseCatalogNodeEntity();
+        missing.setCourseId(listed.getId());
+        missing.setContentKind(CourseCatalogContentKind.LIVE);
+        missing.setContentId("act-gone");
+        when(catalogNodeRepository.findActiveByCourseIdsAndContentKind(any(), eq(CourseCatalogContentKind.LIVE)))
+                .thenReturn(List.of(liveNode, replayNode, missing));
+
+        ActivityEntity live = new ActivityEntity();
+        live.setId("act-live");
+        live.setType(2);
+        ActivityEntity replay = new ActivityEntity();
+        replay.setId("act-replay");
+        replay.setType(4);
+        ActivityEntity deleted = new ActivityEntity();
+        deleted.setId("act-gone");
+        deleted.setType(1);
+        deleted.setDeletedTime(LocalDateTime.of(2026, 11, 1, 0, 0));
+        when(activityRepository.findAllById(any())).thenReturn(List.of(live, replay, deleted));
 
         OutsideCourseListRequest request = new OutsideCourseListRequest();
-        request.setPage(1);
-        request.setPageSize(20);
-        request.setCourseName(" 数学 ");
+        request.setName(" 数学 ");
         OutsideCourseListResponse response = courseService.outsideList(request);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(courseRepository).search(eq("数学"), eq("on"), eq("passed"), pageable.capture());
-        Sort.Order order = pageable.getValue().getSort().getOrderFor("listedTime");
+        verify(courseRepository).searchOutside(eq("数学"), eq(null), eq(true), any(), pageable.capture());
+        Sort.Order order = pageable.getValue().getSort().getOrderFor("updatedTime");
         assertNotNull(order);
         assertEquals(Sort.Direction.DESC, order.getDirection());
+        assertEquals(10, pageable.getValue().getPageSize());
 
         assertEquals(1, response.getPage());
-        assertEquals(20, response.getPageSize());
-        assertEquals(100, response.getTotal());
-        assertEquals(2, response.getList().size());
-        assertEquals(listed.getId(), response.getList().get(0).getCourseId());
-        assertEquals("已上架课", response.getList().get(0).getCourseName());
-        assertEquals(3, response.getList().get(0).getContentCount());
-        assertEquals("教研一部、内容中心", response.getList().get(0).getDepartmentName());
-        assertEquals(noOwner.getId(), response.getList().get(1).getCourseId());
-        assertNull(response.getList().get(1).getDepartmentName());
+        assertEquals(10, response.getPageSize());
+        assertEquals(3, response.getTotal());
+        assertEquals(3, response.getList().size());
+
+        var first = response.getList().get(0);
+        assertEquals(listed.getId(), first.getCourseId());
+        assertEquals("已上架课", first.getCourseName());
+        assertEquals(58L, first.getDeptId());
+        assertEquals("技术管理中心", first.getDeptName());
+        assertEquals(1, first.getStatus());
+        assertEquals("张三", first.getUpdaterName());
+        assertEquals("2026-11-05 11:30:01", first.getUpdateTime());
+        assertEquals(1, first.getLiveCount());
+        assertEquals(1, first.getReplayCount());
+        assertNull(first.getTeacherName());
+
+        var offItem = response.getList().get(1);
+        assertEquals(off.getId(), offItem.getCourseId());
+        assertEquals(2, offItem.getStatus());
+
+        var bare = response.getList().get(2);
+        assertEquals(noOwner.getId(), bare.getCourseId());
+        assertNull(bare.getDeptId());
+        assertNull(bare.getDeptName());
 
         ObjectMapper mapper = new ObjectMapper();
         mapper.setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL);
         String json = mapper.writeValueAsString(response);
         for (String forbidden : List.of(
+                "materialId", "materialName", "contentCount", "departmentName",
                 "entitledUserCount", "totalUserCount", "salesCount",
                 "riskStatus", "shelfStatus", "canList", "canUnlist", "canDelete",
                 "detailHtml", "avatar", "owners", "coverUrl", "introduction", "listedTime",
                 "\"title\"")) {
             assertFalse(json.contains(forbidden), forbidden);
         }
-        String first = mapper.writeValueAsString(response.getList().get(0));
-        assertTrue(first.contains("\"courseId\""));
-        assertTrue(first.contains("\"courseName\":\"已上架课\""));
-        assertTrue(first.contains("\"contentCount\":3"));
-        assertTrue(first.contains("\"departmentName\":\"教研一部、内容中心\""));
-        String second = mapper.writeValueAsString(response.getList().get(1));
-        assertFalse(second.contains("\"departmentName\""));
-        assertTrue(second.contains("\"contentCount\":0"));
+        String firstJson = mapper.writeValueAsString(first);
+        assertTrue(firstJson.contains("\"courseId\""));
+        assertTrue(firstJson.contains("\"courseName\":\"已上架课\""));
+        assertTrue(firstJson.contains("\"deptId\":58"));
+        assertTrue(firstJson.contains("\"deptName\":\"技术管理中心\""));
+        assertTrue(firstJson.contains("\"teacherName\":null"));
+        String bareJson = mapper.writeValueAsString(bare);
+        assertFalse(bareJson.contains("\"deptId\""));
+        assertFalse(bareJson.contains("\"deptName\""));
+        assertTrue(bareJson.contains("\"teacherName\":null"));
     }
 
     @Test
     void outsideList_pageSizeOverMax_isClampedTo100() {
-        when(courseRepository.search(eq(null), eq("on"), eq("passed"), any())).thenReturn(
+        when(courseRepository.searchOutside(eq(null), eq(null), eq(true), any(), any())).thenReturn(
                 new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 100), 0));
 
         OutsideCourseListRequest request = new OutsideCourseListRequest();
@@ -483,11 +544,74 @@ class CourseServiceTest {
         OutsideCourseListResponse response = courseService.outsideList(request);
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(courseRepository).search(eq(null), eq("on"), eq("passed"), pageable.capture());
+        verify(courseRepository).searchOutside(eq(null), eq(null), eq(true), any(), pageable.capture());
         assertEquals(0, pageable.getValue().getPageNumber());
         assertEquals(100, pageable.getValue().getPageSize());
         assertEquals(1, response.getPage());
         assertEquals(100, response.getPageSize());
+    }
+
+    @Test
+    void outsideList_nameLongerThan50_rejected() {
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setName("a".repeat(51));
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class, () -> courseService.outsideList(request));
+        assertTrue(ex.getMessage().contains("50"));
+        verify(courseRepository, never()).searchOutside(any(), any(), anyBoolean(), any(), any());
+    }
+
+    @Test
+    void outsideList_invalidStatus_rejected() {
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setStatus(3);
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class, () -> courseService.outsideList(request));
+        assertTrue(ex.getMessage().contains("状态无效"));
+    }
+
+    @Test
+    void outsideList_status2_queriesOffOnly() {
+        when(courseRepository.searchOutside(eq(null), eq(2), eq(true), any(), any())).thenReturn(
+                new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 10), 0));
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setStatus(2);
+        courseService.outsideList(request);
+        verify(courseRepository).searchOutside(eq(null), eq(2), eq(true), any(), any());
+    }
+
+    @Test
+    void outsideList_deptId_filtersBeforePaging() {
+        CourseOwnerEntity owner = new CourseOwnerEntity();
+        owner.setId(new CourseOwnerId("course-dept", OPERATOR_ID));
+        owner.setSortOrder(0);
+        CourseOwnerEntity other = new CourseOwnerEntity();
+        other.setId(new CourseOwnerId("course-other", 20002L));
+        other.setSortOrder(0);
+        when(ownerRepository.findAllOrdered()).thenReturn(List.of(owner, other));
+        when(employeeDeptResolver.resolvePrimaryBatch(any())).thenReturn(Map.of(
+                OPERATOR_ID, new EmployeeDeptResolver.Dept(58L, "技术管理中心"),
+                20002L, new EmployeeDeptResolver.Dept(99L, "其他部门")));
+        when(courseRepository.searchOutside(eq(null), eq(null), eq(false), eq(List.of("course-dept")), any()))
+                .thenReturn(new PageImpl<>(List.of(), org.springframework.data.domain.PageRequest.of(0, 10), 0));
+
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setDeptId(58L);
+        courseService.outsideList(request);
+
+        verify(courseRepository).searchOutside(
+                eq(null), eq(null), eq(false), eq(List.of("course-dept")), any());
+    }
+
+    @Test
+    void outsideList_deptId_noMatch_returnsEmptyWithoutQuery() {
+        when(ownerRepository.findAllOrdered()).thenReturn(List.of());
+        OutsideCourseListRequest request = new OutsideCourseListRequest();
+        request.setDeptId(58L);
+        OutsideCourseListResponse response = courseService.outsideList(request);
+        assertEquals(0, response.getTotal());
+        assertEquals(10, response.getPageSize());
+        verify(courseRepository, never()).searchOutside(any(), any(), anyBoolean(), any(), any());
     }
 
     @Test

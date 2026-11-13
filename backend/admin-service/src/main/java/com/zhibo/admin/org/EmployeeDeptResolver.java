@@ -2,9 +2,15 @@ package com.zhibo.admin.org;
 
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -31,28 +37,77 @@ public class EmployeeDeptResolver {
         if (employeeId <= 0) {
             return Optional.empty();
         }
-        Optional<SysUserAccountEntity> accountOpt = userRepository.findById(employeeId);
-        if (accountOpt.isEmpty()) {
-            return Optional.empty();
+        return Optional.ofNullable(resolvePrimaryBatch(List.of(employeeId)).get(employeeId));
+    }
+
+    /**
+     * 批量解析员工第一部门，口径与 {@link #resolvePrimary(long)} 相同，避免 N+1。
+     */
+    public Map<Long, Dept> resolvePrimaryBatch(Collection<Long> employeeIds) {
+        if (employeeIds == null || employeeIds.isEmpty()) {
+            return Map.of();
         }
-        Long yhid = accountOpt.get().getYhid();
-        if (yhid == null || yhid <= 0) {
-            return Optional.empty();
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        for (Long id : employeeIds) {
+            if (id != null && id > 0) {
+                ids.add(id);
+            }
         }
-        List<HrUimsyhgwxxEntity> positions = positionRepository.findActiveByYhidIn(List.of(yhid));
-        if (positions == null || positions.isEmpty()) {
-            return Optional.empty();
+        if (ids.isEmpty()) {
+            return Map.of();
         }
-        HrUimsyhgwxxEntity first = positions.stream()
-                .filter(g -> g.getBmid() != null && g.getBmid() > 0)
-                .min(Comparator.comparing(HrUimsyhgwxxEntity::getId, Comparator.nullsLast(Long::compareTo)))
-                .orElse(null);
-        if (first == null) {
-            return Optional.empty();
+        List<SysUserAccountEntity> accounts = userRepository.findAllById(ids);
+        Map<Long, Long> employeeToYhid = new LinkedHashMap<>();
+        for (SysUserAccountEntity account : accounts) {
+            Long yhid = account.getYhid();
+            if (yhid != null && yhid > 0) {
+                employeeToYhid.put(account.getId(), yhid);
+            }
         }
-        return deptRepository.findById(first.getBmid())
-                .filter(d -> d.getBmmc() != null && !d.getBmmc().isBlank())
-                .map(d -> new Dept(d.getId(), d.getBmmc().trim()));
+        if (employeeToYhid.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> yhids = new LinkedHashSet<>(employeeToYhid.values());
+        List<HrUimsyhgwxxEntity> positions = positionRepository.findActiveByYhidIn(new ArrayList<>(yhids));
+        Map<Long, HrUimsyhgwxxEntity> yhidToPosition = new HashMap<>();
+        if (positions != null) {
+            for (HrUimsyhgwxxEntity g : positions) {
+                if (g.getYhid() == null || g.getBmid() == null || g.getBmid() <= 0) {
+                    continue;
+                }
+                HrUimsyhgwxxEntity existing = yhidToPosition.get(g.getYhid());
+                if (existing == null
+                        || (g.getId() != null
+                                && (existing.getId() == null || g.getId() < existing.getId()))) {
+                    yhidToPosition.put(g.getYhid(), g);
+                }
+            }
+        }
+        Set<Long> bmids = new LinkedHashSet<>();
+        for (HrUimsyhgwxxEntity g : yhidToPosition.values()) {
+            bmids.add(g.getBmid());
+        }
+        Map<Long, SysUimsbmxxEntity> deptRows = new HashMap<>();
+        if (!bmids.isEmpty()) {
+            for (SysUimsbmxxEntity d : deptRepository.findAllById(bmids)) {
+                if (d.getBmmc() != null && !d.getBmmc().isBlank()) {
+                    deptRows.put(d.getId(), d);
+                }
+            }
+        }
+        Map<Long, Dept> result = new LinkedHashMap<>();
+        for (Map.Entry<Long, Long> e : employeeToYhid.entrySet()) {
+            HrUimsyhgwxxEntity pos = yhidToPosition.get(e.getValue());
+            if (pos == null) {
+                continue;
+            }
+            SysUimsbmxxEntity dept = deptRows.get(pos.getBmid());
+            if (dept == null) {
+                continue;
+            }
+            result.put(e.getKey(), new Dept(dept.getId(), dept.getBmmc().trim()));
+        }
+        return result;
     }
 
     public record Dept(long deptId, String deptName) {}

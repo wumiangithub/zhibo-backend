@@ -77,6 +77,17 @@ class AuthInterceptorTest {
     }
 
     @Test
+    void outsideOrdersReceive_withoutCredentials_isNotBlocked() throws Exception {
+        assertTrue(AuthInterceptor.isWhitelisted("/api/v1/outside/courses/orders/receive"));
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST", "/api/v1/outside/courses/orders/receive");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertTrue(interceptor.preHandle(request, response, new Object()));
+        assertEquals(200, response.getStatus());
+        assertFalse(response.getContentAsString().contains("\"code\":401"));
+    }
+
+    @Test
     void businessApi_rejectsRefreshToken() throws Exception {
         String refresh = jwtTokenService.issueRefresh(1L, "admin", "???", 0, "admin", "1");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/activities/list");

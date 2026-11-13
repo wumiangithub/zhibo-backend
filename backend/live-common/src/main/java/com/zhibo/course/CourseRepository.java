@@ -59,4 +59,26 @@ public interface CourseRepository extends JpaRepository<CourseEntity, String> {
             @Param("shelfStatus") String shelfStatus,
             @Param("riskStatus") String riskStatus,
             Pageable pageable);
+
+    /**
+     * 对外课程列表：未软删，且满足可见性。
+     * {@code status=1}：已上架且风控通过；{@code status=2}：已下架；
+     * {@code status} 为空：二者并集。仍排除待上架、封禁、仅驳回等。
+     * {@code idsEmpty=true} 时不过滤 id（{@code ids} 仍须传非空占位，避免 IN ()）。
+     */
+    @Query("SELECT c FROM CourseEntity c WHERE c.deletedTime IS NULL "
+            + "AND (:keyword IS NULL OR c.title LIKE CONCAT('%', :keyword, '%')) "
+            + "AND ("
+            + "(:status IS NULL AND ((c.shelfStatus = 'on' AND c.riskStatus = 'passed') "
+            + "OR c.shelfStatus = 'off')) "
+            + "OR (:status = 1 AND c.shelfStatus = 'on' AND c.riskStatus = 'passed') "
+            + "OR (:status = 2 AND c.shelfStatus = 'off')"
+            + ") "
+            + "AND (:idsEmpty = true OR c.id IN :ids)")
+    Page<CourseEntity> searchOutside(
+            @Param("keyword") String keyword,
+            @Param("status") Integer status,
+            @Param("idsEmpty") boolean idsEmpty,
+            @Param("ids") Collection<String> ids,
+            Pageable pageable);
 }

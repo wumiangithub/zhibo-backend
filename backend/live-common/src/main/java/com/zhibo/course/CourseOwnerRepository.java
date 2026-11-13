@@ -13,6 +13,9 @@ public interface CourseOwnerRepository extends JpaRepository<CourseOwnerEntity, 
             + "ORDER BY o.id.courseId ASC, o.sortOrder ASC")
     List<CourseOwnerEntity> findByCourseIds(@Param("ids") Collection<String> ids);
 
+    @Query("SELECT o FROM CourseOwnerEntity o ORDER BY o.id.courseId ASC, o.sortOrder ASC")
+    List<CourseOwnerEntity> findAllOrdered();
+
     @Query("SELECT DISTINCT o.id.courseId FROM CourseOwnerEntity o WHERE o.id.userId IN :userIds")
     List<String> findCourseIdsByUserIdIn(@Param("userIds") Collection<Long> userIds);
 

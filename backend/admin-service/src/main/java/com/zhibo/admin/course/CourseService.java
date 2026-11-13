@@ -1,8 +1,11 @@
 package com.zhibo.admin.course;
 
 import com.zhibo.admin.auth.AuthService;
+import com.zhibo.admin.org.EmployeeDeptResolver;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
+import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.SellPasswordCryptoService;
 import com.zhibo.admin.course.dto.CourseAuditItem;
 import com.zhibo.admin.course.dto.CourseAuditListResponse;
@@ -25,6 +28,9 @@ import com.zhibo.admin.course.dto.OutsideCourseListRequest;
 import com.zhibo.admin.course.dto.UpdateCourseRequest;
 import com.zhibo.admin.course.dto.OutsideCourseListResponse;
 import com.zhibo.course.CourseAuditEntity;
+import com.zhibo.course.CourseCatalogContentKind;
+import com.zhibo.course.CourseCatalogNodeEntity;
+import com.zhibo.course.CourseCatalogNodeRepository;
 import com.zhibo.course.CourseAuditRepository;
 import com.zhibo.course.CourseEntity;
 import com.zhibo.course.CourseMaterialAccess;
@@ -91,6 +97,9 @@ public class CourseService {
     private final SysUserAccountRepository userRepository;
     private final SellPasswordCryptoService sellPasswordCrypto;
     private final CourseUserRepository courseUserRepository;
+    private final EmployeeDeptResolver employeeDeptResolver;
+    private final CourseCatalogNodeRepository catalogNodeRepository;
+    private final ActivityRepository activityRepository;
 
     @Transactional
     public CourseIdResponse create(CreateCourseRequest request, long operatorId) {
@@ -220,33 +229,55 @@ public class CourseService {
         return response;
     }
 
+
     /**
-     * 对外列表：只含已上架且风控已通过、未软删的课程。
-     * 字段：courseId / courseName / contentCount / departmentName（归属人部门）。
+     * 对外课程列表，字段对齐已发布合同《课程列表_订单回调接口文档》。
+     * status=1：已上架且风控通过；status=2：已下架；不传：二者并集。排除软删、待上架、封禁等。
      */
     public OutsideCourseListResponse outsideList(OutsideCourseListRequest request) {
         OutsideCourseListRequest body = request == null ? new OutsideCourseListRequest() : request;
         int page = body.getPage() == null || body.getPage() < 1 ? 1 : body.getPage();
         int pageSize;
         if (body.getPageSize() == null || body.getPageSize() < 1) {
-            pageSize = 20;
+            pageSize = 10;
         } else if (body.getPageSize() > 100) {
             pageSize = 100;
         } else {
             pageSize = body.getPageSize();
         }
-        String nameFilter = trimToNull(body.getCourseName());
-        PageRequest pageable = PageRequest.of(page - 1, pageSize, Sort.by("listedTime").descending());
-        Page<CourseEntity> result = courseRepository.search(nameFilter, "on", "passed", pageable);
+        String nameRaw = body.getName();
+        if (nameRaw != null && nameRaw.length() > 50) {
+            throw new IllegalArgumentException("课程名称不能超过50个字符");
+        }
+        String nameFilter = trimToNull(nameRaw);
+        Integer status = body.getStatus();
+        if (status != null && status != 1 && status != 2) {
+            throw new IllegalArgumentException("状态无效，仅支持 1启用 或 2已下架");
+        }
+
+        boolean idsEmpty = true;
+        List<String> deptCourseIds = List.of("_");
+        if (body.getDeptId() != null) {
+            List<String> ids = courseIdsWithPrimaryOwnerDept(body.getDeptId());
+            if (ids.isEmpty()) {
+                return emptyOutsideList(page, pageSize);
+            }
+            deptCourseIds = ids;
+            idsEmpty = false;
+        }
+
+        PageRequest pageable = PageRequest.of(
+                page - 1, pageSize, Sort.by(Sort.Direction.DESC, "updatedTime"));
+        Page<CourseEntity> result = courseRepository.searchOutside(
+                nameFilter, status, idsEmpty, deptCourseIds, pageable);
 
         List<OutsideCourseItem> items = new ArrayList<>();
         for (CourseEntity entity : result.getContent()) {
-            if (!visibleOutside(entity)) {
-                continue;
-            }
             items.add(toOutsideItem(entity));
         }
         attachOutsideDepartment(items);
+        attachOutsideUpdater(items);
+        attachOutsideLessonCounts(items);
 
         OutsideCourseListResponse response = new OutsideCourseListResponse();
         response.setPage(page);
@@ -254,6 +285,36 @@ public class CourseService {
         response.setTotal(result.getTotalElements());
         response.setList(items);
         return response;
+    }
+
+    private OutsideCourseListResponse emptyOutsideList(int page, int pageSize) {
+        OutsideCourseListResponse response = new OutsideCourseListResponse();
+        response.setPage(page);
+        response.setPageSize(pageSize);
+        response.setTotal(0);
+        response.setList(List.of());
+        return response;
+    }
+
+    /** 预选出第一归属人部门等于 {@code deptId} 的课程 id，再交给分页查询，避免先分页后内存过滤。 */
+    private List<String> courseIdsWithPrimaryOwnerDept(long deptId) {
+        List<CourseOwnerEntity> owners = ownerRepository.findAllOrdered();
+        if (owners == null || owners.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Long> primary = new LinkedHashMap<>();
+        for (CourseOwnerEntity row : owners) {
+            primary.putIfAbsent(row.getId().getCourseId(), row.getId().getUserId());
+        }
+        Map<Long, EmployeeDeptResolver.Dept> depts = employeeDeptResolver.resolvePrimaryBatch(primary.values());
+        List<String> ids = new ArrayList<>();
+        for (Map.Entry<String, Long> e : primary.entrySet()) {
+            EmployeeDeptResolver.Dept dept = depts.get(e.getValue());
+            if (dept != null && dept.deptId() == deptId) {
+                ids.add(e.getKey());
+            }
+        }
+        return ids;
     }
 
     public CourseDetailResponse detail(String id) {
@@ -808,9 +869,10 @@ public class CourseService {
         }
     }
 
+
     /**
-     * 课程部门 = 归属人部门。多人归属时取 {@code sort_order} 最小的第一人；
-     * 该员工多部门时用顿号连接（同 {@link AuthService#resolveDepartmentName}）。
+     * 课程部门 = 第一归属人部门（{@code sort_order} 最小）；
+     * 经 {@link EmployeeDeptResolver} 取岗位表单一部门，禁止读 {@code qw_bmxx}。
      */
     private void attachOutsideDepartment(List<OutsideCourseItem> items) {
         if (items.isEmpty()) {
@@ -818,27 +880,92 @@ public class CourseService {
         }
         List<String> ids = items.stream().map(OutsideCourseItem::getCourseId).toList();
         Map<String, List<CourseOwnerEntity>> owners = ownerRepository.findByCourseIds(ids).stream()
-                .collect(Collectors.groupingBy(row -> row.getId().getCourseId(), LinkedHashMap::new, Collectors.toList()));
-        Set<Long> userIds = owners.values().stream()
-                .flatMap(List::stream)
-                .map(row -> row.getId().getUserId())
-                .collect(Collectors.toSet());
-        Map<Long, SysUserAccountEntity> users = userIds.isEmpty()
-                ? Map.of()
-                : userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(SysUserAccountEntity::getId, user -> user, (a, b) -> a));
+                .collect(Collectors.groupingBy(
+                        row -> row.getId().getCourseId(), LinkedHashMap::new, Collectors.toList()));
+        java.util.LinkedHashSet<Long> userIds = new java.util.LinkedHashSet<>();
+        for (List<CourseOwnerEntity> rows : owners.values()) {
+            for (CourseOwnerEntity row : rows) {
+                userIds.add(row.getId().getUserId());
+            }
+        }
+        Map<Long, EmployeeDeptResolver.Dept> depts = employeeDeptResolver.resolvePrimaryBatch(userIds);
         for (OutsideCourseItem item : items) {
-            SysUserAccountEntity primary = null;
+            Long primaryUser = null;
             for (CourseOwnerEntity row : owners.getOrDefault(item.getCourseId(), List.of())) {
-                SysUserAccountEntity user = users.get(row.getId().getUserId());
-                if (user != null) {
-                    primary = user;
-                    break;
-                }
+                primaryUser = row.getId().getUserId();
+                break;
             }
-            if (primary != null) {
-                item.setDepartmentName(AuthService.resolveDepartmentName(primary));
+            if (primaryUser == null) {
+                continue;
             }
+            EmployeeDeptResolver.Dept dept = depts.get(primaryUser);
+            if (dept != null) {
+                item.setDeptId(dept.deptId());
+                item.setDeptName(dept.deptName());
+            }
+        }
+    }
+
+    private void attachOutsideUpdater(List<OutsideCourseItem> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        List<String> ids = items.stream().map(OutsideCourseItem::getCourseId).toList();
+        List<CourseAuditEntity> audits = auditRepository.findByCourseIdInOrderByCreatedTimeDesc(ids);
+        if (audits == null || audits.isEmpty()) {
+            return;
+        }
+        Map<String, String> latest = new LinkedHashMap<>();
+        for (CourseAuditEntity row : audits) {
+            if (latest.containsKey(row.getCourseId())) {
+                continue;
+            }
+            if (row.getOperatorName() != null && !row.getOperatorName().isBlank()) {
+                latest.put(row.getCourseId(), row.getOperatorName().trim());
+            }
+        }
+        for (OutsideCourseItem item : items) {
+            item.setUpdaterName(latest.get(item.getCourseId()));
+        }
+    }
+
+    private void attachOutsideLessonCounts(List<OutsideCourseItem> items) {
+        if (items.isEmpty()) {
+            return;
+        }
+        List<String> ids = items.stream().map(OutsideCourseItem::getCourseId).toList();
+        List<CourseCatalogNodeEntity> nodes = catalogNodeRepository.findActiveByCourseIdsAndContentKind(
+                ids, CourseCatalogContentKind.LIVE);
+        if (nodes == null || nodes.isEmpty()) {
+            return;
+        }
+        java.util.Set<String> activityIds = nodes.stream()
+                .map(CourseCatalogNodeEntity::getContentId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        Map<String, ActivityEntity> activities = activityIds.isEmpty()
+                ? Map.of()
+                : activityRepository.findAllById(activityIds).stream()
+                        .filter(a -> a.getDeletedTime() == null && a.getType() != null)
+                        .collect(Collectors.toMap(ActivityEntity::getId, a -> a, (a, b) -> a));
+        Map<String, int[]> counts = new HashMap<>();
+        for (CourseCatalogNodeEntity node : nodes) {
+            ActivityEntity activity = activities.get(node.getContentId());
+            if (activity == null) {
+                continue;
+            }
+            int type = activity.getType();
+            int[] pair = counts.computeIfAbsent(node.getCourseId(), key -> new int[2]);
+            if (type == 1 || type == 2 || type == 3) {
+                pair[0]++;
+            } else if (type == 4) {
+                pair[1]++;
+            }
+        }
+        for (OutsideCourseItem item : items) {
+            int[] pair = counts.getOrDefault(item.getCourseId(), new int[2]);
+            item.setLiveCount(pair[0]);
+            item.setReplayCount(pair[1]);
         }
     }
 
@@ -846,14 +973,12 @@ public class CourseService {
         OutsideCourseItem item = new OutsideCourseItem();
         item.setCourseId(entity.getId());
         item.setCourseName(entity.getTitle());
-        item.setContentCount(entity.getContentCount());
+        item.setStatus("on".equals(entity.getShelfStatus()) ? 1 : 2);
+        item.setUpdateTime(formatTime(entity.getUpdatedTime()));
+        item.setTeacherName(null);
+        item.setLiveCount(0);
+        item.setReplayCount(0);
         return item;
-    }
-
-    private static boolean visibleOutside(CourseEntity entity) {
-        return entity.getDeletedTime() == null
-                && "on".equals(entity.getShelfStatus())
-                && "passed".equals(entity.getRiskStatus());
     }
 
     private List<CourseMaterialView> loadMaterials(String courseId) {

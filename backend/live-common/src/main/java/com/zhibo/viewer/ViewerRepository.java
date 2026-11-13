@@ -1,5 +1,6 @@
 package com.zhibo.viewer;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -26,4 +27,10 @@ public interface ViewerRepository extends JpaRepository<ViewerEntity, Long>, Jpa
     List<ViewerEntity> findByIdIn(Collection<Long> ids);
 
     List<ViewerEntity> findByUsernameIn(Collection<String> usernames);
+
+    long countByLastVisitTimeGreaterThanEqualAndLastVisitTimeLessThan(
+            LocalDateTime start, LocalDateTime end);
+
+    long countByCreatedTimeGreaterThanEqualAndCreatedTimeLessThan(
+            LocalDateTime start, LocalDateTime end);
 }

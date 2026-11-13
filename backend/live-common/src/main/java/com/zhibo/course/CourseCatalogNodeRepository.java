@@ -66,6 +66,13 @@ public interface CourseCatalogNodeRepository extends JpaRepository<CourseCatalog
             @Param("courseId") String courseId,
             @Param("contentKind") int contentKind);
 
+    @Query("SELECT n FROM CourseCatalogNodeEntity n WHERE n.courseId IN :courseIds "
+            + "AND n.deletedTime IS NULL AND n.contentKind = :contentKind "
+            + "AND n.contentId IS NOT NULL")
+    List<CourseCatalogNodeEntity> findActiveByCourseIdsAndContentKind(
+            @Param("courseIds") Collection<String> courseIds,
+            @Param("contentKind") int contentKind);
+
     @Query("SELECT CASE WHEN COUNT(n) > 0 THEN true ELSE false END FROM CourseCatalogNodeEntity n "
             + "WHERE n.courseId = :courseId AND n.deletedTime IS NULL AND n.nodeType = 3 "
             + "AND n.contentKind = :contentKind AND n.contentId = :contentId")
