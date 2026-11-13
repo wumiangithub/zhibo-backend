@@ -2144,6 +2144,53 @@ function buildAdmin() {
         },
       },
     },
+    ActivityCloudSyncData: {
+      type: 'object',
+      required: [
+        'id',
+        'state',
+        'applicable',
+        'stateAttempted',
+        'stateUpdated',
+        'sessionsAttempted',
+        'recordsAttempted',
+        'recordsOk',
+      ],
+      description:
+        '显式同步微吼云数据（D120）：info 对账 state + switch-list 场次；结束类 state 或已有 live_actual_end_time 时再跑回放 get-list/TOS。失败只体现在 flags，不 500。不用 webinar/get-list 替换本站活动列表。',
+      properties: {
+        id: { $ref: '#/components/schemas/BusinessUuid', description: '本站活动 id' },
+        state: {
+          $ref: '#/components/schemas/ActivityState',
+          description: '补偿后本库活动状态（可能刚被 webinar/info 写回）',
+        },
+        applicable: {
+          type: 'boolean',
+          description: '是否为可补偿的 vhall 且有 provider_room_id；否则其余 attempted 为 false',
+        },
+        stateAttempted: {
+          type: 'boolean',
+          description: '是否尝试拉微吼 webinar/info 对账 state',
+        },
+        stateUpdated: {
+          type: 'boolean',
+          description: 'info 对账是否写回了本库 state',
+        },
+        sessionsAttempted: {
+          type: 'boolean',
+          description: '是否尝试 get-webinar-switch-list 场次 sync',
+        },
+        recordsAttempted: {
+          type: 'boolean',
+          description:
+            '是否尝试回放 get-list 补偿；仅结束类 state（3/4/5）或本库已有 live_actual_end_time 时为 true',
+        },
+        recordsOk: {
+          type: 'boolean',
+          description: '回放 get-list 是否成功；未尝试时为 false',
+        },
+      },
+    },
     ActivityMemberItem: {
       type: 'object',
       required: ['id', 'userName', 'role', 'nickname', 'tag'],
@@ -3728,6 +3775,116 @@ function buildAdmin() {
         },
       },
     },
+    DashboardRecentLiveRow: {
+      type: 'object',
+      required: [
+        'id',
+        'title',
+        'coverUrl',
+        'startTime',
+        'endTime',
+        'state',
+        'roomViewCount',
+        'roomVisitorCount',
+        'watchViewCount',
+        'watchViewerCount',
+        'avgWatchDurationSec',
+        'maxOnlinePeak',
+        'newUserCount',
+      ],
+      properties: {
+        id: {
+          $ref: '#/components/schemas/BusinessUuid',
+          description: '本站活动 UUID',
+        },
+        title: { type: 'string', description: '直播名称' },
+        coverUrl: {
+          type: 'string',
+          description: '详情封面 URL；无封面时为空字符串',
+        },
+        startTime: {
+          type: 'string',
+          description:
+            '实际首开时间（Asia/Shanghai），格式 yyyy-MM-dd HH:mm:ss。有场次时取各段最早 start，否则用 live_actual_start_time。本接口不返回计划预告时间。',
+        },
+        endTime: {
+          type: 'string',
+          description:
+            '实际末结时间（Asia/Shanghai），格式 yyyy-MM-dd HH:mm:ss。有场次时取各段最晚 end，否则用 live_actual_end_time。直播中且尚无汇总结束时为空字符串。',
+        },
+        state: {
+          $ref: '#/components/schemas/ActivityState',
+          description: '1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放',
+        },
+        roomViewCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '直播间浏览量。等于直播数据·用户数据 type=live 的观看人次；只计观众 presence 会话。',
+        },
+        roomVisitorCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '直播间访问人数。等于 type=live 的观看人数（有正直播时长的去重观众）。',
+        },
+        watchViewCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '累计观看人次。等于 type=live_replay 的观看人次（直播人次加回放人次）。',
+        },
+        watchViewerCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '累计观看人数。等于 type=live_replay 的观看人数（直播与回放观众并集）。',
+        },
+        avgWatchDurationSec: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '人均观看时长，整秒。等于 type=live 的人均观看时长；前端展示为 HH:mm:ss。',
+        },
+        maxOnlinePeak: {
+          type: 'integer',
+          description:
+            '最高在线人数。各场次时间窗内按 room_presence_event 扫描观众在线集合，取全局最大值；无 socket_id 的历史流水不参与。',
+        },
+        newUserCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '当日新增用户数。本场 presence 出现过的观众 username 与 viewer.created_time 落在开播自然日（Asia/Shanghai，[当天 00:00, 次日 00:00)）的交集人数。',
+        },
+      },
+    },
+    DashboardRecentLivesData: {
+      type: 'object',
+      required: ['page', 'pageSize', 'total', 'list'],
+      properties: {
+        page: {
+          type: 'integer',
+          description: '回显请求页码，从 1 起',
+        },
+        pageSize: {
+          type: 'integer',
+          description: '回显请求每页条数；默认 20，上限 50',
+        },
+        total: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '当前候选集总条数。候选规则：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次。前端可用 page * pageSize < total 判断是否还有下一页。',
+        },
+        list: {
+          type: 'array',
+          description:
+            '本页最近直播行；未软删且已有 live_actual_start_time，按首开时间倒序；无匹配时为空数组。',
+          items: { $ref: '#/components/schemas/DashboardRecentLiveRow' },
+        },
+      },
+    },
 
     CatalogNodeType: {
       type: 'integer',
@@ -4091,6 +4248,7 @@ function buildAdmin() {
       $ref: '#/components/schemas/ActivityRecordDownloadData',
     },
     ApiResponseEndActivity: { $ref: '#/components/schemas/EndActivityData' },
+    ApiResponseCloudSync: { $ref: '#/components/schemas/ActivityCloudSyncData' },
     ApiResponseLiveStart: { $ref: '#/components/schemas/EndActivityData' },
     ApiResponseMembers: { $ref: '#/components/schemas/ActivityMemberListData' },
     ApiResponseAcceptMember: {
@@ -4214,6 +4372,9 @@ function buildAdmin() {
     ApiResponseViewerTagList: { $ref: '#/components/schemas/ViewerTagListData' },
     ApiResponseViewerTagDetail: { $ref: '#/components/schemas/ViewerTagListItem' },
     ApiResponseActivityUserData: { $ref: '#/components/schemas/ActivityUserData' },
+    ApiResponseDashboardRecentLives: {
+      $ref: '#/components/schemas/DashboardRecentLivesData',
+    },
     ApiResponseCourseCatalogList: {
       $ref: '#/components/schemas/CourseCatalogListData',
     },
@@ -4725,6 +4886,8 @@ function buildAdmin() {
       get: {
         tags: ['活动管理'],
         summary: '活动列表',
+        description:
+          '管理端直播/活动列表。组装本页 list 前对每场活动经 ActivityCloudSyncService 旁路 sessionsOnly（get-webinar-switch-list），失败只日志不挡主流程；不对未入本页的活动全库扫（D120）。',
         operationId: 'listActivities',
         security: bearer,
         parameters: [
@@ -4774,6 +4937,22 @@ function buildAdmin() {
         security: bearer,
         parameters: [activityId],
         responses: ok200('#/components/schemas/ApiResponseActivityDetail'),
+      },
+    },
+    '/api/v1/activities/cloud-sync/{id}': {
+      post: {
+        tags: ['活动管理'],
+        summary: '显式同步微吼云数据',
+        description:
+          '对指定活动跑统一补偿门面（D120）：拉 webinar/info 对账本库 state；拉 get-webinar-switch-list upsert 场次并回写 live_actual_*；' +
+          '当云侧或本库为结束类（state 3/4/5）或本库已有 live_actual_end_time 时，再跑与回放列表同源的 get-list → check/TOS 补偿。' +
+          '只同步这一场，禁止全账号扫。失败只打日志并以响应 flags 体现，不挡主流程、不 500。' +
+          '不用微吼 webinar/get-list 替换本站活动列表。非 vhall / 无 provider_room_id 时 applicable=false。' +
+          '活动不存在或已软删 → 业务 400。须管理端员工 JWT；未登录 → code=401。',
+        operationId: 'cloudSyncActivity',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseCloudSync'),
       },
     },
     '/api/v1/activities/update/{id}': {
@@ -5200,6 +5379,49 @@ function buildAdmin() {
         security: bearer,
         parameters: [activityId],
         responses: ok200('#/components/schemas/ApiResponseActivityUserData'),
+      },
+    },
+    '/api/v1/dashboard/recent-lives': {
+      get: {
+        tags: ['统计'],
+        summary: '工作台 · 最近直播数据',
+        description:
+          '管理端工作台「最近直播数据」表格。读本站 activity、activity_live_session、room_presence_event、room_replay_watch、viewer。' +
+          '组装本页列表前对每场活动经 ActivityCloudSyncService 旁路 sessionsOnly（get-webinar-switch-list），失败只日志不挡主流程（D120）。' +
+          '分页 page（默认 1）+ pageSize（默认 20，上限 50）。' +
+          '候选集：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次；均按实际首开倒序。' +
+          'startTime/endTime 为实际首开～末结（计划时间不回）；直播中未闭合时 endTime 为空串。' +
+          'roomViewCount/roomVisitorCount/avgWatchDurationSec 对齐用户数据 type=live；' +
+          'watchViewCount/watchViewerCount 对齐 type=live_replay；只计观众。' +
+          'maxOnlinePeak 为场次窗内 presence 扫峰值；newUserCount 为本场观众与开播自然日注册用户的交集。未登录业务码 401。',
+        operationId: 'getDashboardRecentLives',
+        security: bearer,
+        parameters: [
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              default: 1,
+              minimum: 1,
+              description: '页码，从 1 起；默认 1；小于 1 时业务 400',
+            },
+          },
+          {
+            name: 'pageSize',
+            in: 'query',
+            required: false,
+            schema: {
+              type: 'integer',
+              default: 20,
+              minimum: 1,
+              maximum: 50,
+              description: '每页条数；默认 20；须在 1～50，越界业务 400',
+            },
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseDashboardRecentLives'),
       },
     },
     '/api/v1/activities/attendees/{id}': {

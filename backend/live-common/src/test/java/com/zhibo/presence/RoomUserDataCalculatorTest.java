@@ -1,6 +1,7 @@
 package com.zhibo.presence;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityLiveSessionEntity;
 import com.zhibo.replay.RoomReplayWatchEntity;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +81,49 @@ class RoomUserDataCalculatorTest {
 
         assertEquals("2026-10-01 10:00:00", stats.trendStartTime());
         assertEquals("2026-10-02 10:00:00", stats.trendEndTime());
+    }
+
+    @Test
+    void live_twoSessionsSkipsGapAndTrendUsesEarliestLatest() {
+        ActivityEntity activity = activity(3);
+        List<ActivityLiveSessionEntity> sessions = List.of(
+                session(1L, "2026-10-29T10:00:00", "2026-10-29T11:00:00"),
+                session(2L, "2026-10-29T14:00:00", "2026-10-29T15:00:00"));
+
+        RoomUserDataCalculator.Result result = RoomUserDataCalculator.compute(
+                activity,
+                List.of(
+                        event("12", "Join", "s1", "2026-10-29 10:00:00"),
+                        event("12", "Leave", "s1", "2026-10-29 15:00:00")),
+                List.of(),
+                sessions,
+                LocalDateTime.of(2026, 10, 29, 16, 0));
+
+        assertEquals(7200L, result.stats().liveTotalSec());
+        assertEquals("2026-10-29 10:00:00", result.stats().trendStartTime());
+        assertEquals("2026-10-29 15:00:00", result.stats().trendEndTime());
+        // 段内峰值 2；空隙内再上线不抬高（空隙事件不计入峰）
+        assertEquals(2, RoomUserDataCalculator.maxOnlinePeak(
+                activity,
+                List.of(
+                        event("12", "Join", "s1", "2026-10-29 10:10:00"),
+                        event("13", "Join", "t1", "2026-10-29 10:20:00"),
+                        event("12", "Leave", "s1", "2026-10-29 10:50:00"),
+                        event("13", "Leave", "t1", "2026-10-29 10:55:00"),
+                        event("12", "Join", "s2", "2026-10-29 12:00:00"),
+                        event("13", "Join", "t2", "2026-10-29 12:05:00"),
+                        event("12", "Leave", "s2", "2026-10-29 12:30:00"),
+                        event("13", "Leave", "t2", "2026-10-29 12:40:00")),
+                sessions,
+                LocalDateTime.of(2026, 10, 29, 16, 0)));
+    }
+
+    private static ActivityLiveSessionEntity session(long switchId, String start, String end) {
+        ActivityLiveSessionEntity row = new ActivityLiveSessionEntity();
+        row.setSwitchId(switchId);
+        row.setStartTime(LocalDateTime.parse(start));
+        row.setEndTime(LocalDateTime.parse(end));
+        return row;
     }
 
     private static ActivityEntity activity(int state) {

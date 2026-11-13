@@ -1,12 +1,16 @@
 package com.zhibo.admin.userdata;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityLiveSessionEntity;
+import com.zhibo.activity.ActivityLiveSessionRepository;
+import com.zhibo.activity.cloud.ActivityCloudSyncService;
 import com.zhibo.admin.activity.ActivityService;
 import com.zhibo.admin.userdata.dto.ActivityUserDataResponse;
 import com.zhibo.presence.PresenceEventRepository;
 import com.zhibo.presence.RoomUserDataCalculator;
 import com.zhibo.presence.RoomUserDataStats;
 import com.zhibo.replay.RoomReplayWatchRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +27,8 @@ public class UserDataService {
     private final ActivityService activityService;
     private final PresenceEventRepository presenceEventRepository;
     private final RoomReplayWatchRepository replayWatchRepository;
+    private final ActivityLiveSessionRepository liveSessionRepository;
+    private final ActivityCloudSyncService activityCloudSyncService;
     private final Clock clock;
 
     public ActivityUserDataResponse userData(String activityId) {
@@ -30,10 +36,17 @@ public class UserDataService {
         String roomId = activity.getId();
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
 
+        ActivityCloudSyncService.Result sync = activityCloudSyncService.syncQuietly(
+                activity, ActivityCloudSyncService.Options.sessionsOnly());
+        List<ActivityLiveSessionEntity> sessions = sync.sessions();
+        if (sessions == null || sessions.isEmpty()) {
+            sessions = liveSessionRepository.findByActivityId(roomId);
+        }
         RoomUserDataCalculator.Result result = RoomUserDataCalculator.compute(
                 activity,
                 presenceEventRepository.findByRoomId(roomId),
                 replayWatchRepository.findByRoomId(roomId),
+                sessions,
                 now);
         RoomUserDataStats stats = result.stats();
 

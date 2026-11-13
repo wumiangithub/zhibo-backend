@@ -130,6 +130,8 @@ class ActivityServiceTest {
     private ActivityRecordRepository activityRecordRepository;
     @Mock
     private ActivityRecordTosIngestService activityRecordTosIngestService;
+    @Mock
+    private com.zhibo.activity.cloud.ActivityCloudSyncService activityCloudSyncService;
 
     @InjectMocks
     private ActivityService activityService;
@@ -152,6 +154,10 @@ class ActivityServiceTest {
         org.mockito.Mockito.lenient()
                 .when(activityRecordTosIngestService.tryMarkInFlight(anyLong()))
                 .thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(activityCloudSyncService.syncQuietly(any(), any()))
+                .thenReturn(new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
+                        true, false, false, null, true, List.of(), false, false));
     }
 
     @Test

@@ -58,11 +58,11 @@ public class ActivityEntity {
     @Column(name = "end_time", length = 32)
     private String endTime;
 
-    /** 开播回调首次写入的实际开始时间。 */
+    /** 汇总：各场次最早实际开播（D119；仅取更早，不抬晚）。 */
     @Column(name = "live_actual_start_time")
     private LocalDateTime liveActualStartTime;
 
-    /** 结束回调首次写入的实际结束时间。 */
+    /** 汇总：各场次最晚实际结束（D119；可覆盖）。 */
     @Column(name = "live_actual_end_time")
     private LocalDateTime liveActualEndTime;
 

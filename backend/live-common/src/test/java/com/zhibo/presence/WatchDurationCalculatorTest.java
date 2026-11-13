@@ -1,6 +1,7 @@
 package com.zhibo.presence;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityLiveSessionEntity;
 import com.zhibo.replay.RoomReplayWatchEntity;
 import org.junit.jupiter.api.Test;
 
@@ -91,6 +92,33 @@ class WatchDurationCalculatorTest {
         assertEquals(180L, out.get("12").replaySec());
         assertEquals(180L, out.get("12").totalSec());
         assertEquals(0L, out.get("12").liveSec());
+    }
+
+    @Test
+    void live_twoSessionsSkipsGapBetweenThem() {
+        ActivityEntity activity = activity(3);
+        List<ActivityLiveSessionEntity> sessions = List.of(
+                session(1L, "2026-10-29T10:00:00", "2026-10-29T11:00:00"),
+                session(2L, "2026-10-29T14:00:00", "2026-10-29T15:00:00"));
+
+        // 全程在线 10:00～15:00，中间 11:00～14:00 空隙不计
+        Map<String, Long> live = WatchDurationCalculator.liveSeconds(
+                activity,
+                List.of(
+                        event("12", "Join", "s1", "2026-10-29 10:00:00"),
+                        event("12", "Leave", "s1", "2026-10-29 15:00:00")),
+                sessions,
+                LocalDateTime.of(2026, 10, 29, 16, 0));
+
+        assertEquals(7200L, live.get("12"));
+    }
+
+    private static ActivityLiveSessionEntity session(long switchId, String start, String end) {
+        ActivityLiveSessionEntity row = new ActivityLiveSessionEntity();
+        row.setSwitchId(switchId);
+        row.setStartTime(LocalDateTime.parse(start));
+        row.setEndTime(LocalDateTime.parse(end));
+        return row;
     }
 
     private static ActivityEntity activity(int state) {

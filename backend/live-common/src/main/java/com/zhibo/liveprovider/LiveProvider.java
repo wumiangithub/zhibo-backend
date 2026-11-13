@@ -8,6 +8,7 @@ import com.zhibo.liveprovider.dto.ProviderRecordDownload;
 import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
+import com.zhibo.liveprovider.dto.ProviderWebinarSwitchList;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
@@ -117,6 +118,14 @@ public interface LiveProvider {
      * 某场直播下的回放/录制列表；{@code list[].id} 即 create-demand 的 {@code record_id}。
      */
     ProviderRecordList listRecords(String providerRoomId);
+
+    /**
+     * 活动开播场次列表（微吼 {@code get-webinar-switch-list}，D119）。
+     * {@code switch_list[].id} → 本站 {@code activity_live_session.switch_id}。
+     */
+    default ProviderWebinarSwitchList listWebinarSwitches(String providerRoomId) {
+        throw new UnsupportedOperationException("该服务商未接入场次列表");
+    }
 
     /**
      * 回放详情（微吼 get-info）。供事件 4 / 补偿落库元数据；不映射 {@code save_time}。

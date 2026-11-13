@@ -1,7 +1,7 @@
 package com.zhibo.presence;
 
 import com.zhibo.activity.ActivityEntity;
-import com.zhibo.activity.AttendanceTimes;
+import com.zhibo.activity.ActivityLiveSessionEntity;
 import com.zhibo.replay.RoomReplayWatchEntity;
 
 import java.time.Duration;
@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 用户管理三时长：直播观看按 socket 配对并与实际直播区间重叠；回放按心跳墙钟。
+ * 用户管理三时长：直播观看按 socket 配对并与实际直播区间（多场次并集，D119）重叠；回放按心跳墙钟。
  */
 public final class WatchDurationCalculator {
 
@@ -32,7 +32,16 @@ public final class WatchDurationCalculator {
             List<PresenceEventEntity> events,
             List<RoomReplayWatchEntity> replays,
             LocalDateTime now) {
-        Map<String, Long> live = liveSeconds(activity, events, now);
+        return byViewer(activity, events, replays, List.of(), now);
+    }
+
+    public static Map<String, Durations> byViewer(
+            ActivityEntity activity,
+            List<PresenceEventEntity> events,
+            List<RoomReplayWatchEntity> replays,
+            List<ActivityLiveSessionEntity> sessions,
+            LocalDateTime now) {
+        Map<String, Long> live = liveSeconds(activity, events, sessions, now);
         Map<String, Long> replay = replaySeconds(replays);
         Map<String, Durations> out = new HashMap<>();
         for (String viewerUsername : live.keySet()) {
@@ -54,11 +63,18 @@ public final class WatchDurationCalculator {
 
     static Map<String, Long> liveSeconds(
             ActivityEntity activity, List<PresenceEventEntity> events, LocalDateTime now) {
-        LocalDateTime liveStart = liveStart(activity);
-        LocalDateTime liveEndBound = liveEndBound(activity, now);
+        return liveSeconds(activity, events, List.of(), now);
+    }
+
+    static Map<String, Long> liveSeconds(
+            ActivityEntity activity,
+            List<PresenceEventEntity> events,
+            List<ActivityLiveSessionEntity> sessions,
+            LocalDateTime now) {
+        List<LiveSessionWindows.Window> windows = LiveSessionWindows.resolve(activity, sessions, now);
         boolean liveInProgress = activity != null && activity.getState() != null && activity.getState() == 1;
         boolean ended = isEnded(activity);
-        boolean hasActualEnd = activity != null && activity.getLiveActualEndTime() != null;
+        boolean hasClosedWindow = !windows.isEmpty() && windows.stream().anyMatch(w -> w.end() != null);
 
         Map<String, Map<String, LocalDateTime>> open = new LinkedHashMap<>();
         Map<String, Long> seconds = new HashMap<>();
@@ -75,20 +91,24 @@ public final class WatchDurationCalculator {
             } else if (PresenceEventEntity.TYPE_LEAVE.equals(event.getType())) {
                 LocalDateTime join = sockets.remove(socketId);
                 if (join != null) {
-                    add(seconds, viewerUsername, overlapSeconds(join, time, liveStart, liveEndBound));
+                    add(seconds, viewerUsername, overlapUnionSeconds(join, time, windows));
                 }
             }
         }
         for (Map.Entry<String, Map<String, LocalDateTime>> user : open.entrySet()) {
             for (LocalDateTime join : user.getValue().values()) {
                 if (liveInProgress) {
-                    add(seconds, user.getKey(), overlapSeconds(join, now, liveStart, now));
-                } else if (hasActualEnd) {
-                    add(seconds, user.getKey(), overlapSeconds(join, liveEndBound, liveStart, liveEndBound));
+                    add(seconds, user.getKey(), overlapUnionSeconds(join, now, windows));
+                } else if (hasClosedWindow) {
+                    LocalDateTime leaveBound = windows.stream()
+                            .map(LiveSessionWindows.Window::end)
+                            .max(LocalDateTime::compareTo)
+                            .orElse(now);
+                    add(seconds, user.getKey(), overlapUnionSeconds(join, leaveBound, windows));
                 } else if (ended) {
-                    // 已结束仍无 Leave、也无实际结束时间：这段计 0
-                } else if (liveEndBound != null) {
-                    add(seconds, user.getKey(), overlapSeconds(join, liveEndBound, liveStart, liveEndBound));
+                    // 已结束仍无 Leave、也无可用场次/实际结束：这段计 0
+                } else {
+                    add(seconds, user.getKey(), overlapUnionSeconds(join, now, windows));
                 }
             }
         }
@@ -117,27 +137,17 @@ public final class WatchDurationCalculator {
         return seconds;
     }
 
-    private static LocalDateTime liveStart(ActivityEntity activity) {
-        if (activity == null) {
-            return null;
+    /** 一段 presence 与多场次并集的重叠秒数（停播空隙不计）。 */
+    static long overlapUnionSeconds(
+            LocalDateTime join, LocalDateTime leave, List<LiveSessionWindows.Window> windows) {
+        if (join == null || leave == null || windows == null || windows.isEmpty()) {
+            return 0L;
         }
-        if (activity.getLiveActualStartTime() != null) {
-            return activity.getLiveActualStartTime();
+        long total = 0L;
+        for (LiveSessionWindows.Window w : windows) {
+            total += overlapSeconds(join, leave, w.start(), w.end());
         }
-        return parseNullable(activity.getStartTime());
-    }
-
-    private static LocalDateTime liveEndBound(ActivityEntity activity, LocalDateTime now) {
-        if (activity == null) {
-            return now;
-        }
-        if (activity.getLiveActualEndTime() != null) {
-            return activity.getLiveActualEndTime();
-        }
-        if (activity.getState() != null && activity.getState() == 1) {
-            return now;
-        }
-        return parseNullable(activity.getEndTime());
+        return total;
     }
 
     private static boolean isEnded(ActivityEntity activity) {
@@ -167,17 +177,6 @@ public final class WatchDurationCalculator {
             return;
         }
         seconds.merge(viewerUsername, delta, Long::sum);
-    }
-
-    private static LocalDateTime parseNullable(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return AttendanceTimes.parse(raw, "t");
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
     }
 
     private static List<PresenceEventEntity> ordered(List<PresenceEventEntity> events) {

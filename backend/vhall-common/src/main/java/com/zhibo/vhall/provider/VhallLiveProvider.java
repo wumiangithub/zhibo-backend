@@ -11,6 +11,8 @@ import com.zhibo.liveprovider.dto.ProviderRecordInfo;
 import com.zhibo.liveprovider.dto.ProviderRecordItem;
 import com.zhibo.liveprovider.dto.ProviderRecordList;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
+import com.zhibo.liveprovider.dto.ProviderWebinarSwitchItem;
+import com.zhibo.liveprovider.dto.ProviderWebinarSwitchList;
 import com.zhibo.liveprovider.dto.PushStreamInfo;
 import com.zhibo.liveprovider.dto.UpdateRoomCommand;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
@@ -62,6 +64,8 @@ public class VhallLiveProvider implements LiveProvider {
     static final String PATH_ONLINE_TREND = "/v3/data-center/report/online";
     /** 某场活动的回放列表；{@code id} 即 create-demand 的 record_id */
     static final String PATH_RECORD_LIST = "/v3/webinars/record/get-list";
+    /** 开播场次列表；{@code switch_list[].id} → activity_live_session.switch_id（D119） */
+    static final String PATH_SWITCH_LIST = "/v3/webinars/webinar/get-webinar-switch-list";
     /** 回放详情；业务参数仅 record_id。见 https://vhall.apifox.cn/234257690e0 */
     static final String PATH_RECORD_GET_INFO = "/v3/webinars/record/get-info";
     /** 回放下载 URL；业务参数仅 record_id */
@@ -501,6 +505,19 @@ public class VhallLiveProvider implements LiveProvider {
         return new ProviderRecordList(total, list);
     }
 
+    /**
+     * 微吼 {@code POST /v3/webinars/webinar/get-webinar-switch-list}（D119）。
+     * 业务参数仅 {@code webinar_id}（全量；不传分页）。
+     */
+    @Override
+    public ProviderWebinarSwitchList listWebinarSwitches(String providerRoomId) {
+        requireRoomId(providerRoomId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = vhallClient.postForData(
+                PATH_SWITCH_LIST, Map.of("webinar_id", providerRoomId), Map.class);
+        return mapSwitchList(data);
+    }
+
     @Override
     public ProviderRecordInfo getRecordInfo(long recordId) {
         if (recordId <= 0) {
@@ -806,6 +823,42 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalArgumentException("name 不能超过 " + CHAT_FILTER_NAME_MAX + " 字");
         }
         return trimmed;
+    }
+
+    static ProviderWebinarSwitchList mapSwitchList(Map<String, Object> data) {
+        if (data == null) {
+            return new ProviderWebinarSwitchList(null, null, null, null, null, List.of());
+        }
+        List<ProviderWebinarSwitchItem> switches = new ArrayList<>();
+        Object rawList = data.get("switch_list");
+        if (rawList instanceof List<?> items) {
+            for (Object item : items) {
+                if (!(item instanceof Map<?, ?> map)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> raw = (Map<String, Object>) map;
+                long id = asLong(raw.get("id"));
+                if (id <= 0) {
+                    continue;
+                }
+                switches.add(new ProviderWebinarSwitchItem(
+                        id,
+                        asString(raw.get("start_time")),
+                        asString(raw.get("end_time")),
+                        asInteger(raw.get("type")),
+                        asInteger(raw.get("start_type")),
+                        asInteger(raw.get("end_type"))
+                ));
+            }
+        }
+        return new ProviderWebinarSwitchList(
+                asString(data.get("start_time")),
+                asString(data.get("end_time")),
+                asString(data.get("start_date")),
+                asString(data.get("end_date")),
+                asInteger(data.get("total_live_time")),
+                switches);
     }
 
     private static List<ProviderRecordItem> mapRecordList(Object rawList) {

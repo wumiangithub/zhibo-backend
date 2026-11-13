@@ -10,6 +10,7 @@ import com.zhibo.activity.PlaybackRules;
 import com.zhibo.activity.RoomCommentEntity;
 import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.RoomCommentType;
+import com.zhibo.activity.cloud.ActivityCloudSyncService;
 import com.zhibo.admin.auth.SysUserAccountEntity;
 import com.zhibo.admin.auth.SysUserAccountRepository;
 import com.zhibo.admin.console.dto.ConsoleQuestionHistoryItem;
@@ -19,9 +20,7 @@ import com.zhibo.admin.console.dto.ConsoleSdkSignResponse;
 import com.zhibo.admin.console.dto.ConsoleSummaryResponse;
 import com.zhibo.common.SdkAvatarHeads;
 import com.zhibo.common.UuidIds;
-import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
-import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import com.zhibo.liveprovider.dto.WatchSdkBundle;
 import com.zhibo.liveprovider.dto.WatchSdkCommand;
 import com.zhibo.presence.PresenceUserIds;
@@ -45,7 +44,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ConsoleService {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
-    private static final String PROVIDER_VHALL = "vhall";
     private static final int NICKNAME_MAX = 30;
     private static final String DEFAULT_NICKNAME = "助理";
     /** 与观看 question-history 同上限；单场提问体量通常远小于聊天 */
@@ -56,6 +54,7 @@ public class ConsoleService {
     private final SysUserAccountRepository userRepository;
     private final RoomCommentRepository commentRepository;
     private final LiveProviderRegistry providerRegistry;
+    private final ActivityCloudSyncService activityCloudSyncService;
     private final Clock clock;
 
     /**
@@ -65,13 +64,13 @@ public class ConsoleService {
     private String defaultAvatarUrl = SdkAvatarHeads.PLACEHOLDER_BASE_URL;
 
     /**
-     * 中控台页壳。vhall 时对账 {@code webinar_state}→本站 {@code state}（与观看 D106 同口径，
-     * 不含回放 get-list 补偿）。再开播后本库若仍结束，summary / {@code live_start} 拉本接口可写回直播。
+     * 中控台页壳。vhall 时经 {@link ActivityCloudSyncService} 对账 state + 场次（D120；
+     * 不含回放 get-list）。再开播后本库若仍结束，summary / {@code live_start} 拉本接口可写回直播。
      */
     @Transactional
     public ConsoleSummaryResponse summary(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
-        reconcileWithProviderOnSummary(entity);
+        activityCloudSyncService.syncQuietly(entity, ActivityCloudSyncService.Options.consoleSummary());
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
         boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
 
@@ -92,49 +91,6 @@ public class ConsoleService {
         response.setPlaybackSpeedAllow(!Boolean.FALSE.equals(entity.getPlaybackSpeedAllow()));
         response.setPlaybackFastForwardAllow(!Boolean.FALSE.equals(entity.getPlaybackFastForwardAllow()));
         return response;
-    }
-
-    /**
-     * 云态对账：拉微吼 webinar/info，不一致则写库。失败只打日志，仍回本库。
-     * 不做观看侧回放补偿（中控台不需 D88 get-list）。
-     */
-    void reconcileWithProviderOnSummary(ActivityEntity entity) {
-        if (entity == null) {
-            return;
-        }
-        String provider = entity.getProvider();
-        String roomId = entity.getProviderRoomId();
-        if (provider == null || !PROVIDER_VHALL.equalsIgnoreCase(provider.trim())) {
-            return;
-        }
-        if (roomId == null || roomId.isBlank()) {
-            return;
-        }
-
-        Integer cloudState = null;
-        try {
-            LiveProvider liveProvider = providerRegistry.require(provider);
-            ProviderRoomSnapshot snap = liveProvider.fetchRoom(roomId.trim());
-            if (snap != null) {
-                cloudState = snap.state();
-            }
-        } catch (RuntimeException ex) {
-            log.warn("中控台 summary 拉微吼 info 失败，降级本库 state activityId={} roomId={}: {}",
-                    entity.getId(), roomId, ex.getMessage());
-            return;
-        }
-
-        if (cloudState == null) {
-            return;
-        }
-        Integer localState = entity.getState();
-        if (localState == null || !localState.equals(cloudState)) {
-            Integer old = localState;
-            entity.setState(cloudState);
-            activityRepository.save(entity);
-            log.info("中控台 summary 云态对账写回 state id={} roomId={} {}→{}",
-                    entity.getId(), roomId, old, cloudState);
-        }
     }
 
     /**

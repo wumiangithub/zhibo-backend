@@ -34,6 +34,10 @@ class UserDataServiceTest {
     private PresenceEventRepository presenceEventRepository;
     @Mock
     private RoomReplayWatchRepository replayWatchRepository;
+    @Mock
+    private com.zhibo.activity.ActivityLiveSessionRepository liveSessionRepository;
+    @Mock
+    private com.zhibo.activity.cloud.ActivityCloudSyncService activityCloudSyncService;
 
     private UserDataService service;
 
@@ -41,7 +45,17 @@ class UserDataServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(Instant.parse("2026-10-29T04:00:00Z"), SHANGHAI);
         service = new UserDataService(
-                activityService, presenceEventRepository, replayWatchRepository, clock);
+                activityService,
+                presenceEventRepository,
+                replayWatchRepository,
+                liveSessionRepository,
+                activityCloudSyncService,
+                clock);
+        org.mockito.Mockito.lenient().when(activityCloudSyncService.syncQuietly(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
+                        true, false, false, null, true, List.of(), false, false));
+        org.mockito.Mockito.lenient().when(liveSessionRepository.findByActivityId(ID)).thenReturn(List.of());
     }
 
     @Test

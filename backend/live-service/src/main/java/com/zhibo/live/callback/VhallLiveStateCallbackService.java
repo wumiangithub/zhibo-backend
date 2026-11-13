@@ -1,8 +1,11 @@
 package com.zhibo.live.callback;
 
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityLiveSessionEntity;
+import com.zhibo.activity.ActivityLiveSessionRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.VhallRoomIdResolver;
+import com.zhibo.activity.cloud.ActivityCloudSyncService;
 import com.zhibo.vhall.config.VhallProperties;
 import com.zhibo.vhall.util.VhallCallbackSignUtil;
 import lombok.RequiredArgsConstructor;
@@ -13,12 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * 微吼活动开始/结束回调（{@code method_id=1}）：
- * {@code type=1} → 本站 {@code state=1}（直播）；{@code type=3} → {@code state=3}（结束）。
+ * 微吼活动开始/结束回调（{@code method_id=1}，D119）：
+ * {@code type=1} → {@code state=1}，开/维护未闭合场次段，首开取更早；
+ * {@code type=3} → {@code state=3}，闭合未闭合段，覆盖末结，再拉 switch-list sync。
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +45,8 @@ public class VhallLiveStateCallbackService {
     private final VhallProperties vhallProperties;
     private final VhallRoomIdResolver roomIdResolver;
     private final ActivityRepository activityRepository;
+    private final ActivityLiveSessionRepository sessionRepository;
+    private final ActivityCloudSyncService activityCloudSyncService;
 
     public enum HandleResult {
         OK,
@@ -86,7 +93,6 @@ public class VhallLiveStateCallbackService {
         Optional<String> roomId = roomIdResolver.resolveRoomId(webinarId);
         if (roomId.isEmpty()) {
             log.warn("微吼开播/结束回调找不到本站活动 webinar_id={}", webinarId);
-            // 未知仍 success，避免微吼无限重试
             return HandleResult.OK;
         }
 
@@ -101,6 +107,11 @@ public class VhallLiveStateCallbackService {
             return HandleResult.OK;
         }
 
+        LocalDateTime eventTime = epochToShanghai(body.get("time"));
+        if (eventTime == null) {
+            eventTime = epochToShanghai(body.get("m_time"));
+        }
+
         int newState = type == TYPE_START ? STATE_LIVE : STATE_ENDED;
         Integer oldState = entity.getState();
         boolean changed = false;
@@ -108,26 +119,94 @@ public class VhallLiveStateCallbackService {
             entity.setState(newState);
             changed = true;
         }
-        LocalDateTime eventTime = epochToShanghai(body.get("time"));
-        if (eventTime == null) {
-            eventTime = epochToShanghai(body.get("m_time"));
+
+        if (type == TYPE_START) {
+            changed |= applyStart(entity, eventTime);
+        } else {
+            changed |= applyEnd(entity, eventTime);
         }
-        if (type == TYPE_START && entity.getLiveActualStartTime() == null && eventTime != null) {
-            entity.setLiveActualStartTime(eventTime);
-            changed = true;
+
+        if (changed) {
+            activityRepository.save(entity);
+            log.info("微吼开播/结束回调写回 state id={} webinar_id={} {}→{} actualStart={} actualEnd={}",
+                    entity.getId(), webinarId, oldState, entity.getState(),
+                    entity.getLiveActualStartTime(), entity.getLiveActualEndTime());
         }
-        if (type == TYPE_END && entity.getLiveActualEndTime() == null && eventTime != null) {
-            entity.setLiveActualEndTime(eventTime);
-            changed = true;
+
+        if (type == TYPE_END) {
+            // D120：结束回调后统一门面补场次（失败只日志）
+            activityCloudSyncService.syncQuietly(entity, ActivityCloudSyncService.Options.sessionsOnly());
         }
-        if (!changed) {
-            return HandleResult.OK;
-        }
-        activityRepository.save(entity);
-        log.info("微吼开播/结束回调写回 state id={} webinar_id={} {}→{} actualStart={} actualEnd={}",
-                entity.getId(), webinarId, oldState, entity.getState(),
-                entity.getLiveActualStartTime(), entity.getLiveActualEndTime());
         return HandleResult.OK;
+    }
+
+    /**
+     * type=1：开/维护未闭合段（临时 switch_id=0）；汇总首开取更早。
+     */
+    private boolean applyStart(ActivityEntity entity, LocalDateTime eventTime) {
+        boolean changed = false;
+        if (eventTime != null) {
+            LocalDateTime cur = entity.getLiveActualStartTime();
+            if (cur == null || eventTime.isBefore(cur)) {
+                entity.setLiveActualStartTime(eventTime);
+                changed = true;
+            }
+        }
+
+        String provider = entity.getProvider() == null ? "vhall" : entity.getProvider().trim();
+        List<ActivityLiveSessionEntity> openRows = sessionRepository.findByActivityIdAndEndTimeIsNull(entity.getId());
+        ActivityLiveSessionEntity open = null;
+        for (ActivityLiveSessionEntity row : openRows) {
+            if (row.getSwitchId() != null
+                    && row.getSwitchId() == ActivityLiveSessionEntity.PROVISIONAL_SWITCH_ID) {
+                open = row;
+                break;
+            }
+            if (open == null) {
+                open = row;
+            }
+        }
+        if (open == null) {
+            open = new ActivityLiveSessionEntity();
+            open.setActivityId(entity.getId());
+            open.setProvider(provider);
+            open.setSwitchId(ActivityLiveSessionEntity.PROVISIONAL_SWITCH_ID);
+            open.setStartTime(eventTime);
+            sessionRepository.save(open);
+            changed = true;
+        } else if (eventTime != null
+                && (open.getStartTime() == null || eventTime.isBefore(open.getStartTime()))) {
+            open.setStartTime(eventTime);
+            sessionRepository.save(open);
+            changed = true;
+        }
+        return changed;
+    }
+
+    /**
+     * type=3：闭合所有未闭合段；覆盖 {@code live_actual_end_time}。
+     */
+    private boolean applyEnd(ActivityEntity entity, LocalDateTime eventTime) {
+        boolean changed = false;
+        if (eventTime != null) {
+            // D119：末结可覆盖（废止首次写入不覆盖）
+            if (entity.getLiveActualEndTime() == null || !eventTime.equals(entity.getLiveActualEndTime())) {
+                entity.setLiveActualEndTime(eventTime);
+                changed = true;
+            }
+        }
+
+        List<ActivityLiveSessionEntity> openRows = sessionRepository.findByActivityIdAndEndTimeIsNull(entity.getId());
+        for (ActivityLiveSessionEntity row : openRows) {
+            if (eventTime != null) {
+                row.setEndTime(eventTime);
+            } else if (row.getEndTime() == null) {
+                row.setEndTime(LocalDateTime.now(SHANGHAI));
+            }
+            sessionRepository.save(row);
+            changed = true;
+        }
+        return changed;
     }
 
     private static LocalDateTime epochToShanghai(Object raw) {

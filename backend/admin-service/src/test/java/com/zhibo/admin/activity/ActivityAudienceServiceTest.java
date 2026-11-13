@@ -72,6 +72,8 @@ class ActivityAudienceServiceTest {
     private PresenceEventRepository presenceEventRepository;
     @Mock
     private RoomReplayWatchRepository replayWatchRepository;
+    @Mock
+    private com.zhibo.activity.ActivityLiveSessionRepository liveSessionRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ActivityAudienceService service;
@@ -91,7 +93,9 @@ class ActivityAudienceServiceTest {
                 objectMapper,
                 presenceEventRepository,
                 replayWatchRepository,
+                liveSessionRepository,
                 clock);
+        lenient().when(liveSessionRepository.findByActivityId(ACTIVITY_ID)).thenReturn(List.of());
         ActivityEntity activity = new ActivityEntity();
         activity.setId(ACTIVITY_ID);
         lenient().when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(activity));

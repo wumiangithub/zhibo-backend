@@ -47,6 +47,16 @@ class AuthInterceptorTest {
     }
 
     @Test
+    void cloudSync_withoutToken_returns401Json() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST", "/api/v1/activities/cloud-sync/a1b2c3d4e5f67890abcdef1234567890");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertFalse(interceptor.preHandle(request, response, new Object()));
+        assertEquals(200, response.getStatus());
+        assertTrue(response.getContentAsString().contains("\"code\":401"));
+    }
+
+    @Test
     void businessApi_withValidToken_ok() throws Exception {
         String token = jwtTokenService.issue(1L, "admin", "???", 0, "admin", "1");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/materials/list");

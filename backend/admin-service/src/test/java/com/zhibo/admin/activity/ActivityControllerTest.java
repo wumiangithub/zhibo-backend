@@ -109,6 +109,26 @@ class ActivityControllerTest {
     }
 
     @Test
+    void cloudSync_returnsOk() throws Exception {
+        var data = new com.zhibo.admin.activity.dto.ActivityCloudSyncResponse();
+        data.setId(UUID);
+        data.setState(3);
+        data.setApplicable(true);
+        data.setStateAttempted(true);
+        data.setSessionsAttempted(true);
+        data.setRecordsAttempted(true);
+        data.setRecordsOk(true);
+        when(activityService.cloudSync(eq(UUID))).thenReturn(data);
+
+        mockMvc.perform(post("/api/v1/activities/cloud-sync/" + UUID).accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.id").value(UUID))
+                .andExpect(jsonPath("$.data.state").value(3))
+                .andExpect(jsonPath("$.data.sessionsAttempted").value(true));
+    }
+
+    @Test
     void host_returnsOk() throws Exception {
         var host = new com.zhibo.admin.activity.dto.ActivityHostResponse();
         host.setProvider("vhall");

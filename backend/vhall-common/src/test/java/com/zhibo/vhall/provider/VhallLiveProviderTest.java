@@ -184,6 +184,48 @@ class VhallLiveProviderTest {
     }
 
     @Test
+    void listWebinarSwitches_mapsSwitchListAndTopLevel() {
+        when(vhallClient.postForData(eq(VhallLiveProvider.PATH_SWITCH_LIST), anyMap(), eq(Map.class)))
+                .thenReturn(Map.of(
+                        "start_time", "2026-11-01 09:00:00",
+                        "start_date", "2026-11-01 10:00:00",
+                        "end_date", "2026-11-01 16:00:00",
+                        "total_live_time", 7200,
+                        "switch_list", List.of(
+                                Map.of(
+                                        "id", 4240761,
+                                        "start_time", "2026-11-01 10:00:00",
+                                        "end_time", "2026-11-01 11:00:00",
+                                        "type", 0,
+                                        "start_type", 4,
+                                        "end_type", 4),
+                                Map.of(
+                                        "id", 4240999,
+                                        "start_time", "2026-11-01 14:00:00",
+                                        "end_time", "2026-11-01 16:00:00",
+                                        "type", 0,
+                                        "start_type", 4,
+                                        "end_type", 4)
+                        )));
+
+        var result = provider.listWebinarSwitches("666781572");
+        assertEquals("2026-11-01 09:00:00", result.startTime());
+        assertEquals("2026-11-01 10:00:00", result.startDate());
+        assertEquals("2026-11-01 16:00:00", result.endDate());
+        assertEquals(7200, result.totalLiveTime());
+        assertEquals(2, result.switchList().size());
+        assertEquals(4240761L, result.switchList().get(0).id());
+        assertEquals("2026-11-01 10:00:00", result.switchList().get(0).startTime());
+        assertEquals(4, result.switchList().get(0).startType());
+        assertEquals(4240999L, result.switchList().get(1).id());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(vhallClient).postForData(eq(VhallLiveProvider.PATH_SWITCH_LIST), captor.capture(), eq(Map.class));
+        assertEquals("666781572", captor.getValue().get("webinar_id"));
+    }
+
+    @Test
     void listRecords_mapsVhallFields() {
         when(vhallClient.postForData(eq(VhallLiveProvider.PATH_RECORD_LIST), anyMap(), eq(Map.class)))
                 .thenReturn(Map.of(

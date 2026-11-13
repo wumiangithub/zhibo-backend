@@ -61,6 +61,8 @@ class ConsoleServiceTest {
     private LiveProviderRegistry providerRegistry;
     @Mock
     private LiveProvider liveProvider;
+    @Mock
+    private com.zhibo.activity.cloud.ActivityCloudSyncService activityCloudSyncService;
 
     private ConsoleService service;
 
@@ -72,7 +74,15 @@ class ConsoleServiceTest {
                 userRepository,
                 commentRepository,
                 providerRegistry,
+                activityCloudSyncService,
                 Clock.fixed(Instant.parse("2026-11-06T00:00:00Z"), ZoneOffset.UTC));
+        org.mockito.Mockito.lenient().when(activityCloudSyncService.syncQuietly(any(), any()))
+                .thenAnswer(inv -> {
+                    com.zhibo.activity.ActivityEntity a = inv.getArgument(0);
+                    return new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
+                            false, false, false, a == null ? null : a.getState(),
+                            false, List.of(), false, false);
+                });
     }
 
     @Test
@@ -100,21 +110,26 @@ class ConsoleServiceTest {
     }
 
     @Test
-    void summary_reconcilesEndedLocalToLiveCloud() {
+    void summary_delegatesCloudSyncToFacade() {
         ActivityEntity entity = baseActivity();
         entity.setProviderRoomId("room-1");
         entity.setTitle("再开播场");
         entity.setState(3);
         when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
-        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(liveProvider.fetchRoom("room-1")).thenReturn(new ProviderRoomSnapshot(
-                "再开播场", 1, 0, null, null, null, null, null, null, null));
+        when(activityCloudSyncService.syncQuietly(
+                eq(entity), eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.consoleSummary())))
+                .thenAnswer(inv -> {
+                    entity.setState(1);
+                    return new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
+                            true, true, true, 1, true, List.of(), false, false);
+                });
 
         ConsoleSummaryResponse res = service.summary(ACTIVITY_ID);
 
         assertEquals(1, res.getState());
-        verify(activityRepository).save(entity);
         assertEquals(1, entity.getState());
+        verify(activityCloudSyncService).syncQuietly(
+                eq(entity), eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.consoleSummary()));
     }
 
     @Test

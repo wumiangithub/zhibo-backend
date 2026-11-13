@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +36,35 @@ public interface ActivityRepository extends JpaRepository<ActivityEntity, String
             Pageable pageable);
 
     Page<ActivityEntity> findAllByOrderByCreatedTimeDesc(Pageable pageable);
+
+    /**
+     * 工作台「最近直播」：已有实际开播汇总的未软删活动，按首开时间倒序（全局候选）。
+     */
+    @Query("SELECT a FROM ActivityEntity a WHERE a.deletedTime IS NULL "
+            + "AND a.liveActualStartTime IS NOT NULL "
+            + "ORDER BY a.liveActualStartTime DESC")
+    Page<ActivityEntity> findRecentWithActualStart(Pageable pageable);
+
+    /**
+     * 近 N 自然日窗口内（按 {@code liveActualStartTime}）已开播场次数量。
+     */
+    @Query("SELECT COUNT(a) FROM ActivityEntity a WHERE a.deletedTime IS NULL "
+            + "AND a.liveActualStartTime IS NOT NULL "
+            + "AND a.liveActualStartTime >= :from AND a.liveActualStartTime < :to")
+    long countWithActualStartBetween(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * 近 N 自然日窗口内已开播场次，按首开时间倒序分页。
+     */
+    @Query("SELECT a FROM ActivityEntity a WHERE a.deletedTime IS NULL "
+            + "AND a.liveActualStartTime IS NOT NULL "
+            + "AND a.liveActualStartTime >= :from AND a.liveActualStartTime < :to "
+            + "ORDER BY a.liveActualStartTime DESC")
+    Page<ActivityEntity> findRecentWithActualStartBetween(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            Pageable pageable);
 
     Optional<ActivityEntity> findByProviderAndProviderRoomId(String provider, String providerRoomId);
 

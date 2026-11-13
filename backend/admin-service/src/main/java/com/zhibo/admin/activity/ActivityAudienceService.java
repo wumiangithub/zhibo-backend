@@ -10,6 +10,8 @@ import com.zhibo.activity.RoomCommentEntity;
 import com.zhibo.activity.RoomCommentRepository;
 import com.zhibo.activity.RoomCommentType;
 import com.zhibo.activity.ActivityEntity;
+import com.zhibo.activity.ActivityLiveSessionEntity;
+import com.zhibo.activity.ActivityLiveSessionRepository;
 import com.zhibo.activity.ActivityRepository;
 import com.zhibo.admin.activity.dto.AudienceCommentListItem;
 import com.zhibo.admin.activity.dto.AudienceCommentListResponse;
@@ -91,6 +93,7 @@ public class ActivityAudienceService {
     private final ObjectMapper objectMapper;
     private final PresenceEventRepository presenceEventRepository;
     private final RoomReplayWatchRepository replayWatchRepository;
+    private final ActivityLiveSessionRepository liveSessionRepository;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -214,10 +217,13 @@ public class ActivityAudienceService {
         };
 
         List<ActivityAudienceEntity> all = new ArrayList<>(audienceRepository.findAll(spec));
+        // 名单 list 为 readOnly：只读本库场次；sync 由结束回调 / summary / user-data 旁路负责
+        List<ActivityLiveSessionEntity> sessions = liveSessionRepository.findByActivityId(uuid);
         Map<String, WatchDurationCalculator.Durations> durations = WatchDurationCalculator.byViewer(
                 activity,
                 presenceEventRepository.findByRoomId(uuid),
                 replayWatchRepository.findByRoomId(uuid),
+                sessions,
                 LocalDateTime.ofInstant(clock.instant(), SHANGHAI));
         if (totalWatchFilter != null || liveWatchFilter != null) {
             all.removeIf(row -> !matchesDurationFilters(row, durations, totalWatchFilter, liveWatchFilter));

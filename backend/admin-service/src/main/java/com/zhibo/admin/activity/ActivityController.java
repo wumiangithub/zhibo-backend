@@ -4,6 +4,7 @@ import com.zhibo.admin.activity.dto.AcceptActivityMemberRequest;
 import com.zhibo.admin.activity.dto.AcceptActivityMemberResponse;
 import com.zhibo.admin.activity.dto.AddActivityMembersRequest;
 import com.zhibo.admin.activity.dto.ActivityChatFilterResponse;
+import com.zhibo.admin.activity.dto.ActivityCloudSyncResponse;
 import com.zhibo.admin.activity.dto.ActivityDetailResponse;
 import com.zhibo.admin.activity.dto.ActivityHostResponse;
 import com.zhibo.admin.activity.dto.ActivityListResponse;
@@ -81,6 +82,15 @@ public class ActivityController {
     @GetMapping("/detail/{id}")
     public ApiResponse<ActivityDetailResponse> detail(@PathVariable String id) {
         return ApiResponse.ok(activityService.detail(id));
+    }
+
+    /**
+     * 显式同步微吼云数据（D120）：info 对账 state + switch-list 场次；
+     * 结束类或已有 actual_end 时再跑回放 get-list/TOS。管理端 JWT；失败不挡（flags 体现）。
+     */
+    @PostMapping("/cloud-sync/{id}")
+    public ApiResponse<ActivityCloudSyncResponse> cloudSync(@PathVariable String id) {
+        return ApiResponse.ok(activityService.cloudSync(id));
     }
 
     /** 某场活动的回放列表；list[].id = create-demand 的 record_id。 */
