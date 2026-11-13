@@ -568,7 +568,6 @@ const FIELD_DESC_BY_PATH = {
   'OutsideCourseItem.contentCount': '内容数',
   'OutsideCourseItem.departmentName': '课程部门（归属人部门）',
   'WatchActivitySummary.id': '本站活动 UUID',
-  'WatchEmbedData.id': '本站活动 UUID',
   'WatchSummaryData.id': '本站活动 UUID',
   'WatchSummaryData.provider': '服务商（页壳可忽略；init 仍以 sdk-sign 的 provider 为准）',
   'WatchSummaryData.title': '本库活动标题',
@@ -2161,7 +2160,7 @@ function buildAdmin() {
         'recordsOk',
       ],
       description:
-        '显式同步微吼云数据（D120）：info 对账 state + switch-list 场次；结束类 state 或已有 live_actual_end_time 时再跑回放 get-list/TOS。失败只体现在 flags，不 500。不用 webinar/get-list 替换本站活动列表。',
+        '显式同步等待微吼云数据（D120；与读路径异步旁路不同）：info 对账 state + switch-list 场次；结束类 state 或已有 live_actual_end_time 时再跑回放 get-list/TOS。失败只体现在 flags，不 500。不用 webinar/get-list 替换本站活动列表。',
       properties: {
         id: { $ref: '#/components/schemas/BusinessUuid', description: '本站活动 id' },
         state: {
@@ -5098,7 +5097,7 @@ function buildAdmin() {
         tags: ['活动管理'],
         summary: '活动列表',
         description:
-          '管理端直播/活动列表。组装本页 list 前对每场活动经 ActivityCloudSyncService 旁路 sessionsOnly（get-webinar-switch-list），失败只日志不挡主流程；不对未入本页的活动全库扫（D120）。',
+          '管理端直播/活动列表。组装本页 list 前对每场活动经 ActivityCloudSyncService.syncQuietlyAsync 异步旁路 sessionsOnly（get-webinar-switch-list）；请求立刻返回本库，不 await 微吼；同一活动短时间去重。失败只日志不挡主流程；不对未入本页的活动全库扫（D120）。',
         operationId: 'listActivities',
         security: bearer,
         parameters: [
@@ -5155,7 +5154,7 @@ function buildAdmin() {
         tags: ['活动管理'],
         summary: '显式同步微吼云数据',
         description:
-          '对指定活动跑统一补偿门面（D120）：拉 webinar/info 对账本库 state；拉 get-webinar-switch-list upsert 场次并回写 live_actual_*；' +
+          '对指定活动同步等待统一补偿门面 syncQuietly（D120；与读路径异步旁路不同）：拉 webinar/info 对账本库 state；拉 get-webinar-switch-list upsert 场次并回写 live_actual_*；' +
           '当云侧或本库为结束类（state 3/4/5）或本库已有 live_actual_end_time 时，再跑与回放列表同源的 get-list → check/TOS 补偿。' +
           '只同步这一场，禁止全账号扫。失败只打日志并以响应 flags 体现，不挡主流程、不 500。' +
           '不用微吼 webinar/get-list 替换本站活动列表。非 vhall / 无 provider_room_id 时 applicable=false。' +
@@ -5614,7 +5613,8 @@ function buildAdmin() {
         summary: '工作台 · 最近直播数据',
         description:
           '管理端工作台「最近直播数据」表格。读本站 activity、activity_live_session、room_presence_event、room_replay_watch、viewer。' +
-          '组装本页列表前对每场活动经 ActivityCloudSyncService 旁路 sessionsOnly（get-webinar-switch-list），失败只日志不挡主流程（D120）。' +
+          '本页活动异步旁路 sessionsOnly（syncQuietlyAsync，不阻塞）；本响应指标仍按本库批量计算，刷新后再进可见落库场次。' +
+          '本页活动 id 批量查场次/presence/回放/观众后本地算指标。' +
           '分页 page（默认 1）+ pageSize（默认 10，上限 50）。' +
           '候选集：近 3 个自然日（Asia/Shanghai，[today-2 00:00, tomorrow 00:00)）内有实际开播的场次数 ≥ pageSize 时只用近 3 天；否则用全局有 live_actual_start_time 的场次；默认 pageSize=10 时近 3 天不足 10 条则退回全局最近开播；均按实际首开倒序。' +
           'startTime/endTime 为实际首开～末结（计划时间不回）；直播中未闭合时 endTime 为空串。' +
@@ -7191,7 +7191,7 @@ function buildAdmin() {
         tags: ['直播中控台'],
         summary: '中控台页壳摘要',
         description:
-          'admin-web 单场中控台页壳（D110）。读本库 Activity；admin JWT；无观众售卖门禁；可不做云态对账。字段对齐 /watch/summary。',
+          'admin-web 单场中控台页壳（D110/D120）。立刻读本库 Activity；vhall 时异步旁路 consoleSummary（info+场次，无回放）；admin JWT；无观众售卖门禁。字段对齐 /watch/summary。',
         operationId: 'getConsoleSummary',
         security: bearer,
         parameters: [activityId],
@@ -7896,20 +7896,6 @@ function buildLive() {
         },
       },
     },
-    WatchEmbedData: {
-      type: 'object',
-      properties: {
-        id: { $ref: '#/components/schemas/BusinessUuid' },
-        title: { type: 'string' },
-        state: { $ref: '#/components/schemas/ActivityState' },
-        type: { $ref: '#/components/schemas/ActivityType' },
-        nickname: { type: 'string' },
-        guestId: { type: 'string' },
-        startTime: { type: 'string' },
-        endTime: { type: 'string' },
-        embedUrl: { type: 'string', format: 'uri' },
-      },
-    },
     VhallSdkPayload: {
       type: 'object',
       description: '微吼签名/init 鉴权字段；脚本 CDN 由前端适配器加载（D93）',
@@ -8127,7 +8113,12 @@ function buildLive() {
         couponAmount: { type: 'string' },
         couponStartDate: { type: 'string' },
         couponEndDate: { type: 'string' },
-        employeeId: { type: 'integer', format: 'int64', description: '发送员工 id' },
+        employeeId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '发送员工 hr_uimsyhxx.rs_mainkey_id（= 账号 yhid）；观众领券原样传订单中心；不是登录账号主键',
+        },
         nickname: { type: 'string', description: '发送昵称快照' },
         deptId: {
           type: 'integer',
@@ -8168,7 +8159,8 @@ function buildLive() {
         lastSenderEmployeeId: {
           type: 'integer',
           format: 'int64',
-          description: '最近发送员工 id；侧栏领取传订单中心',
+          description:
+            '最近发送员工 hr_uimsyhxx.rs_mainkey_id；侧栏领取传订单中心',
         },
         lastSenderNickname: { type: 'string', description: '最近发送昵称' },
         lastSenderDeptId: {
@@ -8205,12 +8197,16 @@ function buildLive() {
           description: 'comment_time 毫秒（上海）',
         },
         couponId: { type: 'integer', format: 'int64' },
-        couponNo: { type: 'string' },
         couponName: { type: 'string' },
         couponAmount: { type: 'string' },
         couponStartDate: { type: 'string' },
         couponEndDate: { type: 'string' },
-        employeeId: { type: 'integer', format: 'int64' },
+        employeeId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '发放员工 hr_uimsyhxx.rs_mainkey_id（content JSON）；领券传订单中心',
+        },
         deptId: {
           type: 'integer',
           format: 'int64',
@@ -8226,7 +8222,6 @@ function buildLive() {
     WatchCouponHistoryData: {
       type: 'object',
       properties: {
-        total: { type: 'integer', format: 'int64', description: '截断前条数' },
         list: {
           type: 'array',
           items: { $ref: '#/components/schemas/WatchCouponHistoryItem' },
@@ -8662,7 +8657,6 @@ function buildLive() {
     ApiResponseViewerLearningLessonContent: {
       $ref: '#/components/schemas/ViewerLearningLessonContentData',
     },
-    ApiResponseWatchEmbed: { $ref: '#/components/schemas/WatchEmbedData' },
     ApiResponseWatchSummary: { $ref: '#/components/schemas/WatchSummaryData' },
     ApiResponseConsoleSummary: { $ref: '#/components/schemas/ConsoleSummaryData' },
     ApiResponseConsoleSdkSign: { $ref: '#/components/schemas/ConsoleSdkSignData' },
@@ -8753,27 +8747,6 @@ function buildLive() {
 
 
   const watchId = { $ref: '#/components/parameters/WatchActivityId' }
-  const guestParams = [
-    {
-      name: 'guestId',
-      in: 'query',
-      schema: { type: 'string', pattern: "^[A-Za-z0-9]+$" },
-      description: '只能字母数字；不传则后端生成（仅 detail 嵌入）',
-    },
-    {
-      name: 'nickname',
-      in: 'query',
-      schema: { type: 'string', maxLength: 50 },
-      description: '默认「观众」',
-    },
-    {
-      name: 'username',
-      in: 'query',
-      schema: { ...VIEWER_USERNAME },
-      description:
-        '用户中心 viewer.username；有则 email 为 {username}@qkzb.com（嵌入兜底；正式观看走 JWT + sdk-sign）',
-    },
-  ]
   const sdkSignParams = [
     {
       name: 'id',
@@ -9087,27 +9060,15 @@ function buildLive() {
         responses: ok200('#/components/schemas/ApiResponseWatchAccessVerifyPassword'),
       },
     },
-    '/api/v1/watch/detail/{id}': {
-      get: {
-        tags: ['观看'],
-        summary: '观看嵌入页地址',
-        description:
-          '独立用途的嵌入 URL（兜底）；观看默认走 /watch/summary + /watch/sdk-sign（D94/D95 签名不再回 embedUrl）。',
-        operationId: 'getWatchEmbed',
-        parameters: [watchId, ...guestParams],
-        responses: ok200('#/components/schemas/ApiResponseWatchEmbed'),
-      },
-    },
     '/api/v1/watch/summary/{id}': {
       get: {
         tags: ['观看'],
         summary: '观看页活动摘要（页面壳）',
         description: [
-          '观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95/D106）。',
-          '响应取本库 Activity（对账写库后），不含 SDK 签名。',
-          'provider=vhall 且有 provider_room_id 时：拉微吼 webinar/info，用 webinar_state 对账本库 state；不一致则写库。',
-          '结束类 state（3/4/5）再跑与管理端回放列表同源的 get-list → pending_package → check/TOS 补偿（D88）。',
-          '非 vhall / 无 room id 跳过；云侧失败降级本库、不 500。勿用 /watch/detail 顶替。须过售卖门禁，未过 → 403。',
+          '观看页 / 中控台 / 回放页的页面壳：标题、态、时间、回放开关与有效期（D95/D106/D120）。',
+          '响应立刻取本库 Activity，不含 SDK 签名；云补偿经 syncQuietlyAsync 异步旁路（info + 场次 + 结束类回放），不阻塞本接口。',
+          'provider=vhall 且有 provider_room_id 时后台对账；首次可能仍见旧 state/场次，刷新后再进可见落库结果。',
+          '非 vhall / 无 room id 跳过；云侧失败只日志、不 500。旧嵌入 /watch/detail 已删除（D122）。须过售卖门禁，未过 → 403。',
         ].join('\n'),
         operationId: 'getWatchSummary',
         parameters: [watchId, activityAccessHeader],

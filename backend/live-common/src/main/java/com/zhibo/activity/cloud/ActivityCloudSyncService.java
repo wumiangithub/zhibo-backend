@@ -10,17 +10,19 @@ import com.zhibo.liveprovider.LiveProvider;
 import com.zhibo.liveprovider.LiveProviderRegistry;
 import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import java.util.List;
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 /**
  * D120：微吼主动拉取统一补偿门面。回调仍是主路径；本类只做按活动补偿，失败只日志不挡主流程。
  * 复用 {@link ActivityLiveSessionSyncService} / {@link ActivityRecordListSyncService}，不复制落库逻辑。
+ * <p>读路径旁路请用 {@link #syncQuietlyAsync}（不阻塞接口）；显式 cloud-sync 仍用 {@link #syncQuietly}。
  * <p>不含微吼 {@code webinar/get-list}：本站活动列表以本库为准，不用云列表替换。
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ActivityCloudSyncService {
 
@@ -29,11 +31,35 @@ public class ActivityCloudSyncService {
     private static final int STATE_VOD = 4;
     private static final int STATE_REPLAY = 5;
 
+    /** 同一 activityId：在飞或刚入队后若干毫秒内不再重复入队（防列表翻页狂打）。 */
+    static final long DEDUP_WINDOW_MS = 5_000L;
+
     private final ActivityRepository activityRepository;
     private final ActivityLiveSessionRepository sessionRepository;
     private final LiveProviderRegistry providerRegistry;
     private final ActivityLiveSessionSyncService sessionSyncService;
     private final ActivityRecordListSyncService recordListSyncService;
+    private final Executor cloudSyncExecutor;
+
+    /** activityId → 最近一次异步入队时刻（epoch ms）。 */
+    private final ConcurrentHashMap<String, Long> lastEnqueueAt = new ConcurrentHashMap<>();
+    /** 正在执行的 activityId。 */
+    private final ConcurrentHashMap<String, Boolean> inFlight = new ConcurrentHashMap<>();
+
+    public ActivityCloudSyncService(
+            ActivityRepository activityRepository,
+            ActivityLiveSessionRepository sessionRepository,
+            LiveProviderRegistry providerRegistry,
+            ActivityLiveSessionSyncService sessionSyncService,
+            ActivityRecordListSyncService recordListSyncService,
+            @Qualifier(ActivityCloudSyncAsyncConfig.CLOUD_SYNC_EXECUTOR) Executor cloudSyncExecutor) {
+        this.activityRepository = activityRepository;
+        this.sessionRepository = sessionRepository;
+        this.providerRegistry = providerRegistry;
+        this.sessionSyncService = sessionSyncService;
+        this.recordListSyncService = recordListSyncService;
+        this.cloudSyncExecutor = cloudSyncExecutor;
+    }
 
     /**
      * 能力开关。预设见 {@link #watchSummary()} / {@link #consoleSummary()} /
@@ -60,7 +86,7 @@ public class ActivityCloudSyncService {
             return new Options(true, true, false, false);
         }
 
-        /** 列表 / 用户数据 / recent-lives / live-state 结束后：仅场次。 */
+        /** 活动列表 / 用户数据 / recent-lives / live-state 结束后：仅场次。 */
         public static Options sessionsOnly() {
             return new Options(false, true, false, false);
         }
@@ -96,7 +122,52 @@ public class ActivityCloudSyncService {
     }
 
     /**
+     * 旁路异步补偿：立刻返回，后台拉微吼；异常只日志。
+     * 同一 {@code activityId} 在飞或 {@link #DEDUP_WINDOW_MS} 内已入队则跳过。
+     * 异步线程按 id 重新加载实体，避免跨线程脏实体。
+     */
+    public void syncQuietlyAsync(ActivityEntity activity, Options options) {
+        if (activity == null || options == null) {
+            return;
+        }
+        String activityId = activity.getId();
+        if (activityId == null || activityId.isBlank()) {
+            return;
+        }
+        if (!isVhallWithRoom(activity)) {
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        Long last = lastEnqueueAt.get(activityId);
+        if (last != null && now - last < DEDUP_WINDOW_MS) {
+            return;
+        }
+        if (inFlight.putIfAbsent(activityId, Boolean.TRUE) != null) {
+            return;
+        }
+        lastEnqueueAt.put(activityId, now);
+
+        Options opts = options;
+        try {
+            cloudSyncExecutor.execute(() -> {
+                try {
+                    syncQuietlyById(activityId, opts);
+                } catch (RuntimeException ex) {
+                    log.warn("云补偿异步失败 activityId={}: {}", activityId, ex.getMessage());
+                } finally {
+                    inFlight.remove(activityId);
+                }
+            });
+        } catch (RuntimeException ex) {
+            inFlight.remove(activityId);
+            log.warn("云补偿异步入队失败 activityId={}: {}", activityId, ex.getMessage());
+        }
+    }
+
+    /**
      * 按活动实体补偿；非 vhall / 无 roomId 跳过；任一步失败只打日志。
+     * 读路径请用 {@link #syncQuietlyAsync}；本方法供显式 cloud-sync 与异步 worker。
      */
     public Result syncQuietly(ActivityEntity activity, Options options) {
         if (activity == null || options == null) {

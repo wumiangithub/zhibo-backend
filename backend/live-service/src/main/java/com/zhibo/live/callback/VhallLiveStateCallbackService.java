@@ -134,8 +134,9 @@ public class VhallLiveStateCallbackService {
         }
 
         if (type == TYPE_END) {
-            // D120：结束回调后统一门面补场次（失败只日志）
-            activityCloudSyncService.syncQuietly(entity, ActivityCloudSyncService.Options.sessionsOnly());
+            // D120：结束回调后异步补场次，不拖回调线程
+            activityCloudSyncService.syncQuietlyAsync(
+                    entity, ActivityCloudSyncService.Options.sessionsOnly());
         }
         return HandleResult.OK;
     }

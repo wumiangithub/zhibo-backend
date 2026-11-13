@@ -9,6 +9,5 @@ import lombok.Setter;
 @Setter
 public class WatchCouponHistoryResponse {
 
-    private int total;
     private List<WatchCouponHistoryItem> list = new ArrayList<>();
 }

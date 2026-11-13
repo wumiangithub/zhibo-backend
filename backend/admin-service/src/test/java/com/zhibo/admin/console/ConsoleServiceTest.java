@@ -76,13 +76,10 @@ class ConsoleServiceTest {
                 providerRegistry,
                 activityCloudSyncService,
                 Clock.fixed(Instant.parse("2026-11-06T00:00:00Z"), ZoneOffset.UTC));
-        org.mockito.Mockito.lenient().when(activityCloudSyncService.syncQuietly(any(), any()))
-                .thenAnswer(inv -> {
-                    com.zhibo.activity.ActivityEntity a = inv.getArgument(0);
-                    return new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
-                            false, false, false, a == null ? null : a.getState(),
-                            false, List.of(), false, false);
-                });
+        org.mockito.Mockito.lenient()
+                .doNothing()
+                .when(activityCloudSyncService)
+                .syncQuietlyAsync(any(), any());
     }
 
     @Test
@@ -110,26 +107,20 @@ class ConsoleServiceTest {
     }
 
     @Test
-    void summary_delegatesCloudSyncToFacade() {
+    void summary_delegatesCloudSyncToFacadeAsync() {
         ActivityEntity entity = baseActivity();
         entity.setProviderRoomId("room-1");
         entity.setTitle("再开播场");
         entity.setState(3);
         when(activityRepository.findById(ACTIVITY_ID)).thenReturn(Optional.of(entity));
-        when(activityCloudSyncService.syncQuietly(
-                eq(entity), eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.consoleSummary())))
-                .thenAnswer(inv -> {
-                    entity.setState(1);
-                    return new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
-                            true, true, true, 1, true, List.of(), false, false);
-                });
 
         ConsoleSummaryResponse res = service.summary(ACTIVITY_ID);
 
-        assertEquals(1, res.getState());
-        assertEquals(1, entity.getState());
-        verify(activityCloudSyncService).syncQuietly(
+        // 异步旁路：本响应仍为本库 state，不 await 云写回
+        assertEquals(3, res.getState());
+        verify(activityCloudSyncService).syncQuietlyAsync(
                 eq(entity), eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.consoleSummary()));
+        verify(activityCloudSyncService, never()).syncQuietly(any(), any());
     }
 
     @Test

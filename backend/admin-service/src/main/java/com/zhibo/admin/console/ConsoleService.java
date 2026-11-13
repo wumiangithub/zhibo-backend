@@ -64,13 +64,14 @@ public class ConsoleService {
     private String defaultAvatarUrl = SdkAvatarHeads.PLACEHOLDER_BASE_URL;
 
     /**
-     * 中控台页壳。vhall 时经 {@link ActivityCloudSyncService} 对账 state + 场次（D120；
-     * 不含回放 get-list）。再开播后本库若仍结束，summary / {@code live_start} 拉本接口可写回直播。
+     * 中控台页壳。vhall 时异步旁路对账 state + 场次（D120；不含回放 get-list）；
+     * 本响应立刻返回本库；下次进入可见落库结果。
      */
     @Transactional
     public ConsoleSummaryResponse summary(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
-        activityCloudSyncService.syncQuietly(entity, ActivityCloudSyncService.Options.consoleSummary());
+        activityCloudSyncService.syncQuietlyAsync(
+                entity, ActivityCloudSyncService.Options.consoleSummary());
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
         boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
 

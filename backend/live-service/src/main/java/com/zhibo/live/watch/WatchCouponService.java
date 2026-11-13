@@ -54,7 +54,6 @@ public class WatchCouponService {
                 commentRepository.findByActivityIdAndCommentTypeAndDeletedTimeIsNullOrderByCommentTimeAsc(
                         entity.getId(), RoomCommentType.COUPON);
         WatchCouponHistoryResponse response = new WatchCouponHistoryResponse();
-        response.setTotal(rows.size());
         int limit = Math.min(rows.size(), MAX_HISTORY);
         for (int i = 0; i < limit; i++) {
             WatchCouponHistoryItem item = toHistoryItem(rows.get(i));
@@ -99,7 +98,6 @@ public class WatchCouponService {
         item.setSenderName(nick);
         item.setTimestamp(toEpochMillis(c.getCommentTime()));
         item.setCouponId(parsed.couponId());
-        item.setCouponNo(parsed.couponNo());
         item.setCouponName(parsed.couponName());
         item.setCouponAmount(parsed.couponAmount());
         item.setCouponStartDate(parsed.couponStartDate());

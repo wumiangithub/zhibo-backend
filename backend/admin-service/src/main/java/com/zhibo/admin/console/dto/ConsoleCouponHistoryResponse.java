@@ -9,6 +9,5 @@ import lombok.Setter;
 @Setter
 public class ConsoleCouponHistoryResponse {
 
-    private int total;
     private List<ConsoleCouponHistoryItem> list = new ArrayList<>();
 }

@@ -5,13 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.zhibo.activity.ActivityEntity;
 import com.zhibo.activity.ActivityLiveSessionRepository;
 import com.zhibo.activity.ActivityRepository;
-import com.zhibo.activity.cloud.ActivityCloudSyncService;
 import com.zhibo.admin.dashboard.dto.RecentLivesResponse;
 import com.zhibo.presence.PresenceEventEntity;
 import com.zhibo.presence.PresenceEventRepository;
@@ -46,29 +46,30 @@ class DashboardRecentLivesServiceTest {
     @Mock
     private ActivityLiveSessionRepository liveSessionRepository;
     @Mock
-    private ActivityCloudSyncService activityCloudSyncService;
-    @Mock
     private PresenceEventRepository presenceEventRepository;
     @Mock
     private RoomReplayWatchRepository replayWatchRepository;
     @Mock
     private ViewerRepository viewerRepository;
+    @Mock
+    private com.zhibo.activity.cloud.ActivityCloudSyncService activityCloudSyncService;
 
     private DashboardRecentLivesService service;
 
     @BeforeEach
     void setUp() {
-        when(activityCloudSyncService.syncQuietly(any(), any()))
-                .thenReturn(new ActivityCloudSyncService.Result(
-                        true, false, false, null, true, List.of(), false, false));
         service = new DashboardRecentLivesService(
                 activityRepository,
                 liveSessionRepository,
-                activityCloudSyncService,
                 presenceEventRepository,
                 replayWatchRepository,
                 viewerRepository,
+                activityCloudSyncService,
                 Clock.fixed(FIXED, java.time.ZoneId.of("UTC")));
+        org.mockito.Mockito.lenient()
+                .doNothing()
+                .when(activityCloudSyncService)
+                .syncQuietlyAsync(any(), any());
     }
 
     @Test
@@ -102,6 +103,8 @@ class DashboardRecentLivesServiceTest {
         assertEquals(10, resp.getPageSize());
         assertEquals(0L, resp.getTotal());
         verify(activityRepository).findRecentWithActualStart(eq(PageRequest.of(0, 10)));
+        verify(liveSessionRepository, never()).findByActivityIdIn(any());
+        verify(presenceEventRepository, never()).findByRoomIdIn(any());
     }
 
     @Test
@@ -137,13 +140,20 @@ class DashboardRecentLivesServiceTest {
         when(activityRepository.countWithActualStartBetween(eq(from), eq(to))).thenReturn(1L);
         when(activityRepository.findRecentWithActualStart(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(activity), PageRequest.of(0, 10), 1L));
-        when(liveSessionRepository.findByActivityId(activity.getId())).thenReturn(List.of());
-        when(presenceEventRepository.findByRoomId(activity.getId())).thenReturn(List.of(
-                join("u1111111111111", "s1", "2026-11-12 19:10:00"),
-                leave("u1111111111111", "s1", "2026-11-12 19:40:00"),
-                join("u2222222222222", "s2", "2026-11-12 19:20:00"),
-                leave("u2222222222222", "s2", "2026-11-12 19:50:00")));
-        when(replayWatchRepository.findByRoomId(activity.getId())).thenReturn(List.of());
+        when(liveSessionRepository.findByActivityIdIn(eq(List.of(activity.getId()))))
+                .thenReturn(List.of());
+        PresenceEventEntity e1 = join("u1111111111111", "s1", "2026-11-12 19:10:00");
+        e1.setRoomId(activity.getId());
+        PresenceEventEntity e2 = leave("u1111111111111", "s1", "2026-11-12 19:40:00");
+        e2.setRoomId(activity.getId());
+        PresenceEventEntity e3 = join("u2222222222222", "s2", "2026-11-12 19:20:00");
+        e3.setRoomId(activity.getId());
+        PresenceEventEntity e4 = leave("u2222222222222", "s2", "2026-11-12 19:50:00");
+        e4.setRoomId(activity.getId());
+        when(presenceEventRepository.findByRoomIdIn(eq(List.of(activity.getId()))))
+                .thenReturn(List.of(e1, e2, e3, e4));
+        when(replayWatchRepository.findByRoomIdIn(eq(List.of(activity.getId()))))
+                .thenReturn(List.of());
 
         ViewerEntity newOnDay = new ViewerEntity();
         newOnDay.setUsername("u1111111111111");
@@ -171,8 +181,13 @@ class DashboardRecentLivesServiceTest {
         assertTrue(row.getAvgWatchDurationSec() > 0);
         assertEquals(2, row.getMaxOnlinePeak());
         assertEquals(1L, row.getNewUserCount());
-        verify(activityCloudSyncService).syncQuietly(
-                eq(activity), eq(ActivityCloudSyncService.Options.sessionsOnly()));
+        verify(activityCloudSyncService).syncQuietlyAsync(
+                eq(activity),
+                eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.sessionsOnly()));
+        verify(activityCloudSyncService, never()).syncQuietly(any(), any());
+        verify(liveSessionRepository).findByActivityIdIn(eq(List.of(activity.getId())));
+        verify(presenceEventRepository).findByRoomIdIn(eq(List.of(activity.getId())));
+        verify(replayWatchRepository).findByRoomIdIn(eq(List.of(activity.getId())));
         verify(viewerRepository).findByUsernameIn(any());
         verify(activityRepository).findRecentWithActualStart(eq(PageRequest.of(0, 10)));
     }

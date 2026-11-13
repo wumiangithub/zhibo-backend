@@ -16,12 +16,7 @@ import com.zhibo.live.watch.dto.WatchProductItem;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchRecordItem;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
-import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.live.watch.dto.WatchSummaryResponse;
-import com.zhibo.liveprovider.LiveProvider;
-import com.zhibo.liveprovider.LiveProviderRegistry;
-import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
-import com.zhibo.vhall.provider.VhallLiveProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -54,7 +49,6 @@ public class WatchService {
     private final ActivityRepository activityRepository;
     private final ActivityProductRepository productRepository;
     private final ActivityRecordRepository activityRecordRepository;
-    private final LiveProviderRegistry providerRegistry;
     private final ActivityRecordListSyncService activityRecordListSyncService;
     private final ActivityCloudSyncService activityCloudSyncService;
     private final Clock clock;
@@ -82,13 +76,13 @@ public class WatchService {
 
     /**
      * 观看页壳摘要（D95 / D106 / D120）：本库 Activity，无签名。
-     * vhall 时经 {@link ActivityCloudSyncService} 统一补偿：info 对账 state、场次 switch-list、
-     * 结束类再跑回放 get-list/TOS（失败只日志，不 500）。
+     * vhall 时异步旁路统一补偿（info / 场次 / 结束类回放）；本响应立刻返回本库。
      */
     public WatchSummaryResponse summary(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
-        activityCloudSyncService.syncQuietly(entity, ActivityCloudSyncService.Options.watchSummary());
+        activityCloudSyncService.syncQuietlyAsync(
+                entity, ActivityCloudSyncService.Options.watchSummary());
 
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
         boolean playbackEnabled = !Boolean.FALSE.equals(entity.getPlaybackEnabled());
@@ -115,37 +109,6 @@ public class WatchService {
     static boolean isEndedLikeState(Integer state) {
         return state != null
                 && (state == STATE_ENDED || state == STATE_VOD || state == STATE_REPLAY);
-    }
-
-    public WatchResponse watch(String activityId, String guestId, String nickname, String viewerUsername) {
-        ActivityEntity entity = requireActivity(activityId);
-        requireReadyForWatch(entity);
-        LiveProvider provider = providerRegistry.require(entity.getProvider());
-
-        String resolvedGuestId = VhallLiveProvider.resolveGuestId(guestId);
-        // 与 /watch/sdk-sign 一致：有 viewerUsername 时优先用客户端展示昵称（小程序 URL）
-        String resolvedNickname = WatchSdkService.resolveSdkNickname(nickname, viewerUsername);
-        String email = VhallLiveProvider.resolveWatchEmail(viewerUsername, resolvedGuestId);
-
-        ProviderRoomSnapshot info = provider.fetchRoom(entity.getProviderRoomId());
-        String baseEmbed = info.fullEmbedShareLink();
-        if (baseEmbed == null || baseEmbed.isBlank()) {
-            throw new IllegalStateException("活动缺少全屏嵌入地址 full_embed_share_link");
-        }
-        String embedUrl = VhallLiveProvider.buildEmbedUrlWithEmail(baseEmbed, email, resolvedNickname);
-
-        WatchResponse response = new WatchResponse();
-        response.setId(entity.getId());
-        response.setProvider(entity.getProvider());
-        response.setTitle(entity.getTitle());
-        response.setState(info.state() != null ? info.state() : entity.getState());
-        response.setType(entity.getType());
-        response.setNickname(resolvedNickname);
-        response.setGuestId(resolvedGuestId);
-        response.setStartTime(entity.getStartTime() != null ? entity.getStartTime() : info.startTime());
-        response.setEndTime(entity.getEndTime() != null ? entity.getEndTime() : info.endTime());
-        response.setEmbedUrl(embedUrl);
-        return response;
     }
 
     /**

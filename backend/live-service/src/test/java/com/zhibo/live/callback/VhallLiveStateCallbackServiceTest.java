@@ -58,6 +58,7 @@ class VhallLiveStateCallbackServiceTest {
                 vhallProperties, roomIdResolver, activityRepository, sessionRepository, activityCloudSyncService);
         lenient().when(vhallProperties.resolveCallbackSecret()).thenReturn(SECRET);
         lenient().when(sessionRepository.findByActivityIdAndEndTimeIsNull(ACTIVITY_ID)).thenReturn(List.of());
+        lenient().doNothing().when(activityCloudSyncService).syncQuietlyAsync(any(), any());
         lenient().when(activityCloudSyncService.syncQuietly(any(), any()))
                 .thenReturn(new ActivityCloudSyncService.Result(
                         true, false, false, 3, true, List.of(), false, false));
@@ -111,8 +112,9 @@ class VhallLiveStateCallbackServiceTest {
                 VhallLiveStateCallbackService.SHANGHAI), entity.getLiveActualEndTime());
         assertNotNull(open.getEndTime());
         verify(sessionRepository).save(open);
-        verify(activityCloudSyncService).syncQuietly(
+        verify(activityCloudSyncService).syncQuietlyAsync(
                 eq(entity), eq(ActivityCloudSyncService.Options.sessionsOnly()));
+        verify(activityCloudSyncService, never()).syncQuietly(any(), any());
     }
 
     @Test
@@ -210,7 +212,7 @@ class VhallLiveStateCallbackServiceTest {
 
         assertEquals(VhallLiveStateCallbackService.HandleResult.OK, service.handle(body));
         assertEquals(LocalDateTime.of(2026, 12, 1, 12, 0), entity.getLiveActualEndTime());
-        verify(activityCloudSyncService).syncQuietly(
+        verify(activityCloudSyncService).syncQuietlyAsync(
                 eq(entity), eq(ActivityCloudSyncService.Options.sessionsOnly()));
     }
 

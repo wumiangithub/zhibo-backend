@@ -12,7 +12,6 @@ public class WatchCouponHistoryItem {
     private String senderName;
     private Long timestamp;
     private Long couponId;
-    private String couponNo;
     private String couponName;
     private String couponAmount;
     private String couponStartDate;

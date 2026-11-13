@@ -11,7 +11,6 @@ import com.zhibo.live.watch.dto.WatchProductClickResponse;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchQuestionHistoryResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
-import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.live.watch.dto.WatchSdkResponse;
 import com.zhibo.live.watch.dto.WatchSummaryResponse;
 import com.zhibo.live.web.ApiResponse;
@@ -47,15 +46,6 @@ public class WatchController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) Integer state) {
         return ApiResponse.ok(watchService.listActivities(page, pageSize, state));
-    }
-
-    @GetMapping("/detail/{id}")
-    public ApiResponse<WatchResponse> watch(
-            @PathVariable String id,
-            @RequestParam(required = false) String guestId,
-            @RequestParam(required = false) String nickname,
-            @RequestParam(required = false) String username) {
-        return ApiResponse.ok(watchService.watch(id, guestId, nickname, username));
     }
 
     /** 观看页壳摘要（D95）；须过售卖门禁。 */

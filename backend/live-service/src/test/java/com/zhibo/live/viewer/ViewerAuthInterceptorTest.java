@@ -41,7 +41,7 @@ class ViewerAuthInterceptorTest {
     @Test
     void watchAndCallback_areNotTreatedAsLoggedOut() throws Exception {
         assertAllowed("GET", "/api/v1/watch/activities");
-        assertAllowed("GET", "/api/v1/watch/detail/abc");
+        assertAllowed("GET", "/api/v1/watch/access/abc");
         assertAllowed("POST", "/api/v1/callbacks/vhall/presence");
         assertAllowed("POST", "/api/v1/callbacks/vhall/live-state");
         assertAllowed("POST", "/api/v1/callbacks/vhall/transcode");

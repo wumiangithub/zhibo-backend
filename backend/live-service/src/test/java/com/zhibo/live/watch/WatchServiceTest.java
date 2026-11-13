@@ -11,11 +11,7 @@ import com.zhibo.activity.cloud.ActivityCloudSyncService;
 import com.zhibo.activity.record.ActivityRecordListSyncService;
 import com.zhibo.live.watch.dto.WatchProductListResponse;
 import com.zhibo.live.watch.dto.WatchRecordListResponse;
-import com.zhibo.live.watch.dto.WatchResponse;
 import com.zhibo.live.watch.dto.WatchSummaryResponse;
-import com.zhibo.liveprovider.LiveProvider;
-import com.zhibo.liveprovider.LiveProviderRegistry;
-import com.zhibo.liveprovider.dto.ProviderRoomSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,10 +55,6 @@ class WatchServiceTest {
     @Mock
     private ActivityRecordRepository activityRecordRepository;
     @Mock
-    private LiveProviderRegistry providerRegistry;
-    @Mock
-    private LiveProvider liveProvider;
-    @Mock
     private ActivityRecordListSyncService activityRecordListSyncService;
     @Mock
     private ActivityCloudSyncService activityCloudSyncService;
@@ -75,13 +68,7 @@ class WatchServiceTest {
     void stubClock() {
         Instant fixed = LocalDateTime.of(2026, 10, 29, 12, 0).atZone(SHANGHAI).toInstant();
         lenient().when(clock.instant()).thenReturn(fixed);
-        lenient().when(activityCloudSyncService.syncQuietly(any(), any()))
-                .thenAnswer(inv -> {
-                    ActivityEntity a = inv.getArgument(0);
-                    return new ActivityCloudSyncService.Result(
-                            false, false, false, a == null ? null : a.getState(),
-                            false, List.of(), false, false);
-                });
+        lenient().doNothing().when(activityCloudSyncService).syncQuietlyAsync(any(), any());
     }
 
     @Test
@@ -120,7 +107,9 @@ class WatchServiceTest {
         assertTrue(response.getPlaybackExpired());
         assertTrue(response.getPlaybackSpeedAllow());
         assertFalse(response.getPlaybackFastForwardAllow());
-        verify(activityCloudSyncService).syncQuietly(eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
+        verify(activityCloudSyncService).syncQuietlyAsync(
+                eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
+        verify(activityCloudSyncService, never()).syncQuietly(any(), any());
         verifyNoInteractions(activityRecordListSyncService);
     }
 
@@ -140,11 +129,12 @@ class WatchServiceTest {
         assertFalse(response.getPlaybackExpired());
         assertTrue(response.getPlaybackSpeedAllow());
         assertTrue(response.getPlaybackFastForwardAllow());
-        verify(activityCloudSyncService).syncQuietly(eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
+        verify(activityCloudSyncService).syncQuietlyAsync(
+                eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
     }
 
     @Test
-    void summary_delegatesCloudSyncToFacade() {
+    void summary_delegatesCloudSyncToFacadeAsync() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setProvider("vhall");
@@ -154,21 +144,18 @@ class WatchServiceTest {
         entity.setReady(1);
         entity.setPlaybackEnabled(Boolean.TRUE);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
-        when(activityCloudSyncService.syncQuietly(eq(entity), eq(ActivityCloudSyncService.Options.watchSummary())))
-                .thenAnswer(inv -> {
-                    entity.setState(3);
-                    return new ActivityCloudSyncService.Result(
-                            true, true, true, 3, true, List.of(), true, true);
-                });
 
         WatchSummaryResponse response = watchService.summary(ID);
-        assertEquals(3, response.getState());
-        verify(activityCloudSyncService).syncQuietly(eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
+        // 异步旁路：本响应为本库 state，不 await 云写回
+        assertEquals(1, response.getState());
+        verify(activityCloudSyncService).syncQuietlyAsync(
+                eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
+        verify(activityCloudSyncService, never()).syncQuietly(any(), any());
         verifyNoInteractions(activityRecordListSyncService);
     }
 
     @Test
-    void summary_cloudSyncFailure_stillReturnsLocal() {
+    void summary_cloudSyncEnqueue_stillReturnsLocal() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setProvider("vhall");
@@ -177,41 +164,12 @@ class WatchServiceTest {
         entity.setState(1);
         entity.setReady(1);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
-        when(activityCloudSyncService.syncQuietly(eq(entity), eq(ActivityCloudSyncService.Options.watchSummary())))
-                .thenReturn(new ActivityCloudSyncService.Result(
-                        true, true, false, 1, true, List.of(), false, false));
 
         WatchSummaryResponse response = watchService.summary(ID);
         assertEquals(1, response.getState());
         verify(activityRepository, never()).save(any());
-    }
-
-    @Test
-    void watch_buildsEmbedUrl() {
-        ActivityEntity entity = new ActivityEntity();
-        entity.setId(ID);
-        entity.setProvider("vhall");
-        entity.setProviderRoomId("1001");
-        entity.setTitle("直播课");
-        entity.setType(2);
-        entity.setState(1);
-        entity.setStartTime("2026-09-18 20:00:00");
-
-        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
-        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
-        when(liveProvider.fetchRoom("1001")).thenReturn(new ProviderRoomSnapshot(
-                "直播课", 1, 2, null,
-                "https://live.example.com/watch/1001",
-                "2026-09-18 20:00:00", null, null, null, null));
-
-        WatchResponse response = watchService.watch(ID, "guest1", "小明", null);
-        assertEquals(ID, response.getId());
-        assertEquals("vhall", response.getProvider());
-        assertEquals("直播课", response.getTitle());
-        assertTrue(response.getEmbedUrl().contains("email=guest1%40zhibo.local")
-                || response.getEmbedUrl().contains("email=guest1@zhibo.local"));
-        assertEquals("guest1", response.getGuestId());
-        assertEquals("小明", response.getNickname());
+        verify(activityCloudSyncService).syncQuietlyAsync(
+                eq(entity), eq(ActivityCloudSyncService.Options.watchSummary()));
     }
 
     @Test
@@ -222,16 +180,15 @@ class WatchServiceTest {
     }
 
     @Test
-    void watch_softDeleted_isMissing() {
+    void summary_softDeleted_isMissing() {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setDeletedTime(LocalDateTime.now());
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> watchService.watch(ID, "guest1", "小明", null));
+                () -> watchService.summary(ID));
         assertEquals("活动不存在", ex.getMessage());
-        verifyNoInteractions(providerRegistry, liveProvider);
     }
 
     @Test
@@ -301,7 +258,6 @@ class WatchServiceTest {
         assertEquals("https://cdn.example.com/a.mp4", response.getList().get(0).getTosUrl());
         assertEquals("2026-10-29 18:00:00", response.getList().get(0).getCreatedTime());
         verify(activityRecordListSyncService).syncForActivity(entity);
-        verifyNoInteractions(providerRegistry, liveProvider);
     }
 
     @Test
@@ -318,7 +274,6 @@ class WatchServiceTest {
         WatchRecordListResponse response = watchService.listRecords(ID);
         assertTrue(response.getList().isEmpty());
         verify(activityRecordListSyncService).syncForActivity(entity);
-        verifyNoInteractions(providerRegistry, liveProvider);
     }
 
     @Test

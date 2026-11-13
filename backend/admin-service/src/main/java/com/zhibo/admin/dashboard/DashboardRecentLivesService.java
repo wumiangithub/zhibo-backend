@@ -14,6 +14,7 @@ import com.zhibo.presence.PresenceEventRepository;
 import com.zhibo.presence.PresenceUserIds;
 import com.zhibo.presence.RoomUserDataCalculator;
 import com.zhibo.presence.RoomUserDataStats;
+import com.zhibo.replay.RoomReplayWatchEntity;
 import com.zhibo.replay.RoomReplayWatchRepository;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
@@ -21,8 +22,11 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,8 +34,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 工作台「最近直播数据」：本站 activity / presence / replay / viewer；
- * 本页活动在算指标前经 {@link ActivityCloudSyncService} 旁路场次补偿，失败只日志不挡。
+ * 工作台「最近直播数据」：本站 activity / presence / replay / viewer。
+ * 本页活动异步旁路 sessionsOnly（不阻塞）；本响应读本库批量算指标。
  * 候选集：近 3 个自然日（Asia/Shanghai）场次数 ≥ pageSize 则只用近 3 天；否则用全局最近开播。
  */
 @Service
@@ -48,26 +52,26 @@ public class DashboardRecentLivesService {
 
     private final ActivityRepository activityRepository;
     private final ActivityLiveSessionRepository liveSessionRepository;
-    private final ActivityCloudSyncService activityCloudSyncService;
     private final PresenceEventRepository presenceEventRepository;
     private final RoomReplayWatchRepository replayWatchRepository;
     private final ViewerRepository viewerRepository;
+    private final ActivityCloudSyncService activityCloudSyncService;
     private final Clock clock;
 
     public DashboardRecentLivesService(
             ActivityRepository activityRepository,
             ActivityLiveSessionRepository liveSessionRepository,
-            ActivityCloudSyncService activityCloudSyncService,
             PresenceEventRepository presenceEventRepository,
             RoomReplayWatchRepository replayWatchRepository,
             ViewerRepository viewerRepository,
+            ActivityCloudSyncService activityCloudSyncService,
             Clock clock) {
         this.activityRepository = activityRepository;
         this.liveSessionRepository = liveSessionRepository;
-        this.activityCloudSyncService = activityCloudSyncService;
         this.presenceEventRepository = presenceEventRepository;
         this.replayWatchRepository = replayWatchRepository;
         this.viewerRepository = viewerRepository;
+        this.activityCloudSyncService = activityCloudSyncService;
         this.clock = clock;
     }
 
@@ -92,32 +96,121 @@ public class DashboardRecentLivesService {
             result = activityRepository.findRecentWithActualStart(pageable);
         }
 
+        List<ActivityEntity> activities = result.getContent();
+        // 本页异步旁路场次；不 await，指标仍按本库现有行
+        for (ActivityEntity activity : activities) {
+            activityCloudSyncService.syncQuietlyAsync(
+                    activity, ActivityCloudSyncService.Options.sessionsOnly());
+        }
+        List<String> roomIds = activities.stream().map(ActivityEntity::getId).toList();
+
+        Map<String, List<ActivityLiveSessionEntity>> sessionsByRoom = groupSessions(roomIds);
+        Map<String, List<PresenceEventEntity>> eventsByRoom = groupEvents(roomIds);
+        Map<String, List<RoomReplayWatchEntity>> replaysByRoom = groupReplays(roomIds);
+        Map<String, LocalDateTime> viewerCreatedByUsername =
+                loadViewerCreatedTimes(eventsByRoom);
+
         RecentLivesResponse response = new RecentLivesResponse();
         response.setPage(page);
         response.setPageSize(pageSize);
         response.setTotal(result.getTotalElements());
-        for (ActivityEntity activity : result.getContent()) {
-            response.getList().add(buildRow(activity, now));
+        for (ActivityEntity activity : activities) {
+            String roomId = activity.getId();
+            response.getList().add(buildRow(
+                    activity,
+                    sessionsByRoom.getOrDefault(roomId, List.of()),
+                    eventsByRoom.getOrDefault(roomId, List.of()),
+                    replaysByRoom.getOrDefault(roomId, List.of()),
+                    viewerCreatedByUsername,
+                    now));
         }
         return response;
     }
 
-    private RecentLiveRowResponse buildRow(ActivityEntity activity, LocalDateTime now) {
-        String roomId = activity.getId();
-        ActivityCloudSyncService.Result sync = activityCloudSyncService.syncQuietly(
-                activity, ActivityCloudSyncService.Options.sessionsOnly());
-        List<ActivityLiveSessionEntity> sessions = sync.sessions();
-        if (sessions == null || sessions.isEmpty()) {
-            sessions = liveSessionRepository.findByActivityId(roomId);
+    private Map<String, List<ActivityLiveSessionEntity>> groupSessions(List<String> roomIds) {
+        Map<String, List<ActivityLiveSessionEntity>> map = new HashMap<>();
+        if (roomIds.isEmpty()) {
+            return map;
         }
-        List<PresenceEventEntity> events = presenceEventRepository.findByRoomId(roomId);
+        for (ActivityLiveSessionEntity row : liveSessionRepository.findByActivityIdIn(roomIds)) {
+            if (row == null || row.getActivityId() == null) {
+                continue;
+            }
+            map.computeIfAbsent(row.getActivityId(), k -> new ArrayList<>()).add(row);
+        }
+        return map;
+    }
 
+    private Map<String, List<PresenceEventEntity>> groupEvents(List<String> roomIds) {
+        Map<String, List<PresenceEventEntity>> map = new HashMap<>();
+        if (roomIds.isEmpty()) {
+            return map;
+        }
+        for (PresenceEventEntity row : presenceEventRepository.findByRoomIdIn(roomIds)) {
+            if (row == null || row.getRoomId() == null) {
+                continue;
+            }
+            map.computeIfAbsent(row.getRoomId(), k -> new ArrayList<>()).add(row);
+        }
+        return map;
+    }
+
+    private Map<String, List<RoomReplayWatchEntity>> groupReplays(List<String> roomIds) {
+        Map<String, List<RoomReplayWatchEntity>> map = new HashMap<>();
+        if (roomIds.isEmpty()) {
+            return map;
+        }
+        for (RoomReplayWatchEntity row : replayWatchRepository.findByRoomIdIn(roomIds)) {
+            if (row == null || row.getRoomId() == null) {
+                continue;
+            }
+            map.computeIfAbsent(row.getRoomId(), k -> new ArrayList<>()).add(row);
+        }
+        return map;
+    }
+
+    /**
+     * 本页所有 presence 观众 username 一次查出 created_time，供 newUserCount 复用。
+     */
+    private Map<String, LocalDateTime> loadViewerCreatedTimes(
+            Map<String, List<PresenceEventEntity>> eventsByRoom) {
+        Set<String> usernames = new HashSet<>();
+        for (List<PresenceEventEntity> events : eventsByRoom.values()) {
+            if (events == null) {
+                continue;
+            }
+            for (PresenceEventEntity event : events) {
+                if (event == null) {
+                    continue;
+                }
+                String username = PresenceUserIds.viewerUsername(event.getUsername());
+                if (username != null) {
+                    usernames.add(username);
+                }
+            }
+        }
+        Map<String, LocalDateTime> created = new HashMap<>();
+        if (usernames.isEmpty()) {
+            return created;
+        }
+        for (ViewerEntity viewer : viewerRepository.findByUsernameIn(usernames)) {
+            if (viewer == null || viewer.getUsername() == null) {
+                continue;
+            }
+            created.put(viewer.getUsername(), viewer.getCreatedTime());
+        }
+        return created;
+    }
+
+    private RecentLiveRowResponse buildRow(
+            ActivityEntity activity,
+            List<ActivityLiveSessionEntity> sessions,
+            List<PresenceEventEntity> events,
+            List<RoomReplayWatchEntity> replays,
+            Map<String, LocalDateTime> viewerCreatedByUsername,
+            LocalDateTime now) {
         RoomUserDataCalculator.Result result = RoomUserDataCalculator.compute(
-                activity,
-                events,
-                replayWatchRepository.findByRoomId(roomId),
-                sessions,
-                now);
+                activity, events, replays, sessions, now);
         RoomUserDataStats stats = result.stats();
         int peak = RoomUserDataCalculator.maxOnlinePeak(activity, events, sessions, now);
 
@@ -137,7 +230,7 @@ public class DashboardRecentLivesService {
         row.setWatchViewerCount(result.liveReplayUnionCount());
         row.setAvgWatchDurationSec(stats.liveAvgSec());
         row.setMaxOnlinePeak(peak);
-        row.setNewUserCount(countNewUsersOnStartDay(actualStart, events));
+        row.setNewUserCount(countNewUsersOnStartDay(actualStart, events, viewerCreatedByUsername));
         return row;
     }
 
@@ -179,7 +272,10 @@ public class DashboardRecentLivesService {
     /**
      * 本场 presence 里出现过的观众 username ∩ created_time 落在开播自然日。
      */
-    long countNewUsersOnStartDay(LocalDateTime actualStart, List<PresenceEventEntity> events) {
+    long countNewUsersOnStartDay(
+            LocalDateTime actualStart,
+            List<PresenceEventEntity> events,
+            Map<String, LocalDateTime> viewerCreatedByUsername) {
         if (actualStart == null) {
             return 0L;
         }
@@ -203,8 +299,8 @@ public class DashboardRecentLivesService {
         LocalDateTime dayStart = day.atStartOfDay();
         LocalDateTime dayEnd = day.plusDays(1).atStartOfDay();
         long count = 0L;
-        for (ViewerEntity viewer : viewerRepository.findByUsernameIn(viewers)) {
-            LocalDateTime created = viewer.getCreatedTime();
+        for (String username : viewers) {
+            LocalDateTime created = viewerCreatedByUsername.get(username);
             if (created != null
                     && !created.isBefore(dayStart)
                     && created.isBefore(dayEnd)) {

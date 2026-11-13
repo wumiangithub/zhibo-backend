@@ -323,9 +323,10 @@ public class ActivityService {
         List<ActivityEntity> visible = result.getContent().stream()
                 .filter(activity -> activity.getDeletedTime() == null)
                 .toList();
-        // 本页活动旁路场次补偿（D120 门面）；失败只日志，不挡列表
+        // 本页活动异步旁路场次补偿（D120）；立刻返回本库，不阻塞列表
         for (ActivityEntity activity : visible) {
-            activityCloudSyncService.syncQuietly(activity, ActivityCloudSyncService.Options.sessionsOnly());
+            activityCloudSyncService.syncQuietlyAsync(
+                    activity, ActivityCloudSyncService.Options.sessionsOnly());
         }
         List<ActivitySummary> summaries = visible.stream().map(this::toSummary).toList();
         attachOwnersAndProducts(summaries);
@@ -782,9 +783,10 @@ public class ActivityService {
     }
 
     /**
-     * 显式同步微吼云数据（D120）：info 对账 state + switch-list 场次；
+     * 显式同步微吼云数据（D120）：**同步等待** info 对账 state + switch-list 场次；
      * 结束类 state 或已有 {@code live_actual_end_time} 时再跑回放 get-list/TOS。
      * 失败只体现在响应 flags，不抛、不 500。活动不存在 / 已软删 → 400。
+     * 与读路径 {@code syncQuietlyAsync} 旁路不同：本接口等云侧完成再返回结果。
      */
     public ActivityCloudSyncResponse cloudSync(String id) {
         ActivityEntity entity = requireActivity(id);

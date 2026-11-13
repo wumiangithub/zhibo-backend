@@ -158,6 +158,10 @@ class ActivityServiceTest {
                 .when(activityRecordTosIngestService.tryMarkInFlight(anyLong()))
                 .thenReturn(true);
         org.mockito.Mockito.lenient()
+                .doNothing()
+                .when(activityCloudSyncService)
+                .syncQuietlyAsync(any(), any());
+        org.mockito.Mockito.lenient()
                 .when(activityCloudSyncService.syncQuietly(any(), any()))
                 .thenReturn(new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
                         true, false, false, null, true, List.of(), false, false));
@@ -2123,6 +2127,10 @@ class ActivityServiceTest {
         assertEquals(1, list.getList().size());
         assertEquals(alive.getId(), list.getList().get(0).getId());
         assertTrue(list.getList().stream().noneMatch(item -> uuid.equals(item.getId())));
+        verify(activityCloudSyncService).syncQuietlyAsync(
+                eq(alive), eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.sessionsOnly()));
+        verify(activityCloudSyncService, never()).syncQuietly(
+                any(), eq(com.zhibo.activity.cloud.ActivityCloudSyncService.Options.sessionsOnly()));
     }
 
     @Test

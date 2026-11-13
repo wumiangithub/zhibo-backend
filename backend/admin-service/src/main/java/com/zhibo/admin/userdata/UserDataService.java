@@ -36,12 +36,10 @@ public class UserDataService {
         String roomId = activity.getId();
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), SHANGHAI);
 
-        ActivityCloudSyncService.Result sync = activityCloudSyncService.syncQuietly(
+        // 异步旁路场次；本响应读本库现有场次（下次进入可见落库结果）
+        activityCloudSyncService.syncQuietlyAsync(
                 activity, ActivityCloudSyncService.Options.sessionsOnly());
-        List<ActivityLiveSessionEntity> sessions = sync.sessions();
-        if (sessions == null || sessions.isEmpty()) {
-            sessions = liveSessionRepository.findByActivityId(roomId);
-        }
+        List<ActivityLiveSessionEntity> sessions = liveSessionRepository.findByActivityId(roomId);
         RoomUserDataCalculator.Result result = RoomUserDataCalculator.compute(
                 activity,
                 presenceEventRepository.findByRoomId(roomId),

@@ -1,5 +1,6 @@
 package com.zhibo.activity;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ActivityLiveSessionRepository extends JpaRepository<ActivityLiveSessionEntity, Long> {
 
     List<ActivityLiveSessionEntity> findByActivityId(String activityId);
+
+    List<ActivityLiveSessionEntity> findByActivityIdIn(Collection<String> activityIds);
 
     Optional<ActivityLiveSessionEntity> findByActivityIdAndProviderAndSwitchId(
             String activityId, String provider, Long switchId);

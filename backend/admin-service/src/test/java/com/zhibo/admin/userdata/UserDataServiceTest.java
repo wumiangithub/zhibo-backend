@@ -51,10 +51,11 @@ class UserDataServiceTest {
                 liveSessionRepository,
                 activityCloudSyncService,
                 clock);
-        org.mockito.Mockito.lenient().when(activityCloudSyncService.syncQuietly(
-                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn(new com.zhibo.activity.cloud.ActivityCloudSyncService.Result(
-                        true, false, false, null, true, List.of(), false, false));
+        org.mockito.Mockito.lenient()
+                .doNothing()
+                .when(activityCloudSyncService)
+                .syncQuietlyAsync(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         org.mockito.Mockito.lenient().when(liveSessionRepository.findByActivityId(ID)).thenReturn(List.of());
     }
 

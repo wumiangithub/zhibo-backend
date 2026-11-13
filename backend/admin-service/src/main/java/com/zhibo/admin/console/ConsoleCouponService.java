@@ -57,6 +57,11 @@ public class ConsoleCouponService {
 
         SysUserAccountEntity employee = userRepository.findById(employeeId)
                 .orElseThrow(() -> new IllegalArgumentException("当前员工不存在"));
+        // 领券传订单中心：hr_uimsyhxx.rs_mainkey_id（账号 yhid），不是登录账号主键
+        Long hrEmployeeId = employee.getYhid();
+        if (hrEmployeeId == null || hrEmployeeId <= 0) {
+            throw new IllegalArgumentException("当前员工未绑定 CRM 档案，无法发券");
+        }
         ActivityMemberEntity member = memberRepository
                 .findById(new ActivityMemberId(activity.getId(), employeeId))
                 .orElse(null);
@@ -83,7 +88,7 @@ public class ConsoleCouponService {
         row.setAllSku(body.allSku());
         row.setDeptNames(body.deptNamesJoined());
         row.setSkuNames(body.allSku() ? "" : body.skuNamesJoined());
-        row.setLastSenderEmployeeId(employeeId);
+        row.setLastSenderEmployeeId(hrEmployeeId);
         row.setLastSenderNickname(nickname);
         row.setLastSenderDeptId(deptId);
         row.setLastSenderDeptName(deptName);
@@ -97,7 +102,7 @@ public class ConsoleCouponService {
                 body.couponAmount(),
                 body.couponStartDate(),
                 body.couponEndDate(),
-                employeeId,
+                hrEmployeeId,
                 deptId,
                 deptName);
         String contentJson = snapshot.toJson();
@@ -123,7 +128,7 @@ public class ConsoleCouponService {
         response.setCouponAmount(body.couponAmount());
         response.setCouponStartDate(body.couponStartDate());
         response.setCouponEndDate(body.couponEndDate());
-        response.setEmployeeId(employeeId);
+        response.setEmployeeId(hrEmployeeId);
         response.setNickname(nickname);
         response.setDeptId(deptId);
         response.setDeptName(deptName);
@@ -139,7 +144,6 @@ public class ConsoleCouponService {
                         activity.getId(), RoomCommentType.COUPON);
 
         ConsoleCouponHistoryResponse response = new ConsoleCouponHistoryResponse();
-        response.setTotal(rows.size());
         int limit = Math.min(rows.size(), MAX_COUPON_HISTORY);
         for (int i = 0; i < limit; i++) {
             ConsoleCouponHistoryItem item = toHistoryItem(rows.get(i));
@@ -164,7 +168,6 @@ public class ConsoleCouponService {
         item.setSenderName(nick);
         item.setTimestamp(toEpochMillis(c.getCommentTime()));
         item.setCouponId(parsed.couponId());
-        item.setCouponNo(parsed.couponNo());
         item.setCouponName(parsed.couponName());
         item.setCouponAmount(parsed.couponAmount());
         item.setCouponStartDate(parsed.couponStartDate());

@@ -671,10 +671,10 @@ class VhallLiveProviderTest {
     }
 
     @Test
-    void resolveWatchEmail_usesViewerIdWhenPresent() {
-        assertEquals("12@qkzb.com", VhallLiveProvider.resolveWatchEmail("12", "guest1"));
-        assertEquals("guest1@zhibo.local", VhallLiveProvider.resolveWatchEmail(null, "guest1"));
-        assertEquals("guest1@zhibo.local", VhallLiveProvider.resolveWatchEmail("", "guest1"));
+    void resolveWatchEmail_requiresUsername() {
+        assertEquals("12@qkzb.com", VhallLiveProvider.resolveWatchEmail("12"));
+        assertThrows(IllegalArgumentException.class, () -> VhallLiveProvider.resolveWatchEmail(null));
+        assertThrows(IllegalArgumentException.class, () -> VhallLiveProvider.resolveWatchEmail(""));
     }
 
     @Test

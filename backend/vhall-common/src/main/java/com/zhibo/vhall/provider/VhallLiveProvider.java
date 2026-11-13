@@ -20,7 +20,6 @@ import com.zhibo.liveprovider.dto.WatchSdkCommand;
 import com.zhibo.vhall.client.VhallClient;
 import com.zhibo.vhall.config.VhallProperties;
 import com.zhibo.vhall.util.VhallSignUtil;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -31,8 +30,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * 微吼 {@link LiveProvider} 实现：所有微吼 HTTP 只经本类，业务 Service 勿直接调 {@link VhallClient}。
@@ -94,10 +91,7 @@ public class VhallLiveProvider implements LiveProvider {
     /** 微吼参会昵称上限（type≠1 时） */
     static final int ROLE_JOIN_NICKNAME_MAX = 30;
 
-    private static final Pattern GUEST_ID_PATTERN = Pattern.compile("^[A-Za-z0-9]+$");
-    /** 未登录观众的合成邮箱域名 */
-    private static final String EMAIL_DOMAIN = "@zhibo.local";
-    /** 已登录观众：与开播角色同一域名，{@code {viewerId}@qkzb.com} */
+    /** 已登录观众：与开播角色同一域名，{@code {username}@qkzb.com} */
     public static final String VIEWER_EMAIL_DOMAIN = "@qkzb.com";
     private static final String DEFAULT_NICKNAME = "观众";
     private static final int NICKNAME_MAX = 50;
@@ -448,7 +442,7 @@ public class VhallLiveProvider implements LiveProvider {
             String parsed = com.zhibo.presence.PresenceUserIds.parseEmail(email);
             account = parsed != null ? parsed : ("z" + viewerIdentity);
         } else {
-            email = resolveWatchEmail(viewerIdentity, null);
+            email = resolveWatchEmail(viewerIdentity);
             // account = 第三方用户唯一标识（观众 username）；聊天回包未必带回
             account = viewerIdentity.trim();
         }
@@ -919,25 +913,14 @@ public class VhallLiveProvider implements LiveProvider {
     }
 
     /**
-     * 观看身份邮箱。有观众 id 时为 {@code {id}@qkzb.com}（与签名、{@code new VhallSDK} 的 email 一致）；
-     * 没有则 {@code {guestId}@zhibo.local}。
+     * 观看身份邮箱：{@code {username}@qkzb.com}（与签名、{@code new VhallSDK} 的 email 一致）。
+     * 须非空观众 {@code username}（D122 起不再用 guestId 合成 {@code @zhibo.local}）。
      */
-    public static String resolveWatchEmail(String viewerUsername, String guestId) {
-        if (viewerUsername != null && !viewerUsername.isBlank()) {
-            return com.zhibo.presence.PresenceUserIds.viewerEmail(viewerUsername);
+    public static String resolveWatchEmail(String viewerUsername) {
+        if (viewerUsername == null || viewerUsername.isBlank()) {
+            throw new IllegalArgumentException("username 不能为空");
         }
-        return resolveGuestId(guestId) + EMAIL_DOMAIN;
-    }
-
-    public static String resolveGuestId(String guestId) {
-        if (guestId == null || guestId.isBlank()) {
-            return UUID.randomUUID().toString().replace("-", "");
-        }
-        String trimmed = guestId.trim();
-        if (!GUEST_ID_PATTERN.matcher(trimmed).matches()) {
-            throw new IllegalArgumentException("guestId 只能包含字母和数字");
-        }
-        return trimmed;
+        return com.zhibo.presence.PresenceUserIds.viewerEmail(viewerUsername);
     }
 
     public static String resolveNickname(String nickname) {
@@ -949,19 +932,6 @@ public class VhallLiveProvider implements LiveProvider {
             throw new IllegalArgumentException("nickname 不能超过 " + NICKNAME_MAX + " 字");
         }
         return trimmed;
-    }
-
-    public static String buildEmbedUrl(String baseEmbed, String guestId, String nickname) {
-        return buildEmbedUrlWithEmail(baseEmbed, guestId + EMAIL_DOMAIN, nickname);
-    }
-
-    public static String buildEmbedUrlWithEmail(String baseEmbed, String email, String nickname) {
-        return UriComponentsBuilder.fromUriString(baseEmbed)
-                .replaceQueryParam("email", email)
-                .replaceQueryParam("nickname", nickname)
-                .encode()
-                .build()
-                .toUriString();
     }
 
     static String resolveEndTime(Object rawEndTime) {

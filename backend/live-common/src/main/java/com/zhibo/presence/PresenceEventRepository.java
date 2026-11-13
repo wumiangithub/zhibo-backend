@@ -3,6 +3,7 @@ package com.zhibo.presence;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 public interface PresenceEventRepository extends JpaRepository<PresenceEventEntity, String> {
@@ -24,6 +25,8 @@ public interface PresenceEventRepository extends JpaRepository<PresenceEventEnti
             String roomId, LocalDateTime startInclusive, LocalDateTime endExclusive);
 
     List<PresenceEventEntity> findByRoomId(String roomId);
+
+    List<PresenceEventEntity> findByRoomIdIn(Collection<String> roomIds);
 
     List<PresenceEventEntity> findByRoomIdAndUsernameOrderByEventTimeAscIdAsc(String roomId, String username);
 }

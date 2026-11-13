@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +23,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,6 +47,9 @@ class ActivityCloudSyncServiceTest {
     @Mock
     private ActivityRecordListSyncService recordListSyncService;
 
+    /** 单测用同步 Executor，便于 verify 落库路径。 */
+    private final Executor syncExecutor = Runnable::run;
+
     private ActivityCloudSyncService service;
 
     @BeforeEach
@@ -53,7 +59,8 @@ class ActivityCloudSyncServiceTest {
                 sessionRepository,
                 providerRegistry,
                 sessionSyncService,
-                recordListSyncService);
+                recordListSyncService,
+                syncExecutor);
     }
 
     @Test
@@ -171,6 +178,51 @@ class ActivityCloudSyncServiceTest {
     void syncQuietlyById_missing_returnsNull() {
         when(activityRepository.findById("missing")).thenReturn(Optional.empty());
         assertEquals(null, service.syncQuietlyById("missing", Options.sessionsOnly()));
+    }
+
+    @Test
+    void syncQuietlyAsync_enqueuesAndRunsById() {
+        ActivityEntity activity = activity("a1", "vhall", "1001");
+        when(activityRepository.findById("a1")).thenReturn(Optional.of(activity));
+        when(sessionSyncService.syncQuietly(activity)).thenReturn(List.of());
+
+        service.syncQuietlyAsync(activity, Options.sessionsOnly());
+
+        verify(sessionSyncService).syncQuietly(activity);
+        verify(providerRegistry, never()).require(any());
+    }
+
+    @Test
+    void syncQuietlyAsync_dedupsSameActivityWithinWindow() {
+        ActivityEntity activity = activity("a1", "vhall", "1001");
+        when(activityRepository.findById("a1")).thenReturn(Optional.of(activity));
+        when(sessionSyncService.syncQuietly(activity)).thenReturn(List.of());
+
+        service.syncQuietlyAsync(activity, Options.sessionsOnly());
+        service.syncQuietlyAsync(activity, Options.sessionsOnly());
+
+        verify(sessionSyncService, times(1)).syncQuietly(activity);
+    }
+
+    @Test
+    void syncQuietlyAsync_nonVhall_doesNotEnqueue() {
+        AtomicInteger runs = new AtomicInteger();
+        ActivityCloudSyncService counting = new ActivityCloudSyncService(
+                activityRepository,
+                sessionRepository,
+                providerRegistry,
+                sessionSyncService,
+                recordListSyncService,
+                r -> {
+                    runs.incrementAndGet();
+                    r.run();
+                });
+        ActivityEntity activity = activity("a1", "aliyun", "100");
+
+        counting.syncQuietlyAsync(activity, Options.sessionsOnly());
+
+        assertEquals(0, runs.get());
+        verify(sessionSyncService, never()).syncQuietly(any());
     }
 
     private static ProviderRoomSnapshot snap(Integer state) {
