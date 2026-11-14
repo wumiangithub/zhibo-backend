@@ -25,6 +25,9 @@
       "name": "素材中心"
     },
     {
+      "name": "快捷发送"
+    },
+    {
       "name": "活动管理"
     },
     {
@@ -326,6 +329,547 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseTosSts"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/groups/list": {
+      "get": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "快捷发送分组列表",
+        "description": "返回租户全局快捷发送分组。按默认组优先，再按 sort_order、id 升序。每项 count 为该组未软删消息数。须管理端 Bearer JWT。",
+        "operationId": "listQuickSendGroups",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendGroups"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/groups/create": {
+      "post": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "新建快捷发送分组",
+        "description": "创建非默认分组。name 去空白后非空且 ≤64；重名返回 400。成功返回新分组（count=0，isDefault=false）。",
+        "operationId": "createQuickSendGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "分组名称"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendGroup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/groups/rename/{id}": {
+      "put": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "重命名快捷发送分组",
+        "description": "修改分组名称；默认组也可改名。name 规则同新建；与其它组重名返回 400。",
+        "operationId": "renameQuickSendGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "分组 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "新分组名称"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendGroup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/groups/delete/{id}": {
+      "delete": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "删除快捷发送分组",
+        "description": "硬删分组。默认组不可删；组下仍有未软删消息时返回 400。成功 data 为 { id }。",
+        "operationId": "deleteQuickSendGroup",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "分组 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/list": {
+      "get": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "快捷发送消息分页列表",
+        "description": "按分组拉取未软删话术。须传真实 groupId。按 sort_order、id 升序。分页 page 从 1 起，pageSize 默认 20、最大 100。",
+        "operationId": "listQuickSendMessages",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "分组 id"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 起（D37）；默认 1"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数；默认 20，最大 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendMessageList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/create": {
+      "post": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "新建快捷发送消息",
+        "description": "在指定分组新增话术。content 去空白后非空且 ≤100。可传 anchorId+place（above/below）插到锚点上/下方；省略锚点则追加到组末。成功后该组未软删消息 sort_order 重写为 1..n。",
+        "operationId": "createQuickSendMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "groupId",
+                  "content"
+                ],
+                "properties": {
+                  "groupId": {
+                    "$ref": "#/components/schemas/BusinessUuid"
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "话术正文"
+                  },
+                  "anchorId": {
+                    "$ref": "#/components/schemas/BusinessUuid",
+                    "description": "相对插入锚点消息 id；可选"
+                  },
+                  "place": {
+                    "type": "string",
+                    "enum": [
+                      "above",
+                      "below"
+                    ],
+                    "description": "有锚点时必填：above 上方 / below 下方",
+                    "x-apifox-enum": [
+                      {
+                        "value": "above",
+                        "name": "上方",
+                        "description": "上方"
+                      },
+                      {
+                        "value": "below",
+                        "name": "下方",
+                        "description": "下方"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/update/{id}": {
+      "put": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "编辑快捷发送消息",
+        "description": "只改 content；不改分组与排序。content 规则同新建。",
+        "operationId": "updateQuickSendMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "消息 id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "content"
+                ],
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "新话术正文"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/copy/{id}": {
+      "post": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "复制快捷发送消息",
+        "description": "将原文案复制一条并插入到原消息下方（同组），重写该组 sort_order。无请求体。",
+        "operationId": "copyQuickSendMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "被复制消息 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/reorder": {
+      "post": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "快捷发送消息拖拽排序",
+        "description": "ids 必须与该分组当前全部未软删消息 id 集合一致（顺序为新顺序），否则 400。写 sort_order 为 1..n。成功仅返回 code/msg。",
+        "operationId": "reorderQuickSendMessages",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "groupId",
+                  "ids"
+                ],
+                "properties": {
+                  "groupId": {
+                    "$ref": "#/components/schemas/BusinessUuid"
+                  },
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/BusinessUuid"
+                    },
+                    "description": "该组全部未软删消息 id 的新顺序"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseBase"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/delete/{id}": {
+      "delete": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "软删单条快捷发送消息",
+        "description": "写 deleted_time；列表不再返回。成功 data 为 { id }。",
+        "operationId": "deleteQuickSendMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BusinessUuid"
+            },
+            "description": "消息 id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quick-send/messages/batch-delete": {
+      "post": {
+        "tags": [
+          "快捷发送"
+        ],
+        "summary": "批量软删快捷发送消息",
+        "description": "ids 1～100；不存在或已删的 id 忽略；至少成功删 1 条，否则 400。返回实际软删条数 deleted。",
+        "operationId": "batchDeleteQuickSendMessages",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ids"
+                ],
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "items": {
+                      "$ref": "#/components/schemas/BusinessUuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseQuickSendBatchDelete"
                 }
               }
             }
@@ -2360,7 +2904,7 @@
           "统计"
         ],
         "summary": "直播设置 · 直播带货数据",
-        "description": "直播数据页「在线人数趋势」下方「直播带货」表。行=本场 activity_product 已绑定商品全量（按 sort_order）；无绑 → list 空数组。点击次数/人数来自 activity_product_click（小黄车「去抢购」埋点）。成交人数/金额来自 activity_order：本场 activity_id + product_id 对齐 spuId、状态 2/3/4/5，username 去重、pay_amount 求和。成功退款金额本轮恒 \"0.00\"。不查 OMS。活动不存在 → 业务 400。",
+        "description": "直播数据页「在线人数趋势」下方「直播带货」表。行=本场 activity_product 已绑定商品全量（按 sort_order）；无绑 → list 空数组。点击次数/人数来自 activity_product_click（小黄车「去抢购」埋点）。成交人数/金额来自 activity_order：本场 activity_id + product_id 对齐 spuId、状态 1030/1050/1070/1071/1080/1081，username 去重、pay_amount 求和。成功退款金额本轮恒 \"0.00\"。不查 OMS。活动不存在 → 业务 400。",
         "operationId": "getActivityCommerceData",
         "security": [
           {
@@ -2880,7 +3424,7 @@
           "直播中控台"
         ],
         "summary": "中控台观看数据成交汇总",
-        "description": "中控台「数据」→「观看数据」左侧成交三项：直播间成交金额 / 成交人数 / 成交商品数。只读本站 activity_order 已付状态（2/3/4/5）；不查 OMS。在线人数与评论指标不经本接口。交易数据 KPI / 趋势见 trade-stats 与 trade-trend。admin JWT。",
+        "description": "中控台「数据」→「观看数据」左侧成交三项：直播间成交金额 / 成交人数 / 成交商品数。只读本站 activity_order 已付状态（1030/1050/1070/1071/1080/1081）；不查 OMS。在线人数与评论指标不经本接口。交易数据 KPI / 趋势见 trade-stats 与 trade-trend。admin JWT。",
         "operationId": "getConsoleWatchTrade",
         "security": [
           {
@@ -2944,7 +3488,7 @@
           "直播中控台"
         ],
         "summary": "中控台交易数据成交趋势",
-        "description": "中控台「数据」→「交易数据」右侧成交趋势：按支付时间桶聚合成交金额与销量（已付订单行数）。只读本站 activity_order 已付状态（2/3/4/5），按 pay_time 入桶；pay_time 为空不计。Query 口径对齐 presence-trend：跨度必须不超过 1 天，bucketSeconds 本迭代仅支持 60。无订单的桶仍返回 dealAmount=\"0.00\"、soldCount=0。admin JWT。",
+        "description": "中控台「数据」→「交易数据」右侧成交趋势：按支付时间桶聚合成交金额与销量（已付订单行数）。只读本站 activity_order 已付状态（1030/1050/1070/1071/1080/1081），按 pay_time 入桶；pay_time 为空不计。Query 口径对齐 presence-trend：跨度必须不超过 1 天，bucketSeconds 本迭代仅支持 60。无订单的桶仍返回 dealAmount=\"0.00\"、soldCount=0。admin JWT。",
         "operationId": "getConsoleTradeTrend",
         "security": [
           {
@@ -3004,7 +3548,7 @@
           "直播中控台"
         ],
         "summary": "中控台商品列表",
-        "description": "中控台中间操作条「商品」面板：返回本场 activity_product 绑定全量（含隐藏行）与小黄车总开关 cartEnabled。soldCount 为本场已付订单行数。封面/价/服务期/类型由前端直连订单中心批量详情补齐。移除走 PUT /activities/{id} 仅传 products 全量覆盖。讲解无本站 API。admin JWT。",
+        "description": "中控台中间操作条「商品」面板：返回本场 activity_product 绑定全量（含隐藏行）与小黄车总开关 cartEnabled。soldCount 为本场已付订单行数（OMS 状态 1030/1050/1070/1071/1080/1081）。封面/价/服务期/类型由前端直连订单中心批量详情补齐。移除走 PUT /activities/{id} 仅传 products 全量覆盖。讲解无本站 API。admin JWT。",
         "operationId": "listConsoleProducts",
         "security": [
           {
@@ -3225,12 +3769,21 @@
             "description": "在线状态筛选"
           },
           {
+            "name": "followerEmployeeId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "正整数员工 id，精确匹配本场邀请人；与 followerKeyword 同时传时都须命中（AND）"
+          },
+          {
             "name": "followerKeyword",
             "in": "query",
             "schema": {
               "type": "string"
             },
-            "description": "跟进人姓名包含；空不过滤"
+            "description": "跟进人姓名包含；空不过滤。下拉选项见 session-inviters"
           },
           {
             "name": "sort",
@@ -3368,6 +3921,14 @@
             }
           },
           {
+            "name": "followerEmployeeId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
             "name": "followerKeyword",
             "in": "query",
             "schema": {
@@ -3380,6 +3941,507 @@
             "schema": {
               "type": "string",
               "default": "latestEnterTime"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc",
+              "description": "asc 升序 / desc 降序",
+              "x-apifox-enum": [
+                {
+                  "value": "asc",
+                  "name": "升序",
+                  "description": "升序"
+                },
+                {
+                  "value": "desc",
+                  "name": "降序",
+                  "description": "降序"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV 文件",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/session-inviters/{id}": {
+      "get": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "本场员工邀请人下拉",
+        "description": "本场 activity_audience 去重 employee_inviter_id（>0），供观众明细/带货明细/员工数据跟进人下拉（D124）。姓名取员工账号；无则「员工{id}」。按姓名中文序。admin JWT。",
+        "operationId": "listConsoleSessionInviters",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseConsoleSessionInviterList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/staff-details/{id}": {
+      "get": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台员工数据列表",
+        "description": "底栏「员工数据」（D125）。行=本场专属链邀请人（activity_audience.employee_inviter_id 去重）。邀请人数=归因且真实进房（观众 Join）；直播观看人数=有 Join 即计（不要求 liveSec>0，与邀请人数现阶段可相等）；平均观看时长=直播秒合计÷观看人数（人数 0→0，不含回放）；发言=未软删聊天+提问；在线人数同观众明细口径，仅顶栏刷新不轮询。admin JWT。",
+        "operationId": "listConsoleStaffDetails",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 起（D37）；默认 1"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数；默认 20，最大 100"
+          },
+          {
+            "name": "employeeId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "正整数员工 id 精确匹配跟进人行；与 employeeKeyword AND"
+          },
+          {
+            "name": "employeeKeyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "跟进人姓名包含；空不过滤"
+          },
+          {
+            "name": "deptId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "第一岗位部门 id 精确匹配（EmployeeDeptResolver）；不含下级；无岗位在有 deptId 时不命中"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "inviteCount",
+              "description": "单列：inviteCount / liveWatchCount / avgLiveWatchDuration / onlineCount / commentCount / employeeName / deptName"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc",
+              "description": "asc 升序 / desc 降序",
+              "x-apifox-enum": [
+                {
+                  "value": "asc",
+                  "name": "升序",
+                  "description": "升序"
+                },
+                {
+                  "value": "desc",
+                  "name": "降序",
+                  "description": "降序"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseConsoleStaffDetailList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/commerce-details/{id}": {
+      "get": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台带货明细列表",
+        "description": "底栏「带货明细」（D124）。行=本场 activity_order 按 username×product_id 聚合；点击仅挂指标。支付状态三态 unpaid/paid/refunded。总支付/总成交=全站已付。admin JWT。不要与侧栏 commerce-data（按绑品汇总）混淆。",
+        "operationId": "listConsoleCommerceDetails",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            },
+            "description": "页码，从 1 起（D37）；默认 1"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "每页条数；默认 20，最大 100"
+          },
+          {
+            "name": "productName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "商品名称模糊；空不过滤"
+          },
+          {
+            "name": "payStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "unpaid",
+                "paid",
+                "refunded"
+              ],
+              "default": "all",
+              "description": "all 全部 / unpaid 未支付 / paid 已支付 / refunded 已退款（按行派生态）",
+              "x-apifox-enum": [
+                {
+                  "value": "all",
+                  "name": "全部",
+                  "description": "全部"
+                },
+                {
+                  "value": "unpaid",
+                  "name": "未支付",
+                  "description": "未支付"
+                },
+                {
+                  "value": "paid",
+                  "name": "已支付",
+                  "description": "已支付"
+                },
+                {
+                  "value": "refunded",
+                  "name": "已退款（按行派生态）",
+                  "description": "已退款（按行派生态）"
+                }
+              ]
+            }
+          },
+          {
+            "name": "followerEmployeeId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "正整数员工 id 精确匹配邀请人；与 followerKeyword AND"
+          },
+          {
+            "name": "followerKeyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "跟进人姓名包含；空不过滤"
+          },
+          {
+            "name": "keywordType",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nickname",
+                "username",
+                "phone"
+              ],
+              "default": "nickname",
+              "description": "nickname 昵称 / username 用户标识 / phone 手机号",
+              "x-apifox-enum": [
+                {
+                  "value": "nickname",
+                  "name": "昵称",
+                  "description": "昵称"
+                },
+                {
+                  "value": "username",
+                  "name": "用户标识",
+                  "description": "用户标识"
+                },
+                {
+                  "value": "phone",
+                  "name": "手机号",
+                  "description": "手机号"
+                }
+              ]
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "用户关键字；空不过滤"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "orderCount",
+              "description": "单列：clickCount / lastClickTime / orderCount / unpaidCount / paidSuccessCount / liveDealAmount / totalPaidOrderCount / totalPaidAmount / productName / payStatus"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc",
+              "description": "asc 升序 / desc 降序",
+              "x-apifox-enum": [
+                {
+                  "value": "asc",
+                  "name": "升序",
+                  "description": "升序"
+                },
+                {
+                  "value": "desc",
+                  "name": "降序",
+                  "description": "降序"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseConsoleCommerceDetailList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/commerce-details/export/{id}": {
+      "get": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台带货明细导出 CSV",
+        "description": "按与 list 相同的筛选导出 UTF-8 BOM CSV，不分页（D124）。支付状态为中文。admin JWT。",
+        "operationId": "exportConsoleCommerceDetails",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          },
+          {
+            "name": "productName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "商品名称模糊；空不过滤"
+          },
+          {
+            "name": "payStatus",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "unpaid",
+                "paid",
+                "refunded"
+              ],
+              "default": "all",
+              "description": "all 全部 / unpaid 未支付 / paid 已支付 / refunded 已退款（按行派生态）",
+              "x-apifox-enum": [
+                {
+                  "value": "all",
+                  "name": "全部",
+                  "description": "全部"
+                },
+                {
+                  "value": "unpaid",
+                  "name": "未支付",
+                  "description": "未支付"
+                },
+                {
+                  "value": "paid",
+                  "name": "已支付",
+                  "description": "已支付"
+                },
+                {
+                  "value": "refunded",
+                  "name": "已退款（按行派生态）",
+                  "description": "已退款（按行派生态）"
+                }
+              ]
+            }
+          },
+          {
+            "name": "followerEmployeeId",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "正整数员工 id 精确匹配邀请人；与 followerKeyword AND"
+          },
+          {
+            "name": "followerKeyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "跟进人姓名包含；空不过滤"
+          },
+          {
+            "name": "keywordType",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nickname",
+                "username",
+                "phone"
+              ],
+              "default": "nickname",
+              "description": "nickname 昵称 / username 用户标识 / phone 手机号",
+              "x-apifox-enum": [
+                {
+                  "value": "nickname",
+                  "name": "昵称",
+                  "description": "昵称"
+                },
+                {
+                  "value": "username",
+                  "name": "用户标识",
+                  "description": "用户标识"
+                },
+                {
+                  "value": "phone",
+                  "name": "手机号",
+                  "description": "手机号"
+                }
+              ]
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "用户关键字；空不过滤"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "orderCount",
+              "description": "单列：clickCount / lastClickTime / orderCount / unpaidCount / paidSuccessCount / liveDealAmount / totalPaidOrderCount / totalPaidAmount / productName / payStatus"
             }
           },
           {
@@ -6919,6 +7981,122 @@
         }
       }
     },
+    "/api/v1/activities/console/system-messages/send/{id}": {
+      "post": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台发送系统消息",
+        "description": "中控台「系统消息」面板发送。同事务 insert room_comment（comment_type=5，content 为 {\"text\",\"pin\"} JSON，username 空，nickname 为当前员工昵称）。pin=true 时先把本场其它系统消息的 pin 清为 false（同场同时仅一条置顶）。前端仅当本接口成功后再调微吼 chat.sendCustomEvent({ type: system, data })。text 须 trim 后 1～200 字。admin JWT。活动不存在或已软删 → 400。",
+        "operationId": "sendConsoleSystemMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleSendSystemMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseConsoleSendSystemMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/system-messages/unpin/{id}": {
+      "post": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台取消系统消息置顶",
+        "description": "将本场指定 commentId 的系统消息 content.pin 写为 false。成功后再广播 sendCustomEvent type=system、data 含 pin:false 与 action:unpin。commentId 无效或非本场 type=5 → 400。admin JWT。",
+        "operationId": "unpinConsoleSystemMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleUnpinSystemMessageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseConsoleSendSystemMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/activities/console/system-message-history/{id}": {
+      "get": {
+        "tags": [
+          "直播中控台"
+        ],
+        "summary": "中控台系统消息历史",
+        "description": "读本站 room_comment（comment_type=5、未软删），按 comment_time 旧→新，最多 500 条；并返回 pinnedCommentId（当前 pin=true 的最新一条）。响应形状对齐观看 /watch/system-message-history；admin JWT；无售卖门禁。活动不存在或已软删 → 400。",
+        "operationId": "getConsoleSystemMessageHistory",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ActivityId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWatchSystemMessageHistory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/live-reports/delete/{id}": {
       "delete": {
         "tags": [
@@ -8918,6 +10096,94 @@
             "type": "string",
             "description": "ISO-8601 UTC（带 Z）；库：DATETIME(3)",
             "example": "2026-10-10T06:00:00Z"
+          }
+        }
+      },
+      "QuickSendGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "分组名称；去空白后非空，最长 64；库：VARCHAR(64)"
+          },
+          "count": {
+            "type": "integer",
+            "description": "该分组下未软删消息数；库：INT"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "是否默认分组；默认分组不可删除；库：TINYINT(1)"
+          }
+        }
+      },
+      "QuickSendMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+          },
+          "groupId": {
+            "$ref": "#/components/schemas/BusinessUuid",
+            "description": "本站业务 UUID（32 位小写十六进制无横线，D74）；库：VARCHAR(32)"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "话术正文；可含表情令牌如 [微笑]；去空白后非空，最长 100（按字符串长度计）；库：VARCHAR(100)"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "description": "组内排序；从小到大；插入/重排后为 1..n；库：INT"
+          },
+          "createdTime": {
+            "type": "string",
+            "description": "创建时间；格式 yyyy-MM-dd HH:mm:ss；库：DATETIME(3)",
+            "example": "2026-11-14 16:00:00"
+          },
+          "updatedTime": {
+            "type": "string",
+            "description": "最近更新时间；格式 yyyy-MM-dd HH:mm:ss；库：DATETIME(3)",
+            "example": "2026-11-14 16:00:00"
+          }
+        }
+      },
+      "QuickSendMessageListData": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "未软删总数；库：BIGINT",
+            "format": "int64"
+          },
+          "page": {
+            "type": "integer",
+            "description": "当前页；从 1 起；库：INT"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数；库：INT"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuickSendMessage"
+            },
+            "description": "列表数据"
+          }
+        }
+      },
+      "QuickSendBatchDeleteData": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "description": "实际软删条数；库：INT"
           }
         }
       },
@@ -11302,11 +12568,11 @@
           },
           "enterTime": {
             "type": "string",
-            "description": "进入时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+            "description": "当前会话最晚一次 Join 时间（yyyy-MM-dd HH:mm:ss）。左侧人员列表 UI 不展示此字段，仍随接口返回。；库：DATETIME(3)"
           },
           "leaveTime": {
             "type": "string",
-            "description": "离开时间，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+            "description": "全部连接闭合后的最晚 Leave；在线则省略。左侧人员列表 UI 不展示。；库：DATETIME(3)"
           },
           "online": {
             "type": "boolean",
@@ -11315,6 +12581,14 @@
           "roleLabel": {
             "type": "string",
             "description": "助教侧角色角标。优先 activity_member.tag；否则主播「讲师」/嘉宾「嘉宾」/助理「助教」；中控台 z{id} 为「中控」。学员侧不返回。"
+          },
+          "followerName": {
+            "type": "string",
+            "description": "学员跟进人姓名，仅取 activity_audience.employee_inviter_id 对应员工；无邀请人则省略（前端展示「暂未分配」）。助教侧不返回。"
+          },
+          "commentCount": {
+            "type": "integer",
+            "description": "本场未软删聊天+提问条数（comment_type 为 1 或 2，不计优惠券/图片）。学员侧恒返回（可为 0）；助教侧省略。；库：INT"
           }
         }
       },
@@ -11503,11 +12777,11 @@
           },
           "pendingPayCount": {
             "type": "integer",
-            "description": "本场 order_status=1 订单数；库：INT"
+            "description": "本场 order_status=1010（待支付）订单数；库：INT"
           },
           "purchaseCount": {
             "type": "integer",
-            "description": "本场已付订单数（order_status 2/3/4/5）；库：INT"
+            "description": "本场已付订单数（order_status 1030/1050/1070/1071/1080/1081）；库：INT"
           },
           "totalPurchaseCount": {
             "type": "integer",
@@ -11553,6 +12827,280 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ConsoleAudienceDetailItem"
+            },
+            "description": "列表数据"
+          }
+        }
+      },
+      "ConsoleSessionInviterItem": {
+        "type": "object",
+        "required": [
+          "employeeId",
+          "name"
+        ],
+        "properties": {
+          "employeeId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "员工账号 id（sys_useraccount.rs_mainkey_id）；库：BIGINT"
+          },
+          "name": {
+            "type": "string",
+            "description": "员工姓名；无则「员工{id}」；库：VARCHAR(256)",
+            "maxLength": 256
+          }
+        }
+      },
+      "ConsoleSessionInviterListData": {
+        "type": "object",
+        "required": [
+          "id",
+          "list"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "本站活动 UUID；库：VARCHAR(32)",
+            "maxLength": 32
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsoleSessionInviterItem"
+            },
+            "description": "本场出现过的去重员工邀请人，按姓名中文序"
+          }
+        }
+      },
+      "ConsoleCommerceDetailItem": {
+        "type": "object",
+        "required": [
+          "username",
+          "nickname",
+          "spuId",
+          "productName",
+          "clickCount",
+          "orderCount",
+          "unpaidCount",
+          "paidSuccessCount",
+          "payStatus",
+          "liveDealAmount",
+          "totalPaidOrderCount",
+          "totalPaidAmount"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "用户中心 viewer.username（D118）；库：VARCHAR(16)"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "通则 · 观众展示昵称；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "头像 URL；库：VARCHAR(512)",
+            "maxLength": 512
+          },
+          "unionid": {
+            "type": "string",
+            "description": "微信 unionid；有则回（仅管理端带货明细）"
+          },
+          "spuId": {
+            "type": "string",
+            "description": "商品 product_id 十进制字符串；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "productName": {
+            "type": "string",
+            "description": "该组订单最近非空商品名快照；库：VARCHAR(128)",
+            "maxLength": 128
+          },
+          "clickCount": {
+            "type": "integer",
+            "description": "本场同用户×spu 的 activity_product_click 行数；无点击为 0；库：INT"
+          },
+          "lastClickTime": {
+            "type": "string",
+            "description": "最近点击时间 yyyy-MM-dd HH:mm:ss；无点击则省略；库：DATETIME(3)"
+          },
+          "orderCount": {
+            "type": "integer",
+            "description": "本场该用户×商品全部订单笔数；库：INT"
+          },
+          "unpaidCount": {
+            "type": "integer",
+            "description": "本场该用户×商品 order_status=1010（待支付）笔数；库：INT"
+          },
+          "paidSuccessCount": {
+            "type": "integer",
+            "description": "本场该用户×商品已付（order_status 1030/1050/1070/1071/1080/1081）笔数；库：INT"
+          },
+          "payStatus": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "paid",
+              "refunded"
+            ],
+            "description": "行标三态：unpaid 未支付 / paid 已支付 / refunded 已退款。派生优先级：该组若存在 order_status∈{1030,1050,1070,1071,1080}→paid；否则若存在 1081→refunded；否则→unpaid。库存 OMS 码：1010 待支付 / 1030 已支付 / 1050 已签约 / 1070 分期退款中 / 1071 退款中 / 1080 部分退款 / 1081 已退款",
+            "x-apifox-enum": [
+              {
+                "value": "unpaid",
+                "name": "未支付",
+                "description": "未支付"
+              },
+              {
+                "value": "paid",
+                "name": "已支付",
+                "description": "已支付"
+              },
+              {
+                "value": "refunded",
+                "name": "已退款",
+                "description": "已退款"
+              }
+            ]
+          },
+          "liveDealAmount": {
+            "type": "string",
+            "description": "本场该用户×商品已付 pay_amount 求和，两位小数，如 \"0.00\""
+          },
+          "totalPaidOrderCount": {
+            "type": "integer",
+            "description": "该用户全站已付订单笔数（与观众明细累计购买次数同口径）；库：INT"
+          },
+          "totalPaidAmount": {
+            "type": "string",
+            "description": "该用户全站已付金额，两位小数（与观众明细累计购买金额同口径）"
+          },
+          "phoneMasked": {
+            "type": "string",
+            "description": "脱敏手机号；无手机则省略"
+          },
+          "followerName": {
+            "type": "string",
+            "description": "本场员工邀请人姓名；无邀请人则省略"
+          },
+          "followerEmployeeId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "邀请人员工账号 id；无则省略；库：BIGINT"
+          }
+        }
+      },
+      "ConsoleCommerceDetailListData": {
+        "type": "object",
+        "required": [
+          "page",
+          "pageSize",
+          "total",
+          "list"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "页码，从 1 开始（D37）；库：INT"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数；库：INT"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "总条数；库：BIGINT"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsoleCommerceDetailItem"
+            },
+            "description": "列表数据"
+          }
+        }
+      },
+      "ConsoleStaffDetailItem": {
+        "type": "object",
+        "required": [
+          "employeeId",
+          "employeeName",
+          "inviteCount",
+          "liveWatchCount",
+          "avgLiveWatchDurationSec",
+          "onlineCount",
+          "commentCount"
+        ],
+        "properties": {
+          "employeeId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "跟进人员工账号 rs_mainkey_id；库：BIGINT"
+          },
+          "employeeName": {
+            "type": "string",
+            "description": "跟进人姓名；无则「员工{id}」"
+          },
+          "deptId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "第一岗位部门 id（EmployeeDeptResolver）；无岗位则省略；库：BIGINT"
+          },
+          "deptName": {
+            "type": "string",
+            "description": "第一岗位部门名称；无岗位则省略"
+          },
+          "inviteCount": {
+            "type": "integer",
+            "description": "邀请人数：本场 employee_inviter_id=该员工且真实进房（观众 Join）的去重人数；仅有 audience 行未进房不计；库：INT"
+          },
+          "liveWatchCount": {
+            "type": "integer",
+            "description": "直播观看人数：同上邀请池中有 Join 即计（不要求 liveSec>0）。与 inviteCount 现阶段可相等；库：INT"
+          },
+          "avgLiveWatchDurationSec": {
+            "type": "integer",
+            "format": "int64",
+            "description": "用户直播平均观看时长（秒）：邀请池有 Join 观众的直播秒合计÷liveWatchCount；人数为 0 时为 0（前端展示 00:00:00）；不含回放；库：BIGINT"
+          },
+          "onlineCount": {
+            "type": "integer",
+            "description": "在线人数：邀请池中当前在线（同观众明细；结束态全离线）。仅顶栏刷新更新，不轮询；库：INT"
+          },
+          "commentCount": {
+            "type": "integer",
+            "description": "用户发言次数：邀请池归因观众未软删 room_comment 且 comment_type∈{1,2} 条数之和；库：INT"
+          }
+        }
+      },
+      "ConsoleStaffDetailListData": {
+        "type": "object",
+        "required": [
+          "page",
+          "pageSize",
+          "total",
+          "list"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "description": "页码，从 1 开始（D37）；库：INT"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "每页条数；库：INT"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "总条数；库：BIGINT"
+          },
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsoleStaffDetailItem"
             },
             "description": "列表数据"
           }
@@ -11608,7 +13156,7 @@
           "dealUserCount": {
             "type": "integer",
             "format": "int64",
-            "description": "成交人数：本场已付订单（order_status 为 2/3/4/5）username 去重人数。；库：BIGINT"
+            "description": "成交人数：本场已付订单（order_status 为 1030/1050/1070/1071/1080/1081）username 去重人数。；库：BIGINT"
           },
           "dealProductCount": {
             "type": "integer",
@@ -11631,7 +13179,7 @@
           "unpaidUserCount": {
             "type": "integer",
             "format": "int64",
-            "description": "未付款人数：本场 order_status=1（待付款）订单 username 去重人数。；库：BIGINT"
+            "description": "未付款人数：本场 order_status=1010（待支付）订单 username 去重人数。；库：BIGINT"
           }
         }
       },
@@ -11699,7 +13247,6 @@
           "spuId",
           "productName",
           "visible",
-          "sortOrder",
           "soldCount"
         ],
         "properties": {
@@ -11717,14 +13264,10 @@
             "type": "boolean",
             "description": "直播间是否展示该绑定商品；false 时观看端小黄车不返回该行；库：TINYINT(1)"
           },
-          "sortOrder": {
-            "type": "integer",
-            "description": "提交顺序，从 0 起；库：INT"
-          },
           "soldCount": {
             "type": "integer",
             "format": "int64",
-            "description": "本场已付订单行数（order_status 为 2/3/4/5，按 product_id 对齐 spu；无成交为 0）；库：BIGINT"
+            "description": "本场已付订单行数（order_status 为 1030/1050/1070/1071/1080/1081，按 product_id 对齐 spu；无成交为 0）；库：BIGINT"
           }
         }
       },
@@ -11750,7 +13293,7 @@
             "items": {
               "$ref": "#/components/schemas/ConsoleProductItem"
             },
-            "description": "本场 activity_product 全量，按 sort_order；无绑定为 []"
+            "description": "本场 activity_product 全量，顺序=绑定数组下标（库内 sort_order）；响应不返回 sortOrder；无绑定为 []"
           }
         }
       },
@@ -15256,7 +16799,7 @@
           },
           "dealUserCount": {
             "type": "integer",
-            "description": "成交人数；本场已支付订单（状态 2/3/4/5）按 username 去重；product_id 对齐 spuId；库：INT"
+            "description": "成交人数；本场已支付订单（状态 1030/1050/1070/1071/1080/1081）按 username 去重；product_id 对齐 spuId；库：INT"
           },
           "dealAmount": {
             "type": "string",
@@ -16714,6 +18257,54 @@
           }
         ]
       },
+      "ApiResponseConsoleSessionInviterList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleSessionInviterListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleCommerceDetailList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleCommerceDetailListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleStaffDetailList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleStaffDetailListData"
+              }
+            }
+          }
+        ]
+      },
       "ApiResponseConsoleWatchTrade": {
         "allOf": [
           {
@@ -17309,6 +18900,89 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/ActivityAudienceImportByTagsData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseQuickSendGroup": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/QuickSendGroup"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseQuickSendGroups": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QuickSendGroup"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseQuickSendMessage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/QuickSendMessage"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseQuickSendMessageList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/QuickSendMessageListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseQuickSendBatchDelete": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/QuickSendBatchDeleteData"
               }
             }
           }

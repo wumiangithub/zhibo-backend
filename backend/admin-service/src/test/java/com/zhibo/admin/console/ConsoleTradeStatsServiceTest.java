@@ -52,7 +52,8 @@ class ConsoleTradeStatsServiceTest {
                         eq(ID), eq(DashboardBusinessService.PAID_STATUSES)))
                 .thenReturn(5L);
         when(clickRepository.countDistinctUsernameByActivityId(ID)).thenReturn(10L);
-        when(orderRepository.countDistinctUsernameByActivityAndStatuses(eq(ID), eq(List.of(1))))
+        when(orderRepository.countDistinctUsernameByActivityAndStatuses(
+                        eq(ID), eq(com.zhibo.activity.ActivityOrderStatuses.UNPAID_STATUSES)))
                 .thenReturn(2L);
 
         ConsoleTradeStatsResponse resp = service.stats(ID);
@@ -81,7 +82,8 @@ class ConsoleTradeStatsServiceTest {
                         eq(ID), eq(DashboardBusinessService.PAID_STATUSES)))
                 .thenReturn(0L);
         when(clickRepository.countDistinctUsernameByActivityId(ID)).thenReturn(0L);
-        when(orderRepository.countDistinctUsernameByActivityAndStatuses(eq(ID), eq(List.of(1))))
+        when(orderRepository.countDistinctUsernameByActivityAndStatuses(
+                        eq(ID), eq(com.zhibo.activity.ActivityOrderStatuses.UNPAID_STATUSES)))
                 .thenReturn(0L);
 
         ConsoleTradeStatsResponse resp = service.stats(ID);

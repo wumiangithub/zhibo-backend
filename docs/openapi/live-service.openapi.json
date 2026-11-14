@@ -1122,6 +1122,42 @@
         }
       }
     },
+    "/api/v1/watch/system-message-history/{id}": {
+      "get": {
+        "tags": [
+          "观看"
+        ],
+        "summary": "观看端系统消息历史",
+        "description": "读本站 room_comment（comment_type=5、未软删），按 comment_time 旧→新，最多 500 条；返回 list 与 pinnedCommentId。置顶消息同时进讨论区列表与顶栏；观众关闭顶栏仅本地。须过售卖门禁，未过 → 403。中控台同源见 /activities/console/system-message-history。",
+        "operationId": "getWatchSystemMessageHistory",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WatchActivityId"
+          },
+          {
+            "name": "X-Activity-Access",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "本场访问 JWT（加密售卖解锁后；勿塞进观众 Authorization）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "业务结果（看 body.code；成功 code===0）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseWatchSystemMessageHistory"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/watch/chat-history/{id}": {
       "get": {
         "tags": [
@@ -2995,6 +3031,133 @@
           }
         }
       },
+      "ConsoleSendSystemMessageRequest": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "description": "中控台系统消息 Body。text 空白或超过 200 字 → 400；pin=true 时同场其它系统消息自动取消置顶。",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "系统消息正文；trim 后 1～200 字，示例：请大家遵守直播间规则；库：VARCHAR(200)"
+          },
+          "pin": {
+            "type": "boolean",
+            "description": "是否置顶；true 时观众端讨论区顶栏展示；同场同时仅一条；库：TINYINT(1)"
+          }
+        }
+      },
+      "ConsoleUnpinSystemMessageRequest": {
+        "type": "object",
+        "required": [
+          "commentId"
+        ],
+        "description": "取消置顶 Body。commentId 须为本场未软删的系统消息主键。",
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "room_comment.id；须为正整数；库：BIGINT"
+          }
+        }
+      },
+      "ConsoleSendSystemMessageResponse": {
+        "type": "object",
+        "required": [
+          "commentId",
+          "text",
+          "pin",
+          "nickname",
+          "commentTime"
+        ],
+        "description": "系统消息落库结果。前端用其字段组装 sendCustomEvent data；unpin 时 pin 恒为 false。",
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "新写入或被取消置顶的 room_comment.id；库：BIGINT"
+          },
+          "text": {
+            "type": "string",
+            "description": "正文快照"
+          },
+          "pin": {
+            "type": "boolean",
+            "description": "当前是否置顶；发送响应跟随请求；unpin 响应恒 false；库：TINYINT(1)"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "发送人昵称快照，如 直播助理；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "commentTime": {
+            "type": "string",
+            "description": "服务器写入时间，格式 yyyy-MM-dd HH:mm:ss，上海时区；库：DATETIME(3)"
+          }
+        }
+      },
+      "WatchSystemMessageHistoryItem": {
+        "type": "object",
+        "required": [
+          "commentId",
+          "text",
+          "pin"
+        ],
+        "description": "系统消息历史一条。content 解析自 room_comment；timestamp 为 comment_time 的毫秒。",
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "room_comment.id；库：BIGINT"
+          },
+          "text": {
+            "type": "string",
+            "description": "正文"
+          },
+          "pin": {
+            "type": "boolean",
+            "description": "该条落库时的 pin 快照；当前有效置顶以响应 pinnedCommentId 为准；库：TINYINT(1)"
+          },
+          "nickname": {
+            "type": "string",
+            "description": "发送昵称快照；库：VARCHAR(64)",
+            "maxLength": 64
+          },
+          "commentTime": {
+            "type": "string",
+            "description": "comment_time，格式 yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "comment_time 对应的 Unix 毫秒，便于与微吼聊天按时间合并；库：BIGINT"
+          }
+        }
+      },
+      "WatchSystemMessageHistoryData": {
+        "type": "object",
+        "required": [
+          "list"
+        ],
+        "description": "系统消息历史。list 旧→新最多 500；pinnedCommentId 为当前 pin=true 的最新一条，无则省略或 null。",
+        "properties": {
+          "list": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WatchSystemMessageHistoryItem"
+            },
+            "description": "列表数据"
+          },
+          "pinnedCommentId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "当前置顶系统消息的 commentId；无置顶时为 null；库：BIGINT"
+          }
+        }
+      },
       "ConsoleSendCouponResponse": {
         "type": "object",
         "description": "发券成功后返回；前端用其组 sendCustomEvent data 并本地上屏",
@@ -4400,6 +4563,38 @@
           }
         ]
       },
+      "ApiResponseConsoleSendSystemMessage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleSendSystemMessageResponse"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseWatchSystemMessageHistory": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/WatchSystemMessageHistoryData"
+              }
+            }
+          }
+        ]
+      },
       "ConsoleSummaryData": {
         "allOf": [
           {
@@ -4712,6 +4907,54 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/ConsoleAudienceDetailListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleSessionInviterList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleSessionInviterListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleCommerceDetailList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleCommerceDetailListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleStaffDetailList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleStaffDetailListData"
               }
             }
           }

@@ -4,6 +4,7 @@ import com.zhibo.activity.ActivityOrderCourseEntity;
 import com.zhibo.activity.ActivityOrderCourseRepository;
 import com.zhibo.activity.ActivityOrderEntity;
 import com.zhibo.activity.ActivityOrderRepository;
+import com.zhibo.activity.ActivityOrderStatuses;
 import com.zhibo.admin.course.dto.OutsideOrderReceiveItem;
 import com.zhibo.viewer.ViewerEntity;
 import com.zhibo.viewer.ViewerRepository;
@@ -14,7 +15,6 @@ import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -33,13 +33,6 @@ public class OutsideOrderService {
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")
             .withResolverStyle(ResolverStyle.STRICT);
-
-    private static final Map<Integer, Integer> OMS_STATUS = Map.of(
-            1010, 1,
-            1030, 2,
-            1071, 3,
-            1080, 4,
-            1081, 5);
 
     private final ActivityOrderRepository orderRepository;
     private final ActivityOrderCourseRepository orderCourseRepository;
@@ -116,15 +109,15 @@ public class OutsideOrderService {
         return parsed;
     }
 
+    /** 原样写入 OMS 码；缺省：有 payTime → 1030，否则 → 1010；未知码 → 400。 */
     static int mapStatus(Integer omsStatus, LocalDateTime payTime) {
         if (omsStatus == null) {
-            return payTime != null ? 2 : 1;
+            return payTime != null ? ActivityOrderStatuses.PAID : ActivityOrderStatuses.UNPAID;
         }
-        Integer mapped = OMS_STATUS.get(omsStatus);
-        if (mapped == null) {
+        if (!ActivityOrderStatuses.isKnown(omsStatus)) {
             throw new IllegalArgumentException("订单状态无效");
         }
-        return mapped;
+        return omsStatus;
     }
 
     private static List<String> normalizeCourseIds(List<String> raw) {

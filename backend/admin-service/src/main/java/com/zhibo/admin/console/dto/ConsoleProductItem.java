@@ -18,9 +18,6 @@ public class ConsoleProductItem {
     /** 直播间是否展示该商品 */
     private boolean visible;
 
-    /** 提交顺序，从 0 起 */
-    private int sortOrder;
-
     /** 本场已付订单行数（一单一品）；无成交为 0 */
     private long soldCount;
 }

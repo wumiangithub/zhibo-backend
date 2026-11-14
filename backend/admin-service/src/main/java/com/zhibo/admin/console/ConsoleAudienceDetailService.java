@@ -71,7 +71,8 @@ public class ConsoleAudienceDetailService {
             "totalPurchaseAmount",
             "commentCount",
             "couponReceiveCount");
-    private static final List<Integer> PAID_STATUSES = List.of(2, 3, 4, 5);
+    private static final List<Integer> PAID_STATUSES =
+            com.zhibo.activity.ActivityOrderStatuses.PAID_STATUSES;
 
     private final ActivityRepository activityRepository;
     private final PresenceEventRepository presenceEventRepository;
@@ -94,6 +95,7 @@ public class ConsoleAudienceDetailService {
             String keywordType,
             String keyword,
             String onlineStatus,
+            Long followerEmployeeId,
             String followerKeyword,
             String sort,
             String order) {
@@ -104,7 +106,14 @@ public class ConsoleAudienceDetailService {
             throw new IllegalArgumentException("pageSize 需在 1~100");
         }
         List<ConsoleAudienceDetailItem> all = prepareRows(
-                activityId, keywordType, keyword, onlineStatus, followerKeyword, sort, order);
+                activityId,
+                keywordType,
+                keyword,
+                onlineStatus,
+                followerEmployeeId,
+                followerKeyword,
+                sort,
+                order);
         int from = (int) Math.min((long) (page - 1) * pageSize, all.size());
         int to = (int) Math.min(from + (long) pageSize, all.size());
         ConsoleAudienceDetailListResponse resp = new ConsoleAudienceDetailListResponse();
@@ -121,11 +130,19 @@ public class ConsoleAudienceDetailService {
             String keywordType,
             String keyword,
             String onlineStatus,
+            Long followerEmployeeId,
             String followerKeyword,
             String sort,
             String order) {
         List<ConsoleAudienceDetailItem> all = prepareRows(
-                activityId, keywordType, keyword, onlineStatus, followerKeyword, sort, order);
+                activityId,
+                keywordType,
+                keyword,
+                onlineStatus,
+                followerEmployeeId,
+                followerKeyword,
+                sort,
+                order);
         StringBuilder sb = new StringBuilder();
         sb.append("用户,用户ID,手机号,跟进人,首次进入时间,最近进入时间,直播观看时长,回放观看时长,累计观看时长,")
                 .append("离线时间,进出次数,状态,点击商品次数,待支付次数,购买次数,累计购买次数,累计购买金额,评论次数,领券次数\n");
@@ -177,6 +194,7 @@ public class ConsoleAudienceDetailService {
             String keywordType,
             String keyword,
             String onlineStatus,
+            Long followerEmployeeId,
             String followerKeyword,
             String sort,
             String order) {
@@ -185,6 +203,7 @@ public class ConsoleAudienceDetailService {
         String kwType = normalizeKeywordType(keywordType);
         String kw = keyword == null ? "" : keyword.trim();
         String status = normalizeOnlineStatus(onlineStatus);
+        Long followerFilterId = normalizeFollowerEmployeeId(followerEmployeeId);
         String followerKw = followerKeyword == null ? "" : followerKeyword.trim();
         String sortKey = normalizeSort(sort);
         boolean asc = "asc".equalsIgnoreCase(order == null ? "desc" : order.trim());
@@ -247,12 +266,17 @@ public class ConsoleAudienceDetailService {
             }
 
             ActivityAudienceEntity audience = audienceByUser.get(username);
-            Long followerId = audience == null ? null : audience.getEmployeeInviterId();
+            Long inviterId = audience == null ? null : audience.getEmployeeInviterId();
             String followerName = null;
-            if (followerId != null && followerId > 0) {
-                followerName = employeeNames.get(followerId);
+            if (inviterId != null && inviterId > 0) {
+                followerName = employeeNames.get(inviterId);
                 if (followerName == null || followerName.isBlank()) {
-                    followerName = "员工" + followerId;
+                    followerName = "员工" + inviterId;
+                }
+            }
+            if (followerFilterId != null) {
+                if (inviterId == null || !followerFilterId.equals(inviterId)) {
+                    continue;
                 }
             }
             if (!followerKw.isEmpty()) {
@@ -279,8 +303,8 @@ public class ConsoleAudienceDetailService {
             if (viewer != null && viewer.getPhone() != null && !viewer.getPhone().isBlank()) {
                 item.setPhoneMasked(ViewerAdminService.maskPhone(viewer.getPhone()));
             }
-            if (followerId != null && followerId > 0) {
-                item.setFollowerEmployeeId(followerId);
+            if (inviterId != null && inviterId > 0) {
+                item.setFollowerEmployeeId(inviterId);
                 item.setFollowerName(followerName);
             }
             item.setFirstEnterTime(AttendanceTimes.format(presence.firstEnter));
@@ -412,7 +436,7 @@ public class ConsoleAudienceDetailService {
             Integer status = (Integer) row[1];
             long count = ((Number) row[2]).longValue();
             long[] slot = map.computeIfAbsent(username, k -> new long[2]);
-            if (status != null && status == 1) {
+            if (com.zhibo.activity.ActivityOrderStatuses.isUnpaid(status)) {
                 slot[0] += count;
             } else if (status != null && PAID_STATUSES.contains(status)) {
                 slot[1] += count;
@@ -477,6 +501,16 @@ public class ConsoleAudienceDetailService {
             throw new IllegalArgumentException("onlineStatus 无效");
         }
         return value;
+    }
+
+    private static Long normalizeFollowerEmployeeId(Long raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw <= 0) {
+            throw new IllegalArgumentException("followerEmployeeId 无效");
+        }
+        return raw;
     }
 
     private static String normalizeSort(String raw) {

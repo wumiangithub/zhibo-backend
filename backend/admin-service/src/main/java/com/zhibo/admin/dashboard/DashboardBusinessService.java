@@ -1,6 +1,7 @@
 package com.zhibo.admin.dashboard;
 
 import com.zhibo.activity.ActivityOrderRepository;
+import com.zhibo.activity.ActivityOrderStatuses;
 import com.zhibo.admin.dashboard.dto.BusinessMetricsResponse;
 import com.zhibo.viewer.ViewerRepository;
 import java.math.BigDecimal;
@@ -20,8 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DashboardBusinessService {
 
-    /** 已支付：2已付款 / 3退款中 / 4部分退款 / 5全部退款；不含 1待付款。 */
-    public static final List<Integer> PAID_STATUSES = List.of(2, 3, 4, 5);
+    /** 已付 OMS 码，见 {@link ActivityOrderStatuses#PAID_STATUSES}。 */
+    public static final List<Integer> PAID_STATUSES = ActivityOrderStatuses.PAID_STATUSES;
 
     static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 

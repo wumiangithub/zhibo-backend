@@ -105,4 +105,10 @@ public interface ActivityOrderRepository extends JpaRepository<ActivityOrderEnti
             @Param("statuses") Collection<Integer> statuses,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+
+    /** 本场有商品的订单（中控台带货明细行源）；{@code product_id} 空的不入表。 */
+    @Query("SELECT o FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.productId IS NOT NULL "
+            + "AND o.username IS NOT NULL AND o.username <> ''")
+    List<ActivityOrderEntity> findByActivityIdWithProduct(@Param("activityId") String activityId);
 }

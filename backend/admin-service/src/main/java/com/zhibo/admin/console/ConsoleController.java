@@ -5,6 +5,7 @@ import com.zhibo.admin.auth.AuthInterceptor;
 import com.zhibo.admin.console.dto.ConsoleAudienceDetailListResponse;
 import com.zhibo.admin.console.dto.ConsoleCartEnabledRequest;
 import com.zhibo.admin.console.dto.ConsoleCartEnabledResponse;
+import com.zhibo.admin.console.dto.ConsoleCommerceDetailListResponse;
 import com.zhibo.admin.console.dto.ConsoleCouponHistoryResponse;
 import com.zhibo.admin.console.dto.ConsoleProductListResponse;
 import com.zhibo.admin.console.dto.ConsoleProductVisibleRequest;
@@ -13,6 +14,12 @@ import com.zhibo.admin.console.dto.ConsoleQuestionHistoryResponse;
 import com.zhibo.admin.console.dto.ConsoleSdkSignResponse;
 import com.zhibo.admin.console.dto.ConsoleSendCouponRequest;
 import com.zhibo.admin.console.dto.ConsoleSendCouponResponse;
+import com.zhibo.admin.console.dto.ConsoleSendSystemMessageRequest;
+import com.zhibo.admin.console.dto.ConsoleSendSystemMessageResponse;
+import com.zhibo.admin.console.dto.ConsoleSessionInviterListResponse;
+import com.zhibo.admin.console.dto.ConsoleSystemMessageHistoryResponse;
+import com.zhibo.admin.console.dto.ConsoleUnpinSystemMessageRequest;
+import com.zhibo.admin.console.dto.ConsoleStaffDetailListResponse;
 import com.zhibo.admin.console.dto.ConsoleSummaryResponse;
 import com.zhibo.admin.console.dto.ConsoleTradeStatsResponse;
 import com.zhibo.admin.console.dto.ConsoleTradeTrendResponse;
@@ -44,7 +51,10 @@ public class ConsoleController {
 
     private final ConsoleService consoleService;
     private final ConsoleCouponService consoleCouponService;
+    private final ConsoleSystemMessageService consoleSystemMessageService;
     private final ConsoleAudienceDetailService audienceDetailService;
+    private final ConsoleCommerceDetailService commerceDetailService;
+    private final ConsoleStaffDetailService staffDetailService;
     private final ConsoleWatchTradeService watchTradeService;
     private final ConsoleTradeStatsService tradeStatsService;
     private final ConsoleTradeTrendService tradeTrendService;
@@ -85,6 +95,31 @@ public class ConsoleController {
     @GetMapping("/coupon-history/{id}")
     public ApiResponse<ConsoleCouponHistoryResponse> couponHistory(@PathVariable String id) {
         return ApiResponse.ok(consoleCouponService.history(id));
+    }
+
+    /** 中控台系统消息：insert room_comment type=5；成功后再 sendCustomEvent。 */
+    @PostMapping("/system-messages/send/{id}")
+    public ApiResponse<ConsoleSendSystemMessageResponse> sendSystemMessage(
+            @PathVariable String id,
+            @RequestBody ConsoleSendSystemMessageRequest body,
+            HttpServletRequest request) {
+        return ApiResponse.ok(consoleSystemMessageService.send(id, currentUserId(request), body));
+    }
+
+    /** 取消置顶：把指定系统消息 pin 改为 false；成功后再 sendCustomEvent。 */
+    @PostMapping("/system-messages/unpin/{id}")
+    public ApiResponse<ConsoleSendSystemMessageResponse> unpinSystemMessage(
+            @PathVariable String id,
+            @RequestBody ConsoleUnpinSystemMessageRequest body,
+            HttpServletRequest request) {
+        return ApiResponse.ok(consoleSystemMessageService.unpin(id, currentUserId(request), body));
+    }
+
+    /** 讨论区系统消息历史（含当前置顶 id）。 */
+    @GetMapping("/system-message-history/{id}")
+    public ApiResponse<ConsoleSystemMessageHistoryResponse> systemMessageHistory(
+            @PathVariable String id) {
+        return ApiResponse.ok(consoleSystemMessageService.history(id));
     }
 
     /**
@@ -147,6 +182,7 @@ public class ConsoleController {
             @RequestParam(required = false) String keywordType,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String onlineStatus,
+            @RequestParam(required = false) Long followerEmployeeId,
             @RequestParam(required = false) String followerKeyword,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String order) {
@@ -157,6 +193,7 @@ public class ConsoleController {
                 keywordType,
                 keyword,
                 onlineStatus,
+                followerEmployeeId,
                 followerKeyword,
                 sort,
                 order));
@@ -169,13 +206,104 @@ public class ConsoleController {
             @RequestParam(required = false) String keywordType,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String onlineStatus,
+            @RequestParam(required = false) Long followerEmployeeId,
             @RequestParam(required = false) String followerKeyword,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String order) {
         byte[] body = audienceDetailService.exportCsv(
-                id, keywordType, keyword, onlineStatus, followerKeyword, sort, order);
+                id,
+                keywordType,
+                keyword,
+                onlineStatus,
+                followerEmployeeId,
+                followerKeyword,
+                sort,
+                order);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audience-details.csv\"")
+                .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+                .body(body);
+    }
+
+    /** 本场员工邀请人下拉（观众明细 / 带货明细 / 员工数据共用，D124）。 */
+    @GetMapping("/session-inviters/{id}")
+    public ApiResponse<ConsoleSessionInviterListResponse> sessionInviters(@PathVariable String id) {
+        return ApiResponse.ok(commerceDetailService.sessionInviters(id));
+    }
+
+    /**
+     * 中控台底部员工数据列表（D125）。
+     * 行=本场专属链邀请人；邀请人数须真实进房；观看人数有 Join 即可。
+     */
+    @GetMapping("/staff-details/{id}")
+    public ApiResponse<ConsoleStaffDetailListResponse> staffDetails(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) Long employeeId,
+            @RequestParam(required = false) String employeeKeyword,
+            @RequestParam(required = false) Long deptId,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        return ApiResponse.ok(staffDetailService.list(
+                id, page, pageSize, employeeId, employeeKeyword, deptId, sort, order));
+    }
+
+    /**
+     * 中控台底部带货明细列表（D124）。
+     * 行=本场 activity_order 按 username×product 聚合；与侧栏 commerce-data（按绑品汇总）不同。
+     */
+    @GetMapping("/commerce-details/{id}")
+    public ApiResponse<ConsoleCommerceDetailListResponse> commerceDetails(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String payStatus,
+            @RequestParam(required = false) Long followerEmployeeId,
+            @RequestParam(required = false) String followerKeyword,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        return ApiResponse.ok(commerceDetailService.list(
+                id,
+                page,
+                pageSize,
+                productName,
+                payStatus,
+                followerEmployeeId,
+                followerKeyword,
+                keywordType,
+                keyword,
+                sort,
+                order));
+    }
+
+    /** 带货明细按筛选导出 CSV（D124）。 */
+    @GetMapping("/commerce-details/export/{id}")
+    public ResponseEntity<byte[]> commerceDetailsExport(
+            @PathVariable String id,
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String payStatus,
+            @RequestParam(required = false) Long followerEmployeeId,
+            @RequestParam(required = false) String followerKeyword,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        byte[] body = commerceDetailService.exportCsv(
+                id,
+                productName,
+                payStatus,
+                followerEmployeeId,
+                followerKeyword,
+                keywordType,
+                keyword,
+                sort,
+                order);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"commerce-details.csv\"")
                 .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
                 .body(body);
     }

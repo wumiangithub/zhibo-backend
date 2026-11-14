@@ -140,14 +140,16 @@ class OutsideOrderServiceTest {
     }
 
     @Test
-    void mapStatus_knownCodesAndDefault() {
-        assertEquals(1, OutsideOrderService.mapStatus(1010, null));
-        assertEquals(2, OutsideOrderService.mapStatus(1030, null));
-        assertEquals(3, OutsideOrderService.mapStatus(1071, null));
-        assertEquals(4, OutsideOrderService.mapStatus(1080, null));
-        assertEquals(5, OutsideOrderService.mapStatus(1081, null));
-        assertEquals(2, OutsideOrderService.mapStatus(null, LocalDateTime.of(2026, 11, 5, 10, 21, 5)));
-        assertEquals(1, OutsideOrderService.mapStatus(null, null));
+    void mapStatus_storesOmsCodesAsIs() {
+        assertEquals(1010, OutsideOrderService.mapStatus(1010, null));
+        assertEquals(1030, OutsideOrderService.mapStatus(1030, null));
+        assertEquals(1050, OutsideOrderService.mapStatus(1050, null));
+        assertEquals(1070, OutsideOrderService.mapStatus(1070, null));
+        assertEquals(1071, OutsideOrderService.mapStatus(1071, null));
+        assertEquals(1080, OutsideOrderService.mapStatus(1080, null));
+        assertEquals(1081, OutsideOrderService.mapStatus(1081, null));
+        assertEquals(1030, OutsideOrderService.mapStatus(null, LocalDateTime.of(2026, 11, 5, 10, 21, 5)));
+        assertEquals(1010, OutsideOrderService.mapStatus(null, null));
     }
 
     @Test
@@ -170,7 +172,7 @@ class OutsideOrderServiceTest {
         assertEquals("a1b2c3d4e5f60718293a4b5c6d7e8f90", entity.getActivityId());
         assertEquals("10086", entity.getSalesmanId());
         assertEquals(1, entity.getChannel());
-        assertEquals(2, entity.getOrderStatus());
+        assertEquals(1030, entity.getOrderStatus());
         assertEquals(LocalDateTime.of(2026, 11, 5, 10, 20, 30), entity.getOrderTime());
         assertEquals(LocalDateTime.of(2026, 11, 5, 10, 21, 5), entity.getPayTime());
 
@@ -201,7 +203,7 @@ class OutsideOrderServiceTest {
         existing.setId(7L);
         existing.setOrderNo("20261105123000001");
         existing.setUsername("old-user");
-        existing.setOrderStatus(1);
+        existing.setOrderStatus(1010);
         when(orderRepository.findByOrderNo("20261105123000001")).thenReturn(Optional.of(existing));
 
         OutsideOrderReceiveItem item = validItem();
@@ -215,7 +217,7 @@ class OutsideOrderServiceTest {
         ArgumentCaptor<ActivityOrderEntity> saved = ArgumentCaptor.forClass(ActivityOrderEntity.class);
         verify(orderRepository).saveAndFlush(saved.capture());
         assertEquals(7L, saved.getValue().getId());
-        assertEquals(5, saved.getValue().getOrderStatus());
+        assertEquals(1081, saved.getValue().getOrderStatus());
         assertEquals(new BigDecimal("10.50"), saved.getValue().getPayAmount());
         assertEquals("o3iNI9E93U6OVcjd", saved.getValue().getUsername());
         verify(orderCourseRepository).deleteByOrderId(7L);
@@ -263,7 +265,7 @@ class OutsideOrderServiceTest {
         service.receive(List.of(unpaid));
         ArgumentCaptor<ActivityOrderEntity> saved = ArgumentCaptor.forClass(ActivityOrderEntity.class);
         verify(orderRepository).saveAndFlush(saved.capture());
-        assertEquals(1, saved.getValue().getOrderStatus());
+        assertEquals(1010, saved.getValue().getOrderStatus());
         assertNull(saved.getValue().getPayTime());
     }
 

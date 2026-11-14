@@ -146,7 +146,7 @@ class ConsoleAudienceDetailServiceTest {
                 .thenReturn(comments);
 
         ConsoleAudienceDetailListResponse resp = service.list(
-                ROOM_ID, 1, 10, null, null, null, null, null, null);
+                ROOM_ID, 1, 10, null, null, null, null, null, null, null);
 
         assertEquals(2, resp.getTotal());
         assertEquals(USER_A, resp.getList().get(0).getUsername());
@@ -184,7 +184,7 @@ class ConsoleAudienceDetailServiceTest {
                 attendance(USER_B, "2026-09-30 10:10:00", "2026-09-30 10:20:00")));
 
         ConsoleAudienceDetailListResponse online = service.list(
-                ROOM_ID, 1, 10, null, null, "online", null, null, null);
+                ROOM_ID, 1, 10, null, null, "online", null, null, null, null);
         assertEquals(1, online.getTotal());
         assertEquals(USER_A, online.getList().get(0).getUsername());
 
@@ -193,7 +193,7 @@ class ConsoleAudienceDetailServiceTest {
         ended.setState(3);
         when(activityRepository.findById(ROOM_ID)).thenReturn(Optional.of(ended));
         ConsoleAudienceDetailListResponse afterEnd = service.list(
-                ROOM_ID, 1, 10, null, null, "online", null, null, null);
+                ROOM_ID, 1, 10, null, null, "online", null, null, null, null);
         assertEquals(0, afterEnd.getTotal());
     }
 
@@ -206,7 +206,7 @@ class ConsoleAudienceDetailServiceTest {
         when(viewerRepository.findByUsernameIn(anyCollection()))
                 .thenReturn(List.of(viewer(USER_A, "观众A", "13312344032")));
 
-        byte[] csv = service.exportCsv(ROOM_ID, null, null, null, null, null, null);
+        byte[] csv = service.exportCsv(ROOM_ID, null, null, null, null, null, null, null);
         assertEquals((byte) 0xEF, csv[0]);
         assertEquals((byte) 0xBB, csv[1]);
         assertEquals((byte) 0xBF, csv[2]);

@@ -61,10 +61,10 @@ public class ActivityOrderEntity {
     @Column(name = "pay_amount", precision = 12, scale = 2)
     private BigDecimal payAmount;
 
-    /** 1待付款 2已付款 3退款中 4部分退款 5全部退款 */
-    /** 库列为 TINYINT，须声明以免 validate 期望 INTEGER。 */
-    @Column(name = "order_status", nullable = false, columnDefinition = "TINYINT")
-    private Integer orderStatus = 2;
+    /** OMS 状态码原样落库（1010+），见 {@link ActivityOrderStatuses}。 */
+    /** 库列为 SMALLINT，须声明以免 validate 期望 INTEGER。 */
+    @Column(name = "order_status", nullable = false, columnDefinition = "SMALLINT")
+    private Integer orderStatus = ActivityOrderStatuses.PAID;
 
     @CreationTimestamp
     @Column(name = "create_time", nullable = false, updatable = false)

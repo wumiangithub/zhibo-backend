@@ -77,17 +77,17 @@ class DashboardBusinessServiceTest {
         ArgumentCaptor<List<Integer>> statuses = ArgumentCaptor.forClass(List.class);
         verify(activityOrderRepository)
                 .sumPayAmountByStatuses(statuses.capture());
-        assertEquals(List.of(2, 3, 4, 5), statuses.getValue());
-        assertFalse(statuses.getValue().contains(1));
+        assertEquals(DashboardBusinessService.PAID_STATUSES, statuses.getValue());
+        assertFalse(statuses.getValue().contains(1010));
 
         verify(activityOrderRepository)
                 .sumPayAmountByStatusesAndPayTimeBetween(
-                        eq(List.of(2, 3, 4, 5)), eq(TODAY_START), eq(TODAY_END));
+                        eq(DashboardBusinessService.PAID_STATUSES), eq(TODAY_START), eq(TODAY_END));
         verify(activityOrderRepository)
                 .countByStatusesAndPayTimeBetween(
-                        eq(List.of(2, 3, 4, 5)), eq(TODAY_START), eq(TODAY_END));
+                        eq(DashboardBusinessService.PAID_STATUSES), eq(TODAY_START), eq(TODAY_END));
         verify(activityOrderRepository)
-                .countDistinctUsernameByStatuses(eq(List.of(2, 3, 4, 5)));
+                .countDistinctUsernameByStatuses(eq(DashboardBusinessService.PAID_STATUSES));
     }
 
     @Test

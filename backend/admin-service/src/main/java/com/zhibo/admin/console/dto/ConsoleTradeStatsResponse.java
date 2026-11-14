@@ -24,6 +24,6 @@ public class ConsoleTradeStatsResponse {
      * 平均客单价：本场已付成交金额 / 成交人数；两位小数字符串；成交人数为 0 时为 {@code "0.00"}。
      */
     private String avgOrderAmount;
-    /** 未付款人数：本场 order_status=1（待付款）订单 username 去重。 */
+    /** 未付款人数：本场 order_status=1010（待支付）订单 username 去重。 */
     private long unpaidUserCount;
 }

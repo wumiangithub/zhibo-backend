@@ -50,7 +50,6 @@ public class ConsoleProductService {
             item.setSpuId(spuId);
             item.setProductName(row.getProductName());
             item.setVisible(row.getVisible() == null || Boolean.TRUE.equals(row.getVisible()));
-            item.setSortOrder(row.getSortOrder());
             item.setSoldCount(sold.getOrDefault(spuId, 0L));
             response.getList().add(item);
         }

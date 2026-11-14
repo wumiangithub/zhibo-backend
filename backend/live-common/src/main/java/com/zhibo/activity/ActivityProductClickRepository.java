@@ -22,4 +22,14 @@ public interface ActivityProductClickRepository extends JpaRepository<ActivityPr
     @Query("SELECT COUNT(DISTINCT c.username) FROM ActivityProductClickEntity c "
             + "WHERE c.activityId = :activityId")
     long countDistinctUsernameByActivityId(@Param("activityId") String activityId);
+
+    /**
+     * 本场按用户×spu 聚合点击次数与最近点击时间（带货明细挂载指标）。
+     * 返回 username / spuId / count / max(clickedAt)。
+     */
+    @Query("SELECT c.username, c.spuId, COUNT(c), MAX(c.clickedAt) FROM ActivityProductClickEntity c "
+            + "WHERE c.activityId = :activityId AND c.username IN :usernames "
+            + "GROUP BY c.username, c.spuId")
+    List<Object[]> aggregateByUsernameAndSpu(
+            @Param("activityId") String activityId, @Param("usernames") Collection<String> usernames);
 }

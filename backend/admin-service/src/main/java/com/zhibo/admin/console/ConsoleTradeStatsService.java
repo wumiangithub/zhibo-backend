@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleTradeStatsService {
 
-    private static final List<Integer> UNPAID_STATUSES = List.of(1);
+    private static final List<Integer> UNPAID_STATUSES = com.zhibo.activity.ActivityOrderStatuses.UNPAID_STATUSES;
 
     private final ActivityService activityService;
     private final ActivityOrderRepository orderRepository;

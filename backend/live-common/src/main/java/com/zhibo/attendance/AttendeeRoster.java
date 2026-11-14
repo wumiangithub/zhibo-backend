@@ -41,7 +41,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AttendeeRoster {
 
-    private static final List<Integer> PAID_ORDER_STATUSES = List.of(2, 3, 4, 5);
+    private static final List<Integer> PAID_ORDER_STATUSES =
+            com.zhibo.activity.ActivityOrderStatuses.PAID_STATUSES;
 
     private final ActivityRepository activityRepository;
     private final RoomAttendanceRepository attendanceRepository;
@@ -261,7 +262,10 @@ public class AttendeeRoster {
             case "coupon" -> Set.of(); // 本站无领券流水，筛此项恒空
             case "productClick" -> usernamesWithPositiveCount(
                     productClickRepository.countByActivityAndUsernames(activityId, usernames));
-            case "pendingPay" -> usernamesWithOrderStatus(activityId, usernames, Set.of(1));
+            case "pendingPay" -> usernamesWithOrderStatus(
+                    activityId,
+                    usernames,
+                    Set.copyOf(com.zhibo.activity.ActivityOrderStatuses.UNPAID_STATUSES));
             case "purchase" -> usernamesWithOrderStatus(
                     activityId, usernames, new HashSet<>(PAID_ORDER_STATUSES));
             default -> Set.of();

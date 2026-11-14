@@ -11,6 +11,8 @@ public final class RoomCommentType {
     public static final int COUPON = 3;
     /** 预留：图片消息（微吼图聊 JSON 快照含 image_urls；本轮不写）。 */
     public static final int IMAGE = 4;
+    /** 系统消息（中控台发送；content 为 JSON：text + pin；D127）。 */
+    public static final int SYSTEM = 5;
 
     private RoomCommentType() {
     }

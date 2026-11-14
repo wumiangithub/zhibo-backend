@@ -20,6 +20,6 @@ public class OutsideOrderReceiveItem {
     private String payTime;
     private String salesmanId;
     private Integer channel;
-    /** 订单中心状态码，如 1030；写入时映射为本站 1～5。 */
+    /** 订单中心状态码，如 1030；原样写入 activity_order.order_status。 */
     private Integer orderStatus;
 }
