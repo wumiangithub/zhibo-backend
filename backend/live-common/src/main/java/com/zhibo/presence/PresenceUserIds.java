@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
  *   <li>观众 {@code {username}@qkzb.com} → {@code {username}}</li>
  *   <li>角色（主持/嘉宾/助理）{@code e{id}@qkzb.com} → {@code e{id}}</li>
  *   <li>中控台进房 {@code z{id}@qkzb.com} → {@code z{id}}（与角色邮箱错开，避免微吼 20005）</li>
+ *   <li>评论审核 {@code p{id}@qkzb.com} → {@code p{id}}（chat-filter / get-role-url 专用，不写 room_*）</li>
  *   <li>游客 {@code *@zhibo.local} → 本地部分</li>
  * </ul>
  */
@@ -17,7 +18,7 @@ public final class PresenceUserIds {
     public static final String QKZB_DOMAIN = "@qkzb.com";
     public static final String GUEST_DOMAIN = "@zhibo.local";
 
-  private static final String VIEWER_USERNAME_CHARS = "[A-Za-z0-9_\\-]";
+    private static final String VIEWER_USERNAME_CHARS = "[A-Za-z0-9_\\-]";
     private static final Pattern VIEWER = Pattern.compile(
             "^(" + VIEWER_USERNAME_CHARS + "{1,16})" + Pattern.quote(QKZB_DOMAIN) + "$",
             Pattern.CASE_INSENSITIVE);
@@ -25,6 +26,8 @@ public final class PresenceUserIds {
             Pattern.compile("^e([1-9]\\d{0,18})" + Pattern.quote(QKZB_DOMAIN) + "$", Pattern.CASE_INSENSITIVE);
     private static final Pattern CONSOLE =
             Pattern.compile("^z([1-9]\\d{0,18})" + Pattern.quote(QKZB_DOMAIN) + "$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CHAT_FILTER =
+            Pattern.compile("^p([1-9]\\d{0,18})" + Pattern.quote(QKZB_DOMAIN) + "$", Pattern.CASE_INSENSITIVE);
     private static final Pattern GUEST =
             Pattern.compile("^([A-Za-z0-9]{1,64})" + Pattern.quote(GUEST_DOMAIN) + "$", Pattern.CASE_INSENSITIVE);
     private static final Pattern VIEWER_USERNAME = Pattern.compile("^" + VIEWER_USERNAME_CHARS + "{1,16}$");
@@ -57,14 +60,26 @@ public final class PresenceUserIds {
     }
 
     /**
-     * @return 观众为 username；角色为 {@code e} + id；中控台为 {@code z} + id；游客为 guestId 本地部分。对不上返回 {@code null}
+     * 评论审核专用邮箱 {@code p{id}@qkzb.com}（get-role-url type=3 与 chat-filter 共用；
+     * 与角色 {@code e{id}}、中控台 {@code z{id}} 错开）。
+     */
+    public static String chatFilterEmail(long employeeId) {
+        if (employeeId <= 0) {
+            throw new IllegalArgumentException("员工 id 无效");
+        }
+        return "p" + employeeId + QKZB_DOMAIN;
+    }
+
+    /**
+     * @return 观众为 username；角色为 {@code e} + id；中控台为 {@code z} + id；
+     *         评论审核为 {@code p} + id；游客为 guestId 本地部分。对不上返回 {@code null}
      */
     public static String parseEmail(String email) {
         if (email == null || email.isBlank()) {
             return null;
         }
         String trimmed = email.trim();
-        // 员工 e*/z* 须先于观众 username（D118 后 username 可为字母数字，会误吃 e10001）
+        // 员工 e*/z*/p* 须先于观众 username（D118 后 username 可为字母数字，会误吃 e10001）
         Matcher staff = STAFF.matcher(trimmed);
         if (staff.matches()) {
             return "e" + staff.group(1);
@@ -73,10 +88,14 @@ public final class PresenceUserIds {
         if (console.matches()) {
             return "z" + console.group(1);
         }
+        Matcher chatFilter = CHAT_FILTER.matcher(trimmed);
+        if (chatFilter.matches()) {
+            return "p" + chatFilter.group(1);
+        }
         Matcher viewer = VIEWER.matcher(trimmed);
         if (viewer.matches()) {
             String local = viewer.group(1);
-            if (isStaff(local) || isConsole(local)) {
+            if (isStaff(local) || isConsole(local) || isChatFilter(local)) {
                 return null;
             }
             if (local.length() > 2 && local.regionMatches(true, 0, "pc", 0, 2)) {
@@ -109,9 +128,18 @@ public final class PresenceUserIds {
         return userId.trim().matches("(?i)z[1-9]\\d{0,18}");
     }
 
+    /** 评论审核专用 {@code p} + 员工 id（不写 room_*）。 */
+    public static boolean isChatFilter(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        return userId.trim().matches("(?i)p[1-9]\\d{0,18}");
+    }
+
     /**
      * 是否允许写 {@code room_attendance} / {@code room_presence_event}。
-     * 仅观众 username、角色 {@code e} + id、中控台 {@code z} + id；游客本地部分等一律否。
+     * 仅观众 username、角色 {@code e} + id、中控台 {@code z} + id；
+     * 评论审核 {@code p} + id、游客本地部分等一律否。
      */
     public static boolean mayWriteRoom(String userId) {
         return isViewer(userId) || isStaff(userId) || isConsole(userId);
@@ -126,7 +154,7 @@ public final class PresenceUserIds {
     }
 
     /**
-     * 观众业务 username（非 {@code e*} / {@code z*} 前缀的数字员工 id）。
+     * 观众业务 username（非 {@code e*} / {@code z*} / {@code p*} 前缀的员工 id）。
      *
      * @deprecated 用 {@link #viewerUsername(String)}。
      */
@@ -149,7 +177,7 @@ public final class PresenceUserIds {
             return null;
         }
         String trimmed = userId.trim();
-        if (isStaff(trimmed) || isConsole(trimmed)) {
+        if (isStaff(trimmed) || isConsole(trimmed) || isChatFilter(trimmed)) {
             return null;
         }
         if (!VIEWER_USERNAME.matcher(trimmed).matches()) {

@@ -209,18 +209,57 @@ class WatchServiceTest {
         ActivityEntity entity = new ActivityEntity();
         entity.setId(ID);
         entity.setReady(1);
+        entity.setCartEnabled(true);
         when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
 
         ActivityProductEntity row = new ActivityProductEntity();
         row.setId(new ActivityProductId(ID, "20002"));
         row.setProductName("满盈单化特训班");
         row.setSortOrder(0);
+        row.setVisible(true);
         when(productRepository.findByActivityIds(List.of(ID))).thenReturn(List.of(row));
 
         WatchProductListResponse response = watchService.listProducts(ID);
         assertEquals(1, response.getList().size());
         assertEquals("20002", response.getList().get(0).getSpuId());
         assertEquals("满盈单化特训班", response.getList().get(0).getProductName());
+    }
+
+    @Test
+    void listProducts_cartOff_returnsEmpty() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setReady(1);
+        entity.setCartEnabled(false);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+
+        WatchProductListResponse response = watchService.listProducts(ID);
+        assertEquals(0, response.getList().size());
+    }
+
+    @Test
+    void listProducts_hidesInvisibleRows() {
+        ActivityEntity entity = new ActivityEntity();
+        entity.setId(ID);
+        entity.setReady(1);
+        entity.setCartEnabled(true);
+        when(activityRepository.findById(ID)).thenReturn(Optional.of(entity));
+
+        ActivityProductEntity shown = new ActivityProductEntity();
+        shown.setId(new ActivityProductId(ID, "20002"));
+        shown.setProductName("可见");
+        shown.setSortOrder(0);
+        shown.setVisible(true);
+        ActivityProductEntity hidden = new ActivityProductEntity();
+        hidden.setId(new ActivityProductId(ID, "20003"));
+        hidden.setProductName("隐藏");
+        hidden.setSortOrder(1);
+        hidden.setVisible(false);
+        when(productRepository.findByActivityIds(List.of(ID))).thenReturn(List.of(shown, hidden));
+
+        WatchProductListResponse response = watchService.listProducts(ID);
+        assertEquals(1, response.getList().size());
+        assertEquals("20002", response.getList().get(0).getSpuId());
     }
 
     @Test

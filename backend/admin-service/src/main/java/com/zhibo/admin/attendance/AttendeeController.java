@@ -23,7 +23,12 @@ public class AttendeeController {
             @RequestParam(defaultValue = "all") String tab,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
-            @RequestParam(required = false) String keyword) {
-        return ApiResponse.ok(attendeeService.list(id, tab, page, pageSize, keyword));
+            @RequestParam(defaultValue = "nickname") String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "student") String kind,
+            @RequestParam(defaultValue = "all") String followerFilter,
+            @RequestParam(defaultValue = "all") String behavior) {
+        return ApiResponse.ok(attendeeService.list(
+                id, tab, page, pageSize, keyword, keywordType, kind, followerFilter, behavior));
     }
 }

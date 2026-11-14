@@ -44,6 +44,14 @@ public interface ActivityOrderRepository extends JpaRepository<ActivityOrderEnti
             @Param("activityId") String activityId,
             @Param("statuses") Collection<Integer> statuses);
 
+    /** 按商品统计本场已付订单行数（中控台商品「已售」；一单一品）。 */
+    @Query("SELECT o.productId, COUNT(o) FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderStatus IN :statuses AND o.productId IS NOT NULL "
+            + "GROUP BY o.productId")
+    List<Object[]> countPaidOrdersByProduct(
+            @Param("activityId") String activityId,
+            @Param("statuses") Collection<Integer> statuses);
+
     /**
      * 本场全部订单的订单号与商品，用于对接 OMS 成功退款金额。不限订单状态（已全额退款也要计入）。
      * {@code product_id} 为空的行无法对上带货表的 spu，调用方可跳过。
@@ -65,4 +73,36 @@ public interface ActivityOrderRepository extends JpaRepository<ActivityOrderEnti
     List<Object[]> aggregatePaidByUsernames(
             @Param("usernames") Collection<String> usernames,
             @Param("statuses") Collection<Integer> statuses);
+
+    /** 本场已付成交金额（中控台观看数据）。空金额按 0。 */
+    @Query("SELECT COALESCE(SUM(o.payAmount), 0) FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderStatus IN :statuses")
+    BigDecimal sumPayAmountByActivityAndStatuses(
+            @Param("activityId") String activityId, @Param("statuses") Collection<Integer> statuses);
+
+    /** 本场已付成交人数（username 去重）。 */
+    @Query("SELECT COUNT(DISTINCT o.username) FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderStatus IN :statuses")
+    long countDistinctUsernameByActivityAndStatuses(
+            @Param("activityId") String activityId, @Param("statuses") Collection<Integer> statuses);
+
+    /** 本场已付成交商品数（订单行数；一单一品）。 */
+    @Query("SELECT COUNT(o) FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderStatus IN :statuses")
+    long countByActivityAndStatuses(
+            @Param("activityId") String activityId, @Param("statuses") Collection<Integer> statuses);
+
+    /**
+     * 本场已付订单的支付时间与金额，供中控台成交趋势按桶聚合。
+     * {@code pay_time} 为空的行跳过（调用方过滤）；区间为 {@code [start, end)}。
+     */
+    @Query("SELECT o.payTime, o.payAmount FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderStatus IN :statuses "
+            + "AND o.payTime IS NOT NULL AND o.payTime >= :start AND o.payTime < :end "
+            + "ORDER BY o.payTime ASC")
+    List<Object[]> findPaidPayTimeAndAmount(
+            @Param("activityId") String activityId,
+            @Param("statuses") Collection<Integer> statuses,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }

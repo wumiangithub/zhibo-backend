@@ -22,4 +22,11 @@ public class ActivityProductEntity {
 
     @Column(name = "sort_order", nullable = false)
     private int sortOrder;
+
+    /**
+     * 直播间是否展示该绑定商品。默认 true。
+     * 库列 TINYINT(1)；false 时观看端小黄车不返回该行（总开关仍开时）。
+     */
+    @Column(name = "visible", nullable = false, columnDefinition = "TINYINT")
+    private Boolean visible = Boolean.TRUE;
 }

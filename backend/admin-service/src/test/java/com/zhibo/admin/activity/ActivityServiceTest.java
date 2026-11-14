@@ -89,6 +89,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -2145,6 +2146,83 @@ class ActivityServiceTest {
                 () -> activityService.shelf(uuid, request));
         assertEquals("强制封禁不可上下架", ex.getMessage());
         verify(activityRepository, never()).save(any());
+    }
+
+    @Test
+    void chatFilter_defaultsToChatFilterEmailNotStaffOrConsole() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 1);
+        entity.setProviderRoomId("room-99");
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildRoleJoinUrl(
+                        eq("room-99"),
+                        eq(ActivityMemberRole.ASSISTANT.getCode()),
+                        eq("p10001@qkzb.com"),
+                        eq("余灵巧"),
+                        isNull()))
+                .thenReturn("https://e.vhall.com/v3/lives/role/room-99");
+        when(liveProvider.buildChatFilterUrl(eq("room-99"), eq("p10001@qkzb.com"), eq("余灵巧")))
+                .thenReturn("https://e.vhall.com/v3/lives/authchat/room-99");
+
+        var res = activityService.chatFilter(uuid, null, null, OPERATOR_ID);
+        assertEquals("https://e.vhall.com/v3/lives/authchat/room-99", res.getPageUrl());
+        var order = inOrder(liveProvider);
+        order.verify(liveProvider).buildRoleJoinUrl(
+                "room-99", ActivityMemberRole.ASSISTANT.getCode(), "p10001@qkzb.com", "余灵巧", null);
+        order.verify(liveProvider).buildChatFilterUrl("room-99", "p10001@qkzb.com", "余灵巧");
+        verify(liveProvider, never()).buildChatFilterUrl(anyString(), eq("z10001@qkzb.com"), anyString());
+        verify(liveProvider, never()).buildChatFilterUrl(anyString(), eq("e10001@qkzb.com"), anyString());
+    }
+
+    @Test
+    void chatFilter_continuesWhenEnsureAssistantAlreadySet() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 1);
+        entity.setProviderRoomId("room-99");
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+        when(userRepository.findById(OPERATOR_ID)).thenReturn(Optional.of(operator()));
+        when(providerRegistry.require("vhall")).thenReturn(liveProvider);
+        when(liveProvider.buildRoleJoinUrl(
+                        eq("room-99"),
+                        eq(ActivityMemberRole.ASSISTANT.getCode()),
+                        eq("p10001@qkzb.com"),
+                        eq("余灵巧"),
+                        isNull()))
+                .thenThrow(new VhallException(20005, "rid", "角色已存在"));
+        when(liveProvider.buildChatFilterUrl(eq("room-99"), eq("p10001@qkzb.com"), eq("余灵巧")))
+                .thenReturn("https://e.vhall.com/v3/lives/authchat/room-99");
+
+        var res = activityService.chatFilter(uuid, null, null, OPERATOR_ID);
+        assertEquals("https://e.vhall.com/v3/lives/authchat/room-99", res.getPageUrl());
+        verify(liveProvider).buildChatFilterUrl("room-99", "p10001@qkzb.com", "余灵巧");
+    }
+
+    @Test
+    void chatFilter_rejectsConsoleEmail() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 1);
+        entity.setProviderRoomId("room-99");
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.chatFilter(uuid, "z10001@qkzb.com", "余灵巧", OPERATOR_ID));
+        assertTrue(ex.getMessage().contains("p{员工id}@qkzb.com"));
+        verify(providerRegistry, never()).require(anyString());
+    }
+
+    @Test
+    void chatFilter_rejectsStaffEmail() {
+        String uuid = "a1b2c3d4e5f67890abcdef1234567890";
+        ActivityEntity entity = liveActivity(uuid, "on", "passed", 1);
+        entity.setProviderRoomId("room-99");
+        when(activityRepository.findById(uuid)).thenReturn(Optional.of(entity));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> activityService.chatFilter(uuid, "e10001@qkzb.com", "余灵巧", OPERATOR_ID));
+        assertTrue(ex.getMessage().contains("p{员工id}@qkzb.com"));
+        verify(providerRegistry, never()).require(anyString());
     }
 
     private static LiveReportEntity passedReport(String id, long hostId) {

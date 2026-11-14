@@ -172,13 +172,21 @@ public class WatchService {
     /**
      * 观看端小黄车元数据：本场绑定 spu 快照。
      * 订单中心商品由前端直连 {@code viewer/product/list/by-ids}（body.spuIds）。
+     * {@code cart_enabled=false} → 空 list；单品 {@code visible=false} 不返回。
      */
     public WatchProductListResponse listProducts(String activityId) {
         ActivityEntity entity = requireActivity(activityId);
         requireReadyForWatch(entity);
-        List<ActivityProductEntity> rows = productRepository.findByActivityIds(List.of(entity.getId()));
         WatchProductListResponse response = new WatchProductListResponse();
-        response.setList(rows.stream().map(this::toProductItem).toList());
+        if (!Boolean.TRUE.equals(entity.getCartEnabled())) {
+            response.setList(List.of());
+            return response;
+        }
+        List<ActivityProductEntity> rows = productRepository.findByActivityIds(List.of(entity.getId()));
+        response.setList(rows.stream()
+                .filter(row -> row.getVisible() == null || Boolean.TRUE.equals(row.getVisible()))
+                .map(this::toProductItem)
+                .toList());
         return response;
     }
 

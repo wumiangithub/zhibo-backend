@@ -3,12 +3,20 @@ package com.zhibo.admin.console;
 import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
 import com.zhibo.admin.console.dto.ConsoleAudienceDetailListResponse;
+import com.zhibo.admin.console.dto.ConsoleCartEnabledRequest;
+import com.zhibo.admin.console.dto.ConsoleCartEnabledResponse;
 import com.zhibo.admin.console.dto.ConsoleCouponHistoryResponse;
+import com.zhibo.admin.console.dto.ConsoleProductListResponse;
+import com.zhibo.admin.console.dto.ConsoleProductVisibleRequest;
+import com.zhibo.admin.console.dto.ConsoleProductVisibleResponse;
 import com.zhibo.admin.console.dto.ConsoleQuestionHistoryResponse;
 import com.zhibo.admin.console.dto.ConsoleSdkSignResponse;
 import com.zhibo.admin.console.dto.ConsoleSendCouponRequest;
 import com.zhibo.admin.console.dto.ConsoleSendCouponResponse;
 import com.zhibo.admin.console.dto.ConsoleSummaryResponse;
+import com.zhibo.admin.console.dto.ConsoleTradeStatsResponse;
+import com.zhibo.admin.console.dto.ConsoleTradeTrendResponse;
+import com.zhibo.admin.console.dto.ConsoleWatchTradeResponse;
 import com.zhibo.admin.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,6 +45,10 @@ public class ConsoleController {
     private final ConsoleService consoleService;
     private final ConsoleCouponService consoleCouponService;
     private final ConsoleAudienceDetailService audienceDetailService;
+    private final ConsoleWatchTradeService watchTradeService;
+    private final ConsoleTradeStatsService tradeStatsService;
+    private final ConsoleTradeTrendService tradeTrendService;
+    private final ConsoleProductService consoleProductService;
 
     @GetMapping("/summary/{id}")
     public ApiResponse<ConsoleSummaryResponse> summary(@PathVariable String id) {
@@ -72,6 +85,57 @@ public class ConsoleController {
     @GetMapping("/coupon-history/{id}")
     public ApiResponse<ConsoleCouponHistoryResponse> couponHistory(@PathVariable String id) {
         return ApiResponse.ok(consoleCouponService.history(id));
+    }
+
+    /**
+     * 中控台「观看数据」成交三项：直播间成交金额 / 成交人数 / 成交商品数。
+     * 只读本站 {@code activity_order}；与带货明细表 {@code commerce-data} 不同（本接口是场级汇总）。
+     */
+    @GetMapping("/watch-trade/{id}")
+    public ApiResponse<ConsoleWatchTradeResponse> watchTrade(@PathVariable String id) {
+        return ApiResponse.ok(watchTradeService.watchTrade(id));
+    }
+
+    /**
+     * 中控台「交易数据」左侧 KPI：成交人数 / 商品数 / 点击人数 / 转化率 / 客单价 / 未付款人数。
+     * 只读本站 {@code activity_order} 与 {@code activity_product_click}。
+     */
+    @GetMapping("/trade-stats/{id}")
+    public ApiResponse<ConsoleTradeStatsResponse> tradeStats(@PathVariable String id) {
+        return ApiResponse.ok(tradeStatsService.stats(id));
+    }
+
+    /**
+     * 中控台「交易数据」成交趋势：按支付时间桶聚合成交金额与销量。
+     * Query 口径对齐 presence-trend（跨度 ≤1 天，桶 60s）。
+     */
+    @GetMapping("/trade-trend/{id}")
+    public ApiResponse<ConsoleTradeTrendResponse> tradeTrend(
+            @PathVariable String id,
+            @RequestParam String startTime,
+            @RequestParam String endTime,
+            @RequestParam(required = false) Integer bucketSeconds) {
+        return ApiResponse.ok(tradeTrendService.trend(id, startTime, endTime, bucketSeconds));
+    }
+
+    /** 中控台「商品」：本场绑定全量 + 小黄车总开关；展示字段由前端批量查订单中心。 */
+    @GetMapping("/products/{id}")
+    public ApiResponse<ConsoleProductListResponse> products(@PathVariable String id) {
+        return ApiResponse.ok(consoleProductService.list(id));
+    }
+
+    /** 中控台单品显示/隐藏；写 {@code activity_product.visible}。 */
+    @PutMapping("/products/visible/{id}")
+    public ApiResponse<ConsoleProductVisibleResponse> setProductVisible(
+            @PathVariable String id, @RequestBody ConsoleProductVisibleRequest body) {
+        return ApiResponse.ok(consoleProductService.setVisible(id, body));
+    }
+
+    /** 中控台小黄车总开关；写 {@code activity.cart_enabled}。 */
+    @PutMapping("/cart/{id}")
+    public ApiResponse<ConsoleCartEnabledResponse> setCartEnabled(
+            @PathVariable String id, @RequestBody ConsoleCartEnabledRequest body) {
+        return ApiResponse.ok(consoleProductService.setCartEnabled(id, body));
     }
 
     /** 中控台底部观众明细列表（D123）。 */

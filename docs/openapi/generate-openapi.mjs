@@ -2478,17 +2478,83 @@ function buildAdmin() {
         },
         nickname: { type: 'string' },
         avatarUrl: { type: 'string' },
-        enterTime: { type: 'string' },
-        leaveTime: { type: 'string' },
+        enterTime: {
+          type: 'string',
+          description:
+            '当前会话最晚一次 Join 时间（yyyy-MM-dd HH:mm:ss）。左侧人员列表 UI 不展示此字段，仍随接口返回。',
+        },
+        leaveTime: {
+          type: 'string',
+          description:
+            '全部连接闭合后的最晚 Leave；在线则省略。左侧人员列表 UI 不展示。',
+        },
         online: { type: 'boolean' },
+        roleLabel: {
+          type: 'string',
+          description:
+            '助教侧角色角标。优先 activity_member.tag；否则主播「讲师」/嘉宾「嘉宾」/助理「助教」；中控台 z{id} 为「中控」。学员侧不返回。',
+        },
+        followerName: {
+          type: 'string',
+          description:
+            '学员跟进人姓名，仅取 activity_audience.employee_inviter_id 对应员工；无邀请人则省略（前端展示「暂未分配」）。助教侧不返回。',
+        },
+        commentCount: {
+          type: 'integer',
+          description:
+            '本场未软删聊天+提问条数（comment_type 为 1 或 2，不计优惠券/图片）。学员侧恒返回（可为 0）；助教侧省略。',
+        },
       },
     },
     AttendeeListData: {
       type: 'object',
-      required: ['activityState', 'total', 'page', 'pageSize', 'list'],
+      required: [
+        'activityState',
+        'total',
+        'studentTotal',
+        'assistantTotal',
+        'allTotal',
+        'onlineTotal',
+        'offlineTotal',
+        'page',
+        'pageSize',
+        'list',
+      ],
       properties: {
         activityState: { $ref: '#/components/schemas/ActivityState' },
-        total: { type: 'integer', format: 'int64' },
+        total: {
+          type: 'integer',
+          format: 'int64',
+          description: '当前一级 tab + 二级 kind（学员再套跟进人/行为）列表命中行数。',
+        },
+        allTotal: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '一级角标「全部(N)」：仅关键字后人数。不受 kind / 跟进人 / 行为影响。',
+        },
+        onlineTotal: {
+          type: 'integer',
+          format: 'int64',
+          description: '一级角标「在线(N)」，口径同 allTotal。',
+        },
+        offlineTotal: {
+          type: 'integer',
+          format: 'int64',
+          description: '一级角标「离线(N)」，口径同 allTotal。',
+        },
+        studentTotal: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '二级角标「学员(N)」：当前一级 tab 内学员数（再套跟进人/行为）。是一级 tab 的子集。',
+        },
+        assistantTotal: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '二级角标「助教(N)」：当前一级 tab 内助教数。是一级 tab 的子集；不受跟进人/行为影响。',
+        },
         page: { type: 'integer' },
         pageSize: { type: 'integer' },
         list: {
@@ -2610,6 +2676,225 @@ function buildAdmin() {
         list: {
           type: 'array',
           items: { $ref: '#/components/schemas/ConsoleAudienceDetailItem' },
+        },
+      },
+    },
+    ConsoleWatchTradeData: {
+      type: 'object',
+      required: ['id', 'dealAmount', 'dealUserCount', 'dealProductCount'],
+      properties: {
+        id: {
+          type: 'string',
+          description: '本站活动 UUID',
+        },
+        dealAmount: {
+          type: 'string',
+          description:
+            '直播间成交金额：本场已付订单 pay_amount 求和；两位小数字符串，如 "26800.00"；无单为 "0.00"',
+        },
+        dealUserCount: {
+          type: 'integer',
+          format: 'int64',
+          description: '成交人数：本场已付订单 username 去重',
+        },
+        dealProductCount: {
+          type: 'integer',
+          format: 'int64',
+          description: '成交商品数：本场已付订单行数（一单一品；含 product_id 空）',
+        },
+      },
+    },
+    ConsoleTradeStatsData: {
+      type: 'object',
+      required: [
+        'id',
+        'dealUserCount',
+        'dealProductCount',
+        'productClickUserCount',
+        'dealConversionRate',
+        'avgOrderAmount',
+        'unpaidUserCount',
+      ],
+      properties: {
+        id: {
+          type: 'string',
+          description: '本站活动 UUID',
+        },
+        dealUserCount: {
+          type: 'integer',
+          format: 'int64',
+          description: '成交人数：本场已付订单（order_status 为 2/3/4/5）username 去重人数。',
+        },
+        dealProductCount: {
+          type: 'integer',
+          format: 'int64',
+          description: '成交商品数：本场已付订单行数（一单一品；含 product_id 为空的已付单）。',
+        },
+        productClickUserCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '商品点击人数：本场 activity_product_click（小黄车「去抢购」埋点）username 去重人数。',
+        },
+        dealConversionRate: {
+          type: 'string',
+          description:
+            '成交转化率：成交人数除以商品点击人数再乘 100，一位小数字符串（如 "12.5"），不含百分号。' +
+            '商品点击人数为 0 时返回 "0.0"。',
+        },
+        avgOrderAmount: {
+          type: 'string',
+          description:
+            '平均客单价：本场已付订单 pay_amount 求和除以成交人数，两位小数字符串（如 "100.00"）。' +
+            '成交人数为 0 时返回 "0.00"。金额按原始支付额累加，不做退款净额。',
+        },
+        unpaidUserCount: {
+          type: 'integer',
+          format: 'int64',
+          description: '未付款人数：本场 order_status=1（待付款）订单 username 去重人数。',
+        },
+      },
+    },
+    ConsoleTradeTrendPoint: {
+      type: 'object',
+      required: ['time', 'dealAmount', 'soldCount'],
+      properties: {
+        time: {
+          type: 'string',
+          description: '时间桶起点，格式 yyyy-MM-dd HH:mm:ss。',
+        },
+        dealAmount: {
+          type: 'string',
+          description:
+            '该桶内已付订单 pay_amount 求和，两位小数字符串；无成交为 "0.00"。',
+        },
+        soldCount: {
+          type: 'integer',
+          description: '该桶内已付订单行数（销量）；无成交为 0。',
+        },
+      },
+    },
+    ConsoleTradeTrendData: {
+      type: 'object',
+      required: ['id', 'startTime', 'endTime', 'bucketSeconds', 'points'],
+      properties: {
+        id: {
+          type: 'string',
+          description: '本站活动 UUID',
+        },
+        startTime: {
+          type: 'string',
+          description: '查询起点，格式 yyyy-MM-dd HH:mm:ss。',
+        },
+        endTime: {
+          type: 'string',
+          description: '查询终点，格式 yyyy-MM-dd HH:mm:ss；与 startTime 组成左闭右开区间。',
+        },
+        bucketSeconds: {
+          type: 'integer',
+          description: '时间桶秒数；本迭代固定为 60。',
+        },
+        points: {
+          type: 'array',
+          description: '按 time 升序的成交趋势点；无订单的桶仍返回零值。',
+          items: { $ref: '#/components/schemas/ConsoleTradeTrendPoint' },
+        },
+      },
+    },
+    ConsoleProductItem: {
+      type: 'object',
+      required: ['spuId', 'productName', 'visible', 'sortOrder', 'soldCount'],
+      properties: {
+        spuId: {
+          type: 'string',
+          description: '订单中心商品 spuId，十进制字符串',
+        },
+        productName: {
+          type: 'string',
+          description: '绑定时商品名称快照',
+        },
+        visible: {
+          type: 'boolean',
+          description: '直播间是否展示该绑定商品；false 时观看端小黄车不返回该行',
+        },
+        sortOrder: {
+          type: 'integer',
+          description: '提交顺序，从 0 起',
+        },
+        soldCount: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '本场已付订单行数（order_status 为 2/3/4/5，按 product_id 对齐 spu；无成交为 0）',
+        },
+      },
+    },
+    ConsoleProductListData: {
+      type: 'object',
+      required: ['id', 'cartEnabled', 'list'],
+      properties: {
+        id: { type: 'string', description: '本站活动 UUID' },
+        cartEnabled: {
+          type: 'boolean',
+          description:
+            '小黄车总开关。false 时观看端 GET /watch/products 返回空 list；中控台列表仍返回全部绑定行',
+        },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ConsoleProductItem' },
+          description: '本场 activity_product 全量，按 sort_order；无绑定为 []',
+        },
+      },
+    },
+    ConsoleProductVisibleRequest: {
+      type: 'object',
+      required: ['spuId', 'visible'],
+      properties: {
+        spuId: {
+          type: 'string',
+          description: '本场已绑定 spuId；未绑定 → 400「商品未绑定本场」',
+        },
+        visible: {
+          type: 'boolean',
+          description: 'true 显示 / false 隐藏；写入 activity_product.visible',
+        },
+      },
+    },
+    ConsoleProductVisibleData: {
+      type: 'object',
+      required: ['id', 'spuId', 'visible'],
+      properties: {
+        id: { type: 'string', description: '本站活动 UUID' },
+        spuId: {
+          type: 'string',
+          description: '订单中心商品 spuId，十进制字符串',
+        },
+        visible: {
+          type: 'boolean',
+          description:
+            '更新后的单品展示态；true 显示 / false 隐藏；已写入 activity_product.visible',
+        },
+      },
+    },
+    ConsoleCartEnabledRequest: {
+      type: 'object',
+      required: ['enabled'],
+      properties: {
+        enabled: {
+          type: 'boolean',
+          description: 'true 开小黄车 / false 关；写入 activity.cart_enabled',
+        },
+      },
+    },
+    ConsoleCartEnabledData: {
+      type: 'object',
+      required: ['id', 'cartEnabled'],
+      properties: {
+        id: { type: 'string', description: '本站活动 UUID' },
+        cartEnabled: {
+          type: 'boolean',
+          description:
+            '更新后的小黄车总开关；true 开 / false 关；已写入 activity.cart_enabled',
         },
       },
     },
@@ -4652,6 +4937,24 @@ function buildAdmin() {
     ApiResponseConsoleAudienceDetailList: {
       $ref: '#/components/schemas/ConsoleAudienceDetailListData',
     },
+    ApiResponseConsoleWatchTrade: {
+      $ref: '#/components/schemas/ConsoleWatchTradeData',
+    },
+    ApiResponseConsoleTradeStats: {
+      $ref: '#/components/schemas/ConsoleTradeStatsData',
+    },
+    ApiResponseConsoleTradeTrend: {
+      $ref: '#/components/schemas/ConsoleTradeTrendData',
+    },
+    ApiResponseConsoleProductList: {
+      $ref: '#/components/schemas/ConsoleProductListData',
+    },
+    ApiResponseConsoleProductVisible: {
+      $ref: '#/components/schemas/ConsoleProductVisibleData',
+    },
+    ApiResponseConsoleCartEnabled: {
+      $ref: '#/components/schemas/ConsoleCartEnabledData',
+    },
     ApiResponseViewerPhone: { $ref: '#/components/schemas/ViewerPhoneData' },
     ApiResponseViewerAppendTags: {
       $ref: '#/components/schemas/ViewerAppendTagsData',
@@ -5990,9 +6293,182 @@ function buildAdmin() {
             },
           },
           ...pageParams,
-          { name: 'keyword', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'keywordType',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['nickname', 'username', 'phone'],
+              default: 'nickname',
+              description:
+                'nickname 对进出行昵称模糊 / username 精确匹配 username / phone 对 viewer.phone 明文模糊后命中本场名单',
+            },
+            description:
+              '关键字类型。nickname 对进出行昵称模糊；username 精确匹配 username；phone 对 viewer.phone 明文模糊后命中本场名单。',
+          },
+          {
+            name: 'keyword',
+            in: 'query',
+            schema: { type: 'string' },
+            description: '搜索关键字；空或省略不过滤。',
+          },
+          {
+            name: 'kind',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['student', 'assistant'],
+              default: 'student',
+              description:
+                'student 学员（观众 username） / assistant 助教（e{员工id} 开播角色与 z{员工id} 中控台）',
+            },
+            description:
+              '名单类型。student 学员（观众 username）；assistant 助教（e{员工id} 开播角色与 z{员工id} 中控台）。',
+          },
+          {
+            name: 'followerFilter',
+            in: 'query',
+            schema: { type: 'string', default: 'all' },
+            description:
+              '学员跟进人筛选。all 全部；none 无归属客户；正整数为邀请人员工 id。仅学员侧生效。',
+          },
+          {
+            name: 'behavior',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['all', 'comment', 'coupon', 'productClick', 'pendingPay', 'purchase'],
+              default: 'all',
+              description:
+                'all 全部 / comment 发言 / coupon 领券（本站无流水恒空） / productClick 点击商品 / pendingPay 本场待支付 / purchase 本场已付购买',
+            },
+            description:
+              '学员行为筛选。comment 发言；coupon 领券（本站无流水恒空）；productClick 点击商品；pendingPay 本场待支付；purchase 本场已付购买。仅学员侧生效。',
+          },
         ],
         responses: ok200('#/components/schemas/ApiResponseAttendeeList'),
+      },
+    },
+    '/api/v1/activities/console/watch-trade/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台观看数据成交汇总',
+        description:
+          '中控台「数据」→「观看数据」左侧成交三项：直播间成交金额 / 成交人数 / 成交商品数。' +
+          '只读本站 activity_order 已付状态（2/3/4/5）；不查 OMS。' +
+          '在线人数与评论指标不经本接口。交易数据 KPI / 趋势见 trade-stats 与 trade-trend。admin JWT。',
+        operationId: 'getConsoleWatchTrade',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseConsoleWatchTrade'),
+      },
+    },
+    '/api/v1/activities/console/trade-stats/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台交易数据 KPI',
+        description:
+          '中控台「数据」→「交易数据」左侧六项：成交人数、成交商品数、商品点击人数、成交转化率、平均客单价、未付款人数。' +
+          '只读本站 activity_order 与 activity_product_click；不查 OMS。' +
+          '转化率=成交人数/点击人数×100（一位小数）；客单价=已付金额/成交人数。' +
+          '场级汇总，不按时间窗裁剪。未付款详情下钻本轮不做。admin JWT。',
+        operationId: 'getConsoleTradeStats',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseConsoleTradeStats'),
+      },
+    },
+    '/api/v1/activities/console/trade-trend/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台交易数据成交趋势',
+        description:
+          '中控台「数据」→「交易数据」右侧成交趋势：按支付时间桶聚合成交金额与销量（已付订单行数）。' +
+          '只读本站 activity_order 已付状态（2/3/4/5），按 pay_time 入桶；pay_time 为空不计。' +
+          'Query 口径对齐 presence-trend：跨度必须不超过 1 天，bucketSeconds 本迭代仅支持 60。' +
+          '无订单的桶仍返回 dealAmount="0.00"、soldCount=0。admin JWT。',
+        operationId: 'getConsoleTradeTrend',
+        security: bearer,
+        parameters: [
+          activityId,
+          {
+            name: 'startTime',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: '查询起点，格式 yyyy-MM-dd HH:mm:ss。',
+          },
+          {
+            name: 'endTime',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: '查询终点，格式 yyyy-MM-dd HH:mm:ss；与 startTime 跨度必须不超过 1 天。',
+          },
+          {
+            name: 'bucketSeconds',
+            in: 'query',
+            required: false,
+            schema: { type: 'integer', default: 60 },
+            description: '时间桶秒数；本迭代仅允许 60，其它值返回业务 400。',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseConsoleTradeTrend'),
+      },
+    },
+    '/api/v1/activities/console/products/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台商品列表',
+        description:
+          '中控台中间操作条「商品」面板：返回本场 activity_product 绑定全量（含隐藏行）与小黄车总开关 cartEnabled。' +
+          'soldCount 为本场已付订单行数。封面/价/服务期/类型由前端直连订单中心批量详情补齐。' +
+          '移除走 PUT /activities/{id} 仅传 products 全量覆盖。讲解无本站 API。admin JWT。',
+        operationId: 'listConsoleProducts',
+        security: bearer,
+        parameters: [activityId],
+        responses: ok200('#/components/schemas/ApiResponseConsoleProductList'),
+      },
+    },
+    '/api/v1/activities/console/products/visible/{id}': {
+      put: {
+        tags: ['直播中控台'],
+        summary: '中控台单品显示或隐藏',
+        description:
+          '写入 activity_product.visible。未绑定 spu → 400「商品未绑定本场」。' +
+          '观看端 GET /watch/products 只返回 visible=true 且 cart_enabled=true 的行。admin JWT。',
+        operationId: 'setConsoleProductVisible',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ConsoleProductVisibleRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseConsoleProductVisible'),
+      },
+    },
+    '/api/v1/activities/console/cart/{id}': {
+      put: {
+        tags: ['直播中控台'],
+        summary: '中控台小黄车总开关',
+        description:
+          '写入 activity.cart_enabled。false 时观看端商品列表为空，中控台列表仍可操作绑定行。admin JWT。',
+        operationId: 'setConsoleCartEnabled',
+        security: bearer,
+        parameters: [activityId],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ConsoleCartEnabledRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseConsoleCartEnabled'),
       },
     },
     '/api/v1/activities/console/audience-details/{id}': {
@@ -6014,6 +6490,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['nickname', 'username', 'phone'],
               default: 'nickname',
+              description: 'nickname 昵称 / username 用户标识 / phone 手机号',
             },
             description: '用户关键字类型，同用户运营',
           },
@@ -6030,6 +6507,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['all', 'online', 'offline'],
               default: 'all',
+              description: 'all 全部 / online 在线 / offline 离线',
             },
             description: '在线状态筛选',
           },
@@ -6056,6 +6534,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['asc', 'desc'],
               default: 'desc',
+              description: 'asc 升序 / desc 降序',
             },
           },
         ],
@@ -6081,6 +6560,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['nickname', 'username', 'phone'],
               default: 'nickname',
+              description: 'nickname 昵称 / username 用户标识 / phone 手机号',
             },
           },
           { name: 'keyword', in: 'query', schema: { type: 'string' } },
@@ -6091,6 +6571,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['all', 'online', 'offline'],
               default: 'all',
+              description: 'all 全部 / online 在线 / offline 离线',
             },
           },
           { name: 'followerKeyword', in: 'query', schema: { type: 'string' } },
@@ -6106,6 +6587,7 @@ function buildAdmin() {
               type: 'string',
               enum: ['asc', 'desc'],
               default: 'desc',
+              description: 'asc 升序 / desc 降序',
             },
           },
         ],
@@ -7534,14 +8016,30 @@ function buildAdmin() {
       get: {
         tags: ['活动管理'],
         summary: '评论管理 / 中控台评论审核 iframe URL',
-        description:
-          '用户运营 · 评论管理与中控台共用（D34/D110）。仅 provider=vhall，否则 501。省略 email/name 时用当前员工 e{id}@qkzb.com / 姓名。',
+        description: [
+          '用户运营 · 评论管理与中控台共用（D34/D110）。仅 provider=vhall，否则 501。',
+          '服务端先调微吼 get-role-url（type=3 助理，email 同审核人 p{员工id}@qkzb.com）确保助理身份，再调 chat-filter 取 page_url；已是助理等幂等失败不阻断后续 chat-filter。',
+          '省略 email/name 时用当前员工 p{id}@qkzb.com / 姓名。',
+          '审核人邮箱须为专用 p{员工id}@qkzb.com（不是角色 e{id}，也不是中控台进房 z{id}）；禁止传 e{员工id}@qkzb.com 或 z{员工id}@qkzb.com。',
+        ].join(''),
         operationId: 'getActivityChatFilter',
         security: bearer,
         parameters: [
           activityId,
-          { name: 'email', in: 'query', schema: { type: 'string' } },
-          { name: 'name', in: 'query', schema: { type: 'string', maxLength: 30 } },
+          {
+            name: 'email',
+            in: 'query',
+            description:
+              '审核人邮箱（get-role-url 与 chat-filter 共用）。省略则当前员工 p{id}@qkzb.com。禁止 e{id}@qkzb.com（角色）与 z{id}@qkzb.com（中控台 sdk-sign 进房邮箱）。',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'name',
+            in: 'query',
+            description:
+              '审核人昵称，最多 30 字（同步传给 get-role-url nickname 与 chat-filter name）。省略则当前员工姓名；姓名也空则「助理」。',
+            schema: { type: 'string', maxLength: 30 },
+          },
         ],
         responses: ok200('#/components/schemas/ApiResponseChatFilterAdmin'),
       },
@@ -9188,6 +9686,24 @@ function buildLive() {
     ApiResponseConsoleAudienceDetailList: {
       $ref: '#/components/schemas/ConsoleAudienceDetailListData',
     },
+    ApiResponseConsoleWatchTrade: {
+      $ref: '#/components/schemas/ConsoleWatchTradeData',
+    },
+    ApiResponseConsoleTradeStats: {
+      $ref: '#/components/schemas/ConsoleTradeStatsData',
+    },
+    ApiResponseConsoleTradeTrend: {
+      $ref: '#/components/schemas/ConsoleTradeTrendData',
+    },
+    ApiResponseConsoleProductList: {
+      $ref: '#/components/schemas/ConsoleProductListData',
+    },
+    ApiResponseConsoleProductVisible: {
+      $ref: '#/components/schemas/ConsoleProductVisibleData',
+    },
+    ApiResponseConsoleCartEnabled: {
+      $ref: '#/components/schemas/ConsoleCartEnabledData',
+    },
     ApiResponseViewerPhone: { $ref: '#/components/schemas/ViewerPhoneData' },
     ApiResponseViewerAppendTags: {
       $ref: '#/components/schemas/ViewerAppendTagsData',
@@ -9575,7 +10091,8 @@ function buildLive() {
         tags: ['观看'],
         summary: '本场商品元数据',
         description:
-          '本场绑定 spu 快照（小黄车）。须过售卖门禁（含免费场须登录，D115），未过 → 403。活动不存在或已软删 → 400。',
+          '本场绑定 spu 快照（小黄车）。须过售卖门禁（含免费场须登录，D115），未过 → 403。' +
+          'cart_enabled=false → 空 list；单品 visible=false 不返回。活动不存在或已软删 → 400。',
         operationId: 'getWatchProducts',
         parameters: [watchId, activityAccessHeader],
         responses: ok200('#/components/schemas/ApiResponseWatchProducts'),

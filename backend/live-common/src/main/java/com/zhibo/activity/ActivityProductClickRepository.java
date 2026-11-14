@@ -17,4 +17,9 @@ public interface ActivityProductClickRepository extends JpaRepository<ActivityPr
             + "WHERE c.activityId = :activityId AND c.username IN :usernames GROUP BY c.username")
     List<Object[]> countByActivityAndUsernames(
             @Param("activityId") String activityId, @Param("usernames") Collection<String> usernames);
+
+    /** 本场商品点击人数（username 去重；中控台交易数据）。 */
+    @Query("SELECT COUNT(DISTINCT c.username) FROM ActivityProductClickEntity c "
+            + "WHERE c.activityId = :activityId")
+    long countDistinctUsernameByActivityId(@Param("activityId") String activityId);
 }

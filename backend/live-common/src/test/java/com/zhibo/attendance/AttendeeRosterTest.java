@@ -5,6 +5,12 @@ import com.zhibo.activity.ActivityRepository;
 import com.zhibo.activity.AttendanceTimes;
 import com.zhibo.activity.RoomAttendanceEntity;
 import com.zhibo.activity.RoomAttendanceRepository;
+import com.zhibo.activity.ActivityAudienceRepository;
+import com.zhibo.activity.ActivityMemberRepository;
+import com.zhibo.activity.ActivityOrderRepository;
+import com.zhibo.activity.ActivityProductClickRepository;
+import com.zhibo.activity.RoomCommentRepository;
+import com.zhibo.viewer.ViewerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +45,18 @@ class AttendeeRosterTest {
     private ActivityRepository activityRepository;
     @Mock
     private RoomAttendanceRepository attendanceRepository;
+    @Mock
+    private ViewerRepository viewerRepository;
+    @Mock
+    private ActivityMemberRepository memberRepository;
+    @Mock
+    private ActivityAudienceRepository audienceRepository;
+    @Mock
+    private ActivityProductClickRepository productClickRepository;
+    @Mock
+    private ActivityOrderRepository orderRepository;
+    @Mock
+    private RoomCommentRepository commentRepository;
 
     @InjectMocks
     private AttendeeRoster roster;
@@ -46,6 +64,8 @@ class AttendeeRosterTest {
     @BeforeEach
     void stubActivity() {
         lenient().when(activityRepository.findById(ROOM_ID)).thenReturn(Optional.of(activity(1)));
+        lenient().when(memberRepository.findByActivityIds(any())).thenReturn(List.of());
+        lenient().when(audienceRepository.findByActivityIdAndUsernameIn(any(), any())).thenReturn(List.of());
     }
 
     @Test

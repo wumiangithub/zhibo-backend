@@ -969,7 +969,7 @@
           "观看"
         ],
         "summary": "本场商品元数据",
-        "description": "本场绑定 spu 快照（小黄车）。须过售卖门禁（含免费场须登录，D115），未过 → 403。活动不存在或已软删 → 400。",
+        "description": "本场绑定 spu 快照（小黄车）。须过售卖门禁（含免费场须登录，D115），未过 → 403。cart_enabled=false → 空 list；单品 visible=false 不返回。活动不存在或已软删 → 400。",
         "operationId": "getWatchProducts",
         "parameters": [
           {
@@ -4696,6 +4696,150 @@
               "data": {
                 "description": "业务数据；失败时可能省略",
                 "$ref": "#/components/schemas/AttendeeListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleAudienceDetailList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleAudienceDetailListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleWatchTrade": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleWatchTradeData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleTradeStats": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleTradeStatsData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleTradeTrend": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleTradeTrendData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleProductList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleProductListData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleProductVisible": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleProductVisibleData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseConsoleCartEnabled": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ConsoleCartEnabledData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseViewerPhone": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ViewerPhoneData"
+              }
+            }
+          }
+        ]
+      },
+      "ApiResponseViewerAppendTags": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ApiResponseBase"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "description": "业务数据；失败时可能省略",
+                "$ref": "#/components/schemas/ViewerAppendTagsData"
               }
             }
           }

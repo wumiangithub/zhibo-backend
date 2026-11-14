@@ -11,10 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PresenceUserIdsTest {
 
     @Test
-    void parseEmail_viewerStaffConsoleGuest() {
+    void parseEmail_viewerStaffConsoleChatFilterGuest() {
         assertEquals("12", PresenceUserIds.parseEmail("12@qkzb.com"));
         assertEquals("e10001", PresenceUserIds.parseEmail("e10001@qkzb.com"));
         assertEquals("z10001", PresenceUserIds.parseEmail("z10001@qkzb.com"));
+        assertEquals("p10001", PresenceUserIds.parseEmail("p10001@qkzb.com"));
         assertEquals("guest1", PresenceUserIds.parseEmail("guest1@zhibo.local"));
     }
 
@@ -31,12 +32,15 @@ class PresenceUserIdsTest {
         assertEquals("12@qkzb.com", PresenceUserIds.viewerEmail("12"));
         assertEquals("e10001@qkzb.com", PresenceUserIds.staffEmail(10001L));
         assertEquals("z10001@qkzb.com", PresenceUserIds.consoleEmail(10001L));
+        assertEquals("p10001@qkzb.com", PresenceUserIds.chatFilterEmail(10001L));
         assertEquals(12L, PresenceUserIds.viewerId("12"));
         assertNull(PresenceUserIds.viewerId("e10001"));
         assertNull(PresenceUserIds.viewerId("z10001"));
+        assertNull(PresenceUserIds.viewerId("p10001"));
         assertTrue(PresenceUserIds.isViewer("12"));
         assertThrows(IllegalArgumentException.class, () -> PresenceUserIds.staffEmail(0));
         assertThrows(IllegalArgumentException.class, () -> PresenceUserIds.consoleEmail(0));
+        assertThrows(IllegalArgumentException.class, () -> PresenceUserIds.chatFilterEmail(0));
     }
 
     @Test
@@ -44,10 +48,14 @@ class PresenceUserIdsTest {
         assertTrue(PresenceUserIds.mayWriteRoom("12"));
         assertTrue(PresenceUserIds.mayWriteRoom("e10001"));
         assertTrue(PresenceUserIds.mayWriteRoom("z10001"));
+        assertFalse(PresenceUserIds.mayWriteRoom("p10001"));
         assertTrue(PresenceUserIds.isStaff("e10001"));
         assertTrue(PresenceUserIds.isConsole("z10001"));
+        assertTrue(PresenceUserIds.isChatFilter("p10001"));
         assertFalse(PresenceUserIds.isStaff("z10001"));
         assertFalse(PresenceUserIds.isConsole("e10001"));
+        assertFalse(PresenceUserIds.isChatFilter("e10001"));
+        assertFalse(PresenceUserIds.isViewer("p10001"));
         // 游客挡在回调 isGuestEmail(email)；此处 userId 已与观众同为字符串
         assertTrue(PresenceUserIds.mayWriteRoom("guest1"));
         assertFalse(PresenceUserIds.mayWriteRoom(null));

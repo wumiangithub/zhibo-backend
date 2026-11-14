@@ -1680,10 +1680,88 @@ paths:
             minimum: 1
             maximum: 100
           description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - username
+              - phone
+            default: nickname
+            description: nickname 对进出行昵称模糊 / username 精确匹配 username / phone 对 viewer.phone 明文模糊后命中本场名单
+            x-apifox-enum:
+              - value: nickname
+                name: 对进出行昵称模糊
+                description: 对进出行昵称模糊
+              - value: username
+                name: 精确匹配 username
+                description: 精确匹配 username
+              - value: phone
+                name: 对 viewer.phone 明文模糊后命中本场名单
+                description: 对 viewer.phone 明文模糊后命中本场名单
+          description: 关键字类型。nickname 对进出行昵称模糊；username 精确匹配 username；phone 对 viewer.phone 明文模糊后命中本场名单。
         - name: keyword
           in: query
           schema:
             type: string
+          description: 搜索关键字；空或省略不过滤。
+        - name: kind
+          in: query
+          schema:
+            type: string
+            enum:
+              - student
+              - assistant
+            default: student
+            description: "student 学员（观众 username） / assistant 助教（e{员工id} 开播角色与 z{员工id} 中控台）"
+            x-apifox-enum:
+              - value: student
+                name: 学员（观众 username）
+                description: 学员（观众 username）
+              - value: assistant
+                name: "助教（e{员工id} 开播角色与 z{员工id} 中控台）"
+                description: "助教（e{员工id} 开播角色与 z{员工id} 中控台）"
+          description: "名单类型。student 学员（观众 username）；assistant 助教（e{员工id} 开播角色与 z{员工id} 中控台）。"
+        - name: followerFilter
+          in: query
+          schema:
+            type: string
+            default: all
+          description: 学员跟进人筛选。all 全部；none 无归属客户；正整数为邀请人员工 id。仅学员侧生效。
+        - name: behavior
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - comment
+              - coupon
+              - productClick
+              - pendingPay
+              - purchase
+            default: all
+            description: all 全部 / comment 发言 / coupon 领券（本站无流水恒空） / productClick 点击商品 / pendingPay 本场待支付 / purchase 本场已付购买
+            x-apifox-enum:
+              - value: all
+                name: 全部
+                description: 全部
+              - value: comment
+                name: 发言
+                description: 发言
+              - value: coupon
+                name: 领券（本站无流水恒空）
+                description: 领券（本站无流水恒空）
+              - value: productClick
+                name: 点击商品
+                description: 点击商品
+              - value: pendingPay
+                name: 本场待支付
+                description: 本场待支付
+              - value: purchase
+                name: 本场已付购买
+                description: 本场已付购买
+          description: 学员行为筛选。comment 发言；coupon 领券（本站无流水恒空）；productClick 点击商品；pendingPay 本场待支付；purchase 本场已付购买。仅学员侧生效。
       responses:
         200:
           description: "业务结果（看 body.code；成功 code===0）"
@@ -1691,6 +1769,397 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiResponseAttendeeList"
+  /api/v1/activities/console/watch-trade/{id}:
+    get:
+      tags:
+        - 直播中控台
+      summary: 中控台观看数据成交汇总
+      description: 中控台「数据」→「观看数据」左侧成交三项：直播间成交金额 / 成交人数 / 成交商品数。只读本站 activity_order 已付状态（2/3/4/5）；不查 OMS。在线人数与评论指标不经本接口。交易数据 KPI / 趋势见 trade-stats 与 trade-trend。admin JWT。
+      operationId: getConsoleWatchTrade
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleWatchTrade"
+  /api/v1/activities/console/trade-stats/{id}:
+    get:
+      tags:
+        - 直播中控台
+      summary: 中控台交易数据 KPI
+      description: "中控台「数据」→「交易数据」左侧六项：成交人数、成交商品数、商品点击人数、成交转化率、平均客单价、未付款人数。只读本站 activity_order 与 activity_product_click；不查 OMS。转化率=成交人数/点击人数×100（一位小数）；客单价=已付金额/成交人数。场级汇总，不按时间窗裁剪。未付款详情下钻本轮不做。admin JWT。"
+      operationId: getConsoleTradeStats
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleTradeStats"
+  /api/v1/activities/console/trade-trend/{id}:
+    get:
+      tags:
+        - 直播中控台
+      summary: 中控台交易数据成交趋势
+      description: "中控台「数据」→「交易数据」右侧成交趋势：按支付时间桶聚合成交金额与销量（已付订单行数）。只读本站 activity_order 已付状态（2/3/4/5），按 pay_time 入桶；pay_time 为空不计。Query 口径对齐 presence-trend：跨度必须不超过 1 天，bucketSeconds 本迭代仅支持 60。无订单的桶仍返回 dealAmount=\"0.00\"、soldCount=0。admin JWT。"
+      operationId: getConsoleTradeTrend
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: startTime
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "查询起点，格式 yyyy-MM-dd HH:mm:ss。"
+        - name: endTime
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "查询终点，格式 yyyy-MM-dd HH:mm:ss；与 startTime 跨度必须不超过 1 天。"
+        - name: bucketSeconds
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 60
+          description: 时间桶秒数；本迭代仅允许 60，其它值返回业务 400。
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleTradeTrend"
+  /api/v1/activities/console/products/{id}:
+    get:
+      tags:
+        - 直播中控台
+      summary: 中控台商品列表
+      description: "中控台中间操作条「商品」面板：返回本场 activity_product 绑定全量（含隐藏行）与小黄车总开关 cartEnabled。soldCount 为本场已付订单行数。封面/价/服务期/类型由前端直连订单中心批量详情补齐。移除走 PUT /activities/{id} 仅传 products 全量覆盖。讲解无本站 API。admin JWT。"
+      operationId: listConsoleProducts
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleProductList"
+  /api/v1/activities/console/products/visible/{id}:
+    put:
+      tags:
+        - 直播中控台
+      summary: 中控台单品显示或隐藏
+      description: "写入 activity_product.visible。未绑定 spu → 400「商品未绑定本场」。观看端 GET /watch/products 只返回 visible=true 且 cart_enabled=true 的行。admin JWT。"
+      operationId: setConsoleProductVisible
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsoleProductVisibleRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleProductVisible"
+  /api/v1/activities/console/cart/{id}:
+    put:
+      tags:
+        - 直播中控台
+      summary: 中控台小黄车总开关
+      description: 写入 activity.cart_enabled。false 时观看端商品列表为空，中控台列表仍可操作绑定行。admin JWT。
+      operationId: setConsoleCartEnabled
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsoleCartEnabledRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleCartEnabled"
+  /api/v1/activities/console/audience-details/{id}:
+    get:
+      tags:
+        - 直播中控台
+      summary: 中控台观众明细列表
+      description: "中控台页最底通栏「观众明细」（D123）。名单=本活动有进出流水的观众；指标多表聚合。admin JWT。不要与左侧 attendees 名单混淆。领券次数本轮恒 0。"
+      operationId: listConsoleAudienceDetails
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: 页码，从 1 起（D37）；默认 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: 每页条数；默认 20，最大 100
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - username
+              - phone
+            default: nickname
+            description: nickname 昵称 / username 用户标识 / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: username
+                name: 用户标识
+                description: 用户标识
+              - value: phone
+                name: 手机号
+                description: 手机号
+          description: 用户关键字类型，同用户运营
+        - name: keyword
+          in: query
+          schema:
+            type: string
+          description: 用户关键字；空不过滤
+        - name: onlineStatus
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - online
+              - offline
+            default: all
+            description: all 全部 / online 在线 / offline 离线
+            x-apifox-enum:
+              - value: all
+                name: 全部
+                description: 全部
+              - value: online
+                name: 在线
+                description: 在线
+              - value: offline
+                name: 离线
+                description: 离线
+          description: 在线状态筛选
+        - name: followerKeyword
+          in: query
+          schema:
+            type: string
+          description: 跟进人姓名包含；空不过滤
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: latestEnterTime
+            description: 单列排序字段：firstEnterTime / latestEnterTime / liveWatchDuration / replayWatchDuration / totalWatchDuration / leaveTime / enterCount / online / productClickCount / pendingPayCount / purchaseCount / totalPurchaseCount / totalPurchaseAmount / commentCount / couponReceiveCount
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+            description: asc 升序 / desc 降序
+            x-apifox-enum:
+              - value: asc
+                name: 升序
+                description: 升序
+              - value: desc
+                name: 降序
+                description: 降序
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseConsoleAudienceDetailList"
+  /api/v1/activities/console/audience-details/export/{id}:
+    get:
+      tags:
+        - 直播中控台
+      summary: 中控台观众明细导出 CSV
+      description: 按与 list 相同的筛选导出 UTF-8 BOM CSV，不分页（D123）。手机号列为脱敏。admin JWT。
+      operationId: exportConsoleAudienceDetails
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - $ref: "#/components/parameters/ActivityId"
+        - name: keywordType
+          in: query
+          schema:
+            type: string
+            enum:
+              - nickname
+              - username
+              - phone
+            default: nickname
+            description: nickname 昵称 / username 用户标识 / phone 手机号
+            x-apifox-enum:
+              - value: nickname
+                name: 昵称
+                description: 昵称
+              - value: username
+                name: 用户标识
+                description: 用户标识
+              - value: phone
+                name: 手机号
+                description: 手机号
+        - name: keyword
+          in: query
+          schema:
+            type: string
+        - name: onlineStatus
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - online
+              - offline
+            default: all
+            description: all 全部 / online 在线 / offline 离线
+            x-apifox-enum:
+              - value: all
+                name: 全部
+                description: 全部
+              - value: online
+                name: 在线
+                description: 在线
+              - value: offline
+                name: 离线
+                description: 离线
+        - name: followerKeyword
+          in: query
+          schema:
+            type: string
+        - name: sort
+          in: query
+          schema:
+            type: string
+            default: latestEnterTime
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+            description: asc 升序 / desc 降序
+            x-apifox-enum:
+              - value: asc
+                name: 升序
+                description: 升序
+              - value: desc
+                name: 降序
+                description: 降序
+      responses:
+        200:
+          description: CSV 文件
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+  /api/v1/viewers/phone/{id}:
+    get:
+      tags:
+        - 用户管理
+      summary: 查看观众手机明文
+      description: 管理端员工 JWT。路径 id 为 viewer.username。列表只回脱敏号；点锁调本接口取明文（D123）。无用户 → 400「用户不存在」；无手机 → 400「未绑定手机号」。
+      operationId: getViewerPhonePlain
+      security:
+        - BearerAuth:
+            []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            maxLength: 16
+            description: 用户中心 viewer.username（业务观众身份，D118）；JWT sub、关联表、订单中心 username 与 third_user_id 均取此值
+          description: "用户中心 viewer.username（路径 {id}，D118）"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerPhone"
+  /api/v1/viewers/append-tags:
+    post:
+      tags:
+        - 用户管理
+      summary: 批量追加手动标签
+      description: "给多名观众追加手动标签，保留已有手动与自动标签（D123）。usernames 1～100 且须全部存在；tagIds 须为未软删 type=1。成功 data.updated 为实际有新增关系的用户数。"
+      operationId: appendViewerTags
+      security:
+        - BearerAuth:
+            []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewerAppendTagsRequest"
+      responses:
+        200:
+          description: "业务结果（看 body.code；成功 code===0）"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponseViewerAppendTags"
   /api/v1/employees:
     get:
       tags:
@@ -3668,7 +4137,7 @@ paths:
       tags:
         - 活动管理
       summary: 评论管理 / 中控台评论审核 iframe URL
-      description: "用户运营 · 评论管理与中控台共用（D34/D110）。仅 provider=vhall，否则 501。省略 email/name 时用当前员工 e{id}@qkzb.com / 姓名。"
+      description: "用户运营 · 评论管理与中控台共用（D34/D110）。仅 provider=vhall，否则 501。服务端先调微吼 get-role-url（type=3 助理，email 同审核人 p{员工id}@qkzb.com）确保助理身份，再调 chat-filter 取 page_url；已是助理等幂等失败不阻断后续 chat-filter。省略 email/name 时用当前员工 p{id}@qkzb.com / 姓名。审核人邮箱须为专用 p{员工id}@qkzb.com（不是角色 e{id}，也不是中控台进房 z{id}）；禁止传 e{员工id}@qkzb.com 或 z{员工id}@qkzb.com。"
       operationId: getActivityChatFilter
       security:
         - BearerAuth:
@@ -3677,10 +4146,12 @@ paths:
         - $ref: "#/components/parameters/ActivityId"
         - name: email
           in: query
+          description: "审核人邮箱（get-role-url 与 chat-filter 共用）。省略则当前员工 p{id}@qkzb.com。禁止 e{id}@qkzb.com（角色）与 z{id}@qkzb.com（中控台 sdk-sign 进房邮箱）。"
           schema:
             type: string
         - name: name
           in: query
+          description: 审核人昵称，最多 30 字（同步传给 get-role-url nickname 与 chat-filter name）。省略则当前员工姓名；姓名也空则「助理」。
           schema:
             type: string
             maxLength: 30
@@ -6789,11 +7260,19 @@ components:
         online:
           type: boolean
           description: 是否在线；库：TINYINT(1)
+        roleLabel:
+          type: string
+          description: "助教侧角色角标。优先 activity_member.tag；否则主播「讲师」/嘉宾「嘉宾」/助理「助教」；中控台 z{id} 为「中控」。学员侧不返回。"
     AttendeeListData:
       type: object
       required:
         - activityState
         - total
+        - studentTotal
+        - assistantTotal
+        - allTotal
+        - onlineTotal
+        - offlineTotal
         - page
         - pageSize
         - list
@@ -6823,7 +7302,27 @@ components:
         total:
           type: integer
           format: int64
-          description: 总条数；库：BIGINT
+          description: 当前一级 tab + 二级 kind（学员再套跟进人/行为）列表命中行数。；库：BIGINT
+        allTotal:
+          type: integer
+          format: int64
+          description: 一级角标「全部(N)」：仅关键字后人数。不受 kind / 跟进人 / 行为影响。；库：BIGINT
+        onlineTotal:
+          type: integer
+          format: int64
+          description: 一级角标「在线(N)」，口径同 allTotal。；库：BIGINT
+        offlineTotal:
+          type: integer
+          format: int64
+          description: 一级角标「离线(N)」，口径同 allTotal。；库：BIGINT
+        studentTotal:
+          type: integer
+          format: int64
+          description: 二级角标「学员(N)」：当前一级 tab 内学员数（再套跟进人/行为）。是一级 tab 的子集。；库：BIGINT
+        assistantTotal:
+          type: integer
+          format: int64
+          description: 二级角标「助教(N)」：当前一级 tab 内助教数。是一级 tab 的子集；不受跟进人/行为影响。；库：BIGINT
         page:
           type: integer
           description: 页码，从 1 开始（D37）；库：INT
@@ -6835,6 +7334,359 @@ components:
           items:
             $ref: "#/components/schemas/AttendeeItem"
           description: 列表数据
+    ConsoleAudienceDetailItem:
+      type: object
+      required:
+        - username
+        - nickname
+        - firstEnterTime
+        - latestEnterTime
+        - liveWatchDurationSec
+        - replayWatchDurationSec
+        - totalWatchDurationSec
+        - enterCount
+        - online
+        - productClickCount
+        - pendingPayCount
+        - purchaseCount
+        - totalPurchaseCount
+        - totalPurchaseAmount
+        - commentCount
+        - couponReceiveCount
+      properties:
+        username:
+          type: string
+          maxLength: 16
+          description: 用户中心 viewer.username（D118）；库：VARCHAR(16)
+        nickname:
+          type: string
+          description: 通则 · 观众展示昵称；库：VARCHAR(64)
+          maxLength: 64
+        avatarUrl:
+          type: string
+          description: 头像 URL；库：VARCHAR(512)
+          maxLength: 512
+        phoneMasked:
+          type: string
+          description: "脱敏手机号；无手机则省略。明文见 GET /viewers/phone/{id}"
+        followerName:
+          type: string
+          description: 本场员工邀请人姓名；无邀请人则省略
+        followerEmployeeId:
+          type: integer
+          format: int64
+          description: 邀请人员工账号 id；无则省略；库：BIGINT
+        firstEnterTime:
+          type: string
+          description: "本场最早一次 Join，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        latestEnterTime:
+          type: string
+          description: "本场最晚一次 Join，yyyy-MM-dd HH:mm:ss；库：DATETIME(3)"
+        liveWatchDurationSec:
+          type: integer
+          description: 直播观看时长秒数（D85/D119）；库：INT
+        replayWatchDurationSec:
+          type: integer
+          description: 回放观看时长秒数；库：INT
+        totalWatchDurationSec:
+          type: integer
+          description: "累计观看秒数 = 直播 + 回放；库：INT"
+        leaveTime:
+          type: string
+          description: 全部连接闭合后的最晚 Leave；在线则省略；库：DATETIME(3)
+        enterCount:
+          type: integer
+          description: 本场 Join 事件条数（只算进）；库：INT
+        online:
+          type: boolean
+          description: 是否在线；活动 state 为 3/4/5 时恒 false；库：TINYINT(1)
+        productClickCount:
+          type: integer
+          description: 本场 activity_product_click 行数；库：INT
+        pendingPayCount:
+          type: integer
+          description: "本场 order_status=1 订单数；库：INT"
+        purchaseCount:
+          type: integer
+          description: 本场已付订单数（order_status 2/3/4/5）；库：INT
+        totalPurchaseCount:
+          type: integer
+          description: 全活动已付订单笔数；库：INT
+        totalPurchaseAmount:
+          type: string
+          description: "全活动已付金额，两位小数字符串，如 \"0.00\""
+        commentCount:
+          type: integer
+          description: 本场未软删聊天+提问条数（不计券/图）；库：INT
+        couponReceiveCount:
+          type: integer
+          description: 领券次数；本轮恒 0；库：INT
+    ConsoleAudienceDetailListData:
+      type: object
+      required:
+        - page
+        - pageSize
+        - total
+        - list
+      properties:
+        page:
+          type: integer
+          description: 页码，从 1 开始（D37）；库：INT
+        pageSize:
+          type: integer
+          description: 每页条数；库：INT
+        total:
+          type: integer
+          format: int64
+          description: 总条数；库：BIGINT
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsoleAudienceDetailItem"
+          description: 列表数据
+    ConsoleWatchTradeData:
+      type: object
+      required:
+        - id
+        - dealAmount
+        - dealUserCount
+        - dealProductCount
+      properties:
+        id:
+          type: string
+          description: 本站活动 UUID；库：VARCHAR(32)
+          maxLength: 32
+        dealAmount:
+          type: string
+          description: "直播间成交金额：本场已付订单 pay_amount 求和；两位小数字符串，如 \"26800.00\"；无单为 \"0.00\""
+        dealUserCount:
+          type: integer
+          format: int64
+          description: 成交人数：本场已付订单 username 去重；库：BIGINT
+        dealProductCount:
+          type: integer
+          format: int64
+          description: 成交商品数：本场已付订单行数（一单一品；含 product_id 空）；库：BIGINT
+    ConsoleTradeStatsData:
+      type: object
+      required:
+        - id
+        - dealUserCount
+        - dealProductCount
+        - productClickUserCount
+        - dealConversionRate
+        - avgOrderAmount
+        - unpaidUserCount
+      properties:
+        id:
+          type: string
+          description: 本站活动 UUID；库：VARCHAR(32)
+          maxLength: 32
+        dealUserCount:
+          type: integer
+          format: int64
+          description: 成交人数：本场已付订单（order_status 为 2/3/4/5）username 去重人数。；库：BIGINT
+        dealProductCount:
+          type: integer
+          format: int64
+          description: 成交商品数：本场已付订单行数（一单一品；含 product_id 为空的已付单）。；库：BIGINT
+        productClickUserCount:
+          type: integer
+          format: int64
+          description: 商品点击人数：本场 activity_product_click（小黄车「去抢购」埋点）username 去重人数。；库：BIGINT
+        dealConversionRate:
+          type: string
+          description: "成交转化率：成交人数除以商品点击人数再乘 100，一位小数字符串（如 \"12.5\"），不含百分号。商品点击人数为 0 时返回 \"0.0\"。"
+        avgOrderAmount:
+          type: string
+          description: "平均客单价：本场已付订单 pay_amount 求和除以成交人数，两位小数字符串（如 \"100.00\"）。成交人数为 0 时返回 \"0.00\"。金额按原始支付额累加，不做退款净额。"
+        unpaidUserCount:
+          type: integer
+          format: int64
+          description: "未付款人数：本场 order_status=1（待付款）订单 username 去重人数。；库：BIGINT"
+    ConsoleTradeTrendPoint:
+      type: object
+      required:
+        - time
+        - dealAmount
+        - soldCount
+      properties:
+        time:
+          type: string
+          description: "时间桶起点，格式 yyyy-MM-dd HH:mm:ss。；库：DATETIME(3)"
+        dealAmount:
+          type: string
+          description: "该桶内已付订单 pay_amount 求和，两位小数字符串；无成交为 \"0.00\"。"
+        soldCount:
+          type: integer
+          description: 该桶内已付订单行数（销量）；无成交为 0。；库：INT
+    ConsoleTradeTrendData:
+      type: object
+      required:
+        - id
+        - startTime
+        - endTime
+        - bucketSeconds
+        - points
+      properties:
+        id:
+          type: string
+          description: 本站活动 UUID；库：VARCHAR(32)
+          maxLength: 32
+        startTime:
+          type: string
+          description: "查询起点，格式 yyyy-MM-dd HH:mm:ss。；库：DATETIME(3)"
+        endTime:
+          type: string
+          description: "查询终点，格式 yyyy-MM-dd HH:mm:ss；与 startTime 组成左闭右开区间。；库：DATETIME(3)"
+        bucketSeconds:
+          type: integer
+          description: 时间桶秒数；本迭代固定为 60。；库：INT
+        points:
+          type: array
+          description: 按 time 升序的成交趋势点；无订单的桶仍返回零值。
+          items:
+            $ref: "#/components/schemas/ConsoleTradeTrendPoint"
+    ConsoleProductItem:
+      type: object
+      required:
+        - spuId
+        - productName
+        - visible
+        - sortOrder
+        - soldCount
+      properties:
+        spuId:
+          type: string
+          description: 订单中心商品 spuId，十进制字符串；库：VARCHAR(64)
+          maxLength: 64
+        productName:
+          type: string
+          description: 绑定时商品名称快照；库：VARCHAR(128)
+          maxLength: 128
+        visible:
+          type: boolean
+          description: 直播间是否展示该绑定商品；false 时观看端小黄车不返回该行；库：TINYINT(1)
+        sortOrder:
+          type: integer
+          description: 提交顺序，从 0 起；库：INT
+        soldCount:
+          type: integer
+          format: int64
+          description: 本场已付订单行数（order_status 为 2/3/4/5，按 product_id 对齐 spu；无成交为 0）；库：BIGINT
+    ConsoleProductListData:
+      type: object
+      required:
+        - id
+        - cartEnabled
+        - list
+      properties:
+        id:
+          type: string
+          description: 本站活动 UUID；库：VARCHAR(32)
+          maxLength: 32
+        cartEnabled:
+          type: boolean
+          description: 小黄车总开关。false 时观看端 GET /watch/products 返回空 list；中控台列表仍返回全部绑定行；库：TINYINT(1)
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConsoleProductItem"
+          description: "本场 activity_product 全量，按 sort_order；无绑定为 []"
+    ConsoleProductVisibleRequest:
+      type: object
+      required:
+        - spuId
+        - visible
+      properties:
+        spuId:
+          type: string
+          description: 本场已绑定 spuId；未绑定 → 400「商品未绑定本场」；库：VARCHAR(64)
+          maxLength: 64
+        visible:
+          type: boolean
+          description: true 显示 / false 隐藏；写入 activity_product.visible；库：TINYINT(1)
+    ConsoleProductVisibleData:
+      type: object
+      required:
+        - id
+        - spuId
+        - visible
+      properties:
+        id:
+          type: string
+          description: 本站活动 UUID；库：VARCHAR(32)
+          maxLength: 32
+        spuId:
+          type: string
+          description: 订单中心商品 spuId，十进制字符串；库：VARCHAR(64)
+          maxLength: 64
+        visible:
+          type: boolean
+          description: 更新后的单品展示态；true 显示 / false 隐藏；已写入 activity_product.visible；库：TINYINT(1)
+    ConsoleCartEnabledRequest:
+      type: object
+      required:
+        - enabled
+      properties:
+        enabled:
+          type: boolean
+          description: true 开小黄车 / false 关；写入 activity.cart_enabled；库：TINYINT(1)
+    ConsoleCartEnabledData:
+      type: object
+      required:
+        - id
+        - cartEnabled
+      properties:
+        id:
+          type: string
+          description: 本站活动 UUID；库：VARCHAR(32)
+          maxLength: 32
+        cartEnabled:
+          type: boolean
+          description: 更新后的小黄车总开关；true 开 / false 关；已写入 activity.cart_enabled；库：TINYINT(1)
+    ViewerPhoneData:
+      type: object
+      required:
+        - username
+        - phone
+      properties:
+        username:
+          type: string
+          maxLength: 16
+          description: 观看昵称；库：VARCHAR(16)
+        phone:
+          type: string
+          description: 库内纯数字明文手机号
+    ViewerAppendTagsRequest:
+      type: object
+      required:
+        - usernames
+        - tagIds
+      properties:
+        usernames:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+            maxLength: 16
+          description: 观众 username 列表；须全部存在
+        tagIds:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+            format: int64
+          description: "未软删且 type=1 的手动标签 id"
+    ViewerAppendTagsData:
+      type: object
+      required:
+        - updated
+      properties:
+        updated:
+          type: integer
+          description: 实际有新增标签关系的用户数；库：INT
     OrgDeptNode:
       type: object
       properties:
@@ -10151,6 +11003,78 @@ components:
             data:
               description: 业务数据；失败时可能省略
               $ref: "#/components/schemas/AttendeeListData"
+    ApiResponseConsoleAudienceDetailList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleAudienceDetailListData"
+    ApiResponseConsoleWatchTrade:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleWatchTradeData"
+    ApiResponseConsoleTradeStats:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleTradeStatsData"
+    ApiResponseConsoleTradeTrend:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleTradeTrendData"
+    ApiResponseConsoleProductList:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleProductListData"
+    ApiResponseConsoleProductVisible:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleProductVisibleData"
+    ApiResponseConsoleCartEnabled:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ConsoleCartEnabledData"
+    ApiResponseViewerPhone:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerPhoneData"
+    ApiResponseViewerAppendTags:
+      allOf:
+        - $ref: "#/components/schemas/ApiResponseBase"
+        - type: object
+          properties:
+            data:
+              description: 业务数据；失败时可能省略
+              $ref: "#/components/schemas/ViewerAppendTagsData"
     ApiResponseSales:
       allOf:
         - $ref: "#/components/schemas/ApiResponseBase"

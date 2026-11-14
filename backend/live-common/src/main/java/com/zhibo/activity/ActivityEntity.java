@@ -201,6 +201,13 @@ public class ActivityEntity {
     @Column(name = "playback_fast_forward_allow", nullable = false)
     private Boolean playbackFastForwardAllow = Boolean.TRUE;
 
+    /**
+     * 小黄车总开关。默认 true。
+     * false 时观看端 {@code GET /watch/products} 返回空 list（仍保留绑定）。
+     */
+    @Column(name = "cart_enabled", nullable = false, columnDefinition = "TINYINT")
+    private Boolean cartEnabled = Boolean.TRUE;
+
     @CreationTimestamp
     @Column(name = "created_time", nullable = false, updatable = false)
     private LocalDateTime createdTime;

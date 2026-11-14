@@ -1164,7 +1164,11 @@ public class ActivityService {
     /**
      * 中控台 / 用户运营 · 评论管理嵌微吼聊天审核页（D34 / D110）。
      * 仅 {@code provider=vhall}；他厂由 {@link LiveProviderRegistry#require} 抛 501。
-     * 省略 email/name 时用当前员工 {@code e{id}@qkzb.com} / 姓名（不再默认 assistant@zhibo.local）。
+     * 省略 email/name 时用当前员工 {@code p{id}@qkzb.com} / 姓名。
+     * 禁止传角色 {@code e{id}} 或中控台进房 {@code z{id}}（主持人未必能要 chat-filter；z 会 512569）。
+     * <p>
+     * 先调微吼 {@code get-role-url}（{@code type=3} 助理，邮箱同审核人 {@code p{id}}）确保有助理身份，
+     * 再调 {@code chat-filter}；已是助理等幂等失败只打日志，仍继续取审核页。
      */
     @Transactional(readOnly = true)
     public ActivityChatFilterResponse chatFilter(String id, String email, String name, long operatorId) {
@@ -1174,7 +1178,7 @@ public class ActivityService {
         if (resolvedEmail == null || resolvedName == null) {
             SysUserAccountEntity operator = requireOperator(operatorId);
             if (resolvedEmail == null) {
-                resolvedEmail = PresenceUserIds.staffEmail(operator.getId());
+                resolvedEmail = PresenceUserIds.chatFilterEmail(operator.getId());
             }
             if (resolvedName == null) {
                 String userName = trimToNull(operator.getUserName());
@@ -1184,10 +1188,47 @@ public class ActivityService {
                 }
             }
         }
-        String pageUrl = providerRegistry
-                .require(entity.getProvider())
-                .buildChatFilterUrl(entity.getProviderRoomId(), resolvedEmail, resolvedName);
+        rejectStaffOrConsoleEmailForChatFilter(resolvedEmail);
+        LiveProvider provider = providerRegistry.require(entity.getProvider());
+        ensureChatFilterAssistantRole(provider, entity, resolvedEmail, resolvedName);
+        String pageUrl = provider.buildChatFilterUrl(
+                entity.getProviderRoomId(), resolvedEmail, resolvedName);
         return new ActivityChatFilterResponse(pageUrl);
+    }
+
+    /**
+     * chat-filter 须用专用审核邮箱 {@code p{id}}；角色 {@code e{id}} 与中控台 {@code z{id}} 拒收。
+     */
+    private static void rejectStaffOrConsoleEmailForChatFilter(String email) {
+        String userId = PresenceUserIds.parseEmail(email);
+        if (PresenceUserIds.isConsole(userId) || PresenceUserIds.isStaff(userId)) {
+            throw new IllegalArgumentException(
+                    "评论审核须用审核邮箱 p{员工id}@qkzb.com，勿传角色 e{员工id}@qkzb.com 或中控台进房 z{员工id}@qkzb.com");
+        }
+    }
+
+    /**
+     * 中控台 chat-filter 前先把审核人设为微吼助理（get-role-url type=3）。
+     * 丢弃 page_url；已是助理等云侧幂等失败只 warn，仍让后续 chat-filter 尝试。
+     */
+    private void ensureChatFilterAssistantRole(
+            LiveProvider provider, ActivityEntity entity, String email, String nickname) {
+        String roomId = trimToNull(entity.getProviderRoomId());
+        if (roomId == null) {
+            return;
+        }
+        String nick = nickname;
+        if (nick != null && nick.length() > VHALL_NICKNAME_MAX) {
+            nick = nick.substring(0, VHALL_NICKNAME_MAX);
+        }
+        try {
+            provider.buildRoleJoinUrl(
+                    roomId, ActivityMemberRole.ASSISTANT.getCode(), email, nick, null);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "chat-filter 前置 get-role-url 助理失败（可能已是助理），继续 chat-filter: roomId={}, email={}, msg={}",
+                    roomId, email, ex.getMessage());
+        }
     }
 
     private SysUserAccountEntity requireOperator(long operatorId) {
@@ -2108,6 +2149,13 @@ public class ActivityService {
     }
 
     private void replaceProducts(String activityId, List<ProductSnap> products) {
+        // 全量覆盖前保留已有可见性，避免中控台/直播设置改绑把「隐藏」冲掉
+        Map<String, Boolean> previousVisible = productRepository.findByActivityIds(List.of(activityId)).stream()
+                .collect(Collectors.toMap(
+                        row -> row.getId().getSpuId(),
+                        row -> row.getVisible() == null || Boolean.TRUE.equals(row.getVisible()),
+                        (a, b) -> a,
+                        LinkedHashMap::new));
         productRepository.deleteByIdActivityId(activityId);
         if (products.isEmpty()) {
             return;
@@ -2119,6 +2167,7 @@ public class ActivityService {
             row.setId(new ActivityProductId(activityId, product.spuId()));
             row.setProductName(product.productName());
             row.setSortOrder(order++);
+            row.setVisible(previousVisible.getOrDefault(product.spuId(), Boolean.TRUE));
             rows.add(row);
         }
         productRepository.saveAll(rows);
