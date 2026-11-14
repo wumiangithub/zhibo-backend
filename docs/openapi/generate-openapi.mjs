@@ -2497,6 +2497,162 @@ function buildAdmin() {
         },
       },
     },
+    ConsoleAudienceDetailItem: {
+      type: 'object',
+      required: [
+        'username',
+        'nickname',
+        'firstEnterTime',
+        'latestEnterTime',
+        'liveWatchDurationSec',
+        'replayWatchDurationSec',
+        'totalWatchDurationSec',
+        'enterCount',
+        'online',
+        'productClickCount',
+        'pendingPayCount',
+        'purchaseCount',
+        'totalPurchaseCount',
+        'totalPurchaseAmount',
+        'commentCount',
+        'couponReceiveCount',
+      ],
+      properties: {
+        username: {
+          type: 'string',
+          maxLength: 16,
+          description: '用户中心 viewer.username（D118）',
+        },
+        nickname: { type: 'string', description: '通则 · 观众展示昵称' },
+        avatarUrl: { type: 'string' },
+        phoneMasked: {
+          type: 'string',
+          description: '脱敏手机号；无手机则省略。明文见 GET /viewers/phone/{id}',
+        },
+        followerName: {
+          type: 'string',
+          description: '本场员工邀请人姓名；无邀请人则省略',
+        },
+        followerEmployeeId: {
+          type: 'integer',
+          format: 'int64',
+          description: '邀请人员工账号 id；无则省略',
+        },
+        firstEnterTime: {
+          type: 'string',
+          description: '本场最早一次 Join，yyyy-MM-dd HH:mm:ss',
+        },
+        latestEnterTime: {
+          type: 'string',
+          description: '本场最晚一次 Join，yyyy-MM-dd HH:mm:ss',
+        },
+        liveWatchDurationSec: {
+          type: 'integer',
+          description: '直播观看时长秒数（D85/D119）',
+        },
+        replayWatchDurationSec: {
+          type: 'integer',
+          description: '回放观看时长秒数',
+        },
+        totalWatchDurationSec: {
+          type: 'integer',
+          description: '累计观看秒数 = 直播 + 回放',
+        },
+        leaveTime: {
+          type: 'string',
+          description: '全部连接闭合后的最晚 Leave；在线则省略',
+        },
+        enterCount: {
+          type: 'integer',
+          description: '本场 Join 事件条数（只算进）',
+        },
+        online: {
+          type: 'boolean',
+          description: '是否在线；活动 state 为 3/4/5 时恒 false',
+        },
+        productClickCount: {
+          type: 'integer',
+          description: '本场 activity_product_click 行数',
+        },
+        pendingPayCount: {
+          type: 'integer',
+          description: '本场 order_status=1 订单数',
+        },
+        purchaseCount: {
+          type: 'integer',
+          description: '本场已付订单数（order_status 2/3/4/5）',
+        },
+        totalPurchaseCount: {
+          type: 'integer',
+          description: '全活动已付订单笔数',
+        },
+        totalPurchaseAmount: {
+          type: 'string',
+          description: '全活动已付金额，两位小数字符串，如 "0.00"',
+        },
+        commentCount: {
+          type: 'integer',
+          description: '本场未软删聊天+提问条数（不计券/图）',
+        },
+        couponReceiveCount: {
+          type: 'integer',
+          description: '领券次数；本轮恒 0',
+        },
+      },
+    },
+    ConsoleAudienceDetailListData: {
+      type: 'object',
+      required: ['page', 'pageSize', 'total', 'list'],
+      properties: {
+        page: { type: 'integer' },
+        pageSize: { type: 'integer' },
+        total: { type: 'integer', format: 'int64' },
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ConsoleAudienceDetailItem' },
+        },
+      },
+    },
+    ViewerPhoneData: {
+      type: 'object',
+      required: ['username', 'phone'],
+      properties: {
+        username: { type: 'string', maxLength: 16 },
+        phone: {
+          type: 'string',
+          description: '库内纯数字明文手机号',
+        },
+      },
+    },
+    ViewerAppendTagsRequest: {
+      type: 'object',
+      required: ['usernames', 'tagIds'],
+      properties: {
+        usernames: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 100,
+          items: { type: 'string', maxLength: 16 },
+          description: '观众 username 列表；须全部存在',
+        },
+        tagIds: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'integer', format: 'int64' },
+          description: '未软删且 type=1 的手动标签 id',
+        },
+      },
+    },
+    ViewerAppendTagsData: {
+      type: 'object',
+      required: ['updated'],
+      properties: {
+        updated: {
+          type: 'integer',
+          description: '实际有新增标签关系的用户数',
+        },
+      },
+    },
     OrgDeptNode: {
       type: 'object',
       properties: {
@@ -4493,6 +4649,13 @@ function buildAdmin() {
     ApiResponseOnlineTrend: { $ref: '#/components/schemas/OnlineTrend' },
     ApiResponsePresenceTrend: { $ref: '#/components/schemas/PresenceTrend' },
     ApiResponseAttendeeList: { $ref: '#/components/schemas/AttendeeListData' },
+    ApiResponseConsoleAudienceDetailList: {
+      $ref: '#/components/schemas/ConsoleAudienceDetailListData',
+    },
+    ApiResponseViewerPhone: { $ref: '#/components/schemas/ViewerPhoneData' },
+    ApiResponseViewerAppendTags: {
+      $ref: '#/components/schemas/ViewerAppendTagsData',
+    },
     ApiResponseSales: { $ref: '#/components/schemas/SalesSettingsData' },
     ApiResponseShelf: { $ref: '#/components/schemas/ShelfData' },
     ApiResponseAuditSubmit: { $ref: '#/components/schemas/AuditSubmitData' },
@@ -5830,6 +5993,171 @@ function buildAdmin() {
           { name: 'keyword', in: 'query', schema: { type: 'string' } },
         ],
         responses: ok200('#/components/schemas/ApiResponseAttendeeList'),
+      },
+    },
+    '/api/v1/activities/console/audience-details/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台观众明细列表',
+        description:
+          '中控台页最底通栏「观众明细」（D123）。名单=本活动有进出流水的观众；指标多表聚合。' +
+          'admin JWT。不要与左侧 attendees 名单混淆。领券次数本轮恒 0。',
+        operationId: 'listConsoleAudienceDetails',
+        security: bearer,
+        parameters: [
+          activityId,
+          ...pageParams,
+          {
+            name: 'keywordType',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['nickname', 'username', 'phone'],
+              default: 'nickname',
+            },
+            description: '用户关键字类型，同用户运营',
+          },
+          {
+            name: 'keyword',
+            in: 'query',
+            schema: { type: 'string' },
+            description: '用户关键字；空不过滤',
+          },
+          {
+            name: 'onlineStatus',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['all', 'online', 'offline'],
+              default: 'all',
+            },
+            description: '在线状态筛选',
+          },
+          {
+            name: 'followerKeyword',
+            in: 'query',
+            schema: { type: 'string' },
+            description: '跟进人姓名包含；空不过滤',
+          },
+          {
+            name: 'sort',
+            in: 'query',
+            schema: {
+              type: 'string',
+              default: 'latestEnterTime',
+              description:
+                '单列排序字段：firstEnterTime / latestEnterTime / liveWatchDuration / replayWatchDuration / totalWatchDuration / leaveTime / enterCount / online / productClickCount / pendingPayCount / purchaseCount / totalPurchaseCount / totalPurchaseAmount / commentCount / couponReceiveCount',
+            },
+          },
+          {
+            name: 'order',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['asc', 'desc'],
+              default: 'desc',
+            },
+          },
+        ],
+        responses: ok200(
+          '#/components/schemas/ApiResponseConsoleAudienceDetailList',
+        ),
+      },
+    },
+    '/api/v1/activities/console/audience-details/export/{id}': {
+      get: {
+        tags: ['直播中控台'],
+        summary: '中控台观众明细导出 CSV',
+        description:
+          '按与 list 相同的筛选导出 UTF-8 BOM CSV，不分页（D123）。手机号列为脱敏。admin JWT。',
+        operationId: 'exportConsoleAudienceDetails',
+        security: bearer,
+        parameters: [
+          activityId,
+          {
+            name: 'keywordType',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['nickname', 'username', 'phone'],
+              default: 'nickname',
+            },
+          },
+          { name: 'keyword', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'onlineStatus',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['all', 'online', 'offline'],
+              default: 'all',
+            },
+          },
+          { name: 'followerKeyword', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'sort',
+            in: 'query',
+            schema: { type: 'string', default: 'latestEnterTime' },
+          },
+          {
+            name: 'order',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['asc', 'desc'],
+              default: 'desc',
+            },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'CSV 文件',
+            content: {
+              'text/csv': { schema: { type: 'string', format: 'binary' } },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/viewers/phone/{id}': {
+      get: {
+        tags: ['用户管理'],
+        summary: '查看观众手机明文',
+        description:
+          '管理端员工 JWT。路径 id 为 viewer.username。列表只回脱敏号；点锁调本接口取明文（D123）。' +
+          '无用户 → 400「用户不存在」；无手机 → 400「未绑定手机号」。',
+        operationId: 'getViewerPhonePlain',
+        security: bearer,
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { ...VIEWER_USERNAME },
+            description: '用户中心 viewer.username（路径 {id}，D118）',
+          },
+        ],
+        responses: ok200('#/components/schemas/ApiResponseViewerPhone'),
+      },
+    },
+    '/api/v1/viewers/append-tags': {
+      post: {
+        tags: ['用户管理'],
+        summary: '批量追加手动标签',
+        description:
+          '给多名观众追加手动标签，保留已有手动与自动标签（D123）。' +
+          'usernames 1～100 且须全部存在；tagIds 须为未软删 type=1。成功 data.updated 为实际有新增关系的用户数。',
+        operationId: 'appendViewerTags',
+        security: bearer,
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ViewerAppendTagsRequest' },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseViewerAppendTags'),
       },
     },
     '/api/v1/employees': {
@@ -8857,6 +9185,13 @@ function buildLive() {
       $ref: '#/components/schemas/WatchQuestionHistoryData',
     },
     ApiResponseAttendeeList: { $ref: '#/components/schemas/AttendeeListData' },
+    ApiResponseConsoleAudienceDetailList: {
+      $ref: '#/components/schemas/ConsoleAudienceDetailListData',
+    },
+    ApiResponseViewerPhone: { $ref: '#/components/schemas/ViewerPhoneData' },
+    ApiResponseViewerAppendTags: {
+      $ref: '#/components/schemas/ViewerAppendTagsData',
+    },
     ApiResponsePresenceTrend: { $ref: '#/components/schemas/PresenceTrend' },
     ApiResponseChatFilter: { $ref: '#/components/schemas/ChatFilterData' },
 

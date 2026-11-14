@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +35,7 @@ public class AuthService {
     private final JwtTokenService jwtTokenService;
     private final WechatOAuthClient wechatOAuthClient;
     private final AuthProperties authProperties;
+    private final Environment environment;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public AuthService(
@@ -43,7 +46,8 @@ public class AuthService {
             LoginStateStore loginStateStore,
             JwtTokenService jwtTokenService,
             WechatOAuthClient wechatOAuthClient,
-            AuthProperties authProperties) {
+            AuthProperties authProperties,
+            Environment environment) {
         this.captchaService = captchaService;
         this.passwordCryptoService = passwordCryptoService;
         this.replayGuard = replayGuard;
@@ -52,6 +56,7 @@ public class AuthService {
         this.jwtTokenService = jwtTokenService;
         this.wechatOAuthClient = wechatOAuthClient;
         this.authProperties = authProperties;
+        this.environment = environment;
     }
 
     public CaptchaResponse captcha() {
@@ -194,6 +199,40 @@ public class AuthService {
         return false;
     }
 
+    /**
+     * 仅 local / test 且配置开启时生效；uat / prod 即使误配也不模拟扫码成功。
+     */
+    private boolean mockScanSuccessActive() {
+        if (!authProperties.getWechat().isMockScanSuccess()) {
+            return false;
+        }
+        if (!environment.acceptsProfiles(Profiles.of("local", "test"))) {
+            log.warn("当前环境忽略 WECHAT_MOCK_SCAN_SUCCESS（仅 local/test 生效）");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 测试权宜：不等微信回调，把已通过账号密码校验的 pending state 直接标成功。
+     * 真实回调仍走 {@link #handleWechatCallback}；关闭 WECHAT_MOCK_SCAN_SUCCESS 后本方法不会被调用。
+     */
+    private LoginStateStore.State mockScanSuccess(String state, LoginStateStore.State session) {
+        Optional<SysUserAccountEntity> userOpt = userRepository.findById(session.getUserId());
+        if (userOpt.isEmpty()
+                || userOpt.get().getRsStatus() == null
+                || userOpt.get().getRsStatus() != 1) {
+            loginStateStore.markFailed(state, "账号不存在或已停用");
+            log.warn("微信扫码轮询按配置直接返回失败（账号不可用，未走真实回调）: stateUserId={}",
+                    session.getUserId());
+            return loginStateStore.get(state);
+        }
+        SysUserAccountEntity user = userOpt.get();
+        markSuccess(state, user);
+        log.info("微信扫码轮询按配置直接返回成功（未走真实回调）: userId={}", user.getId());
+        return loginStateStore.get(state);
+    }
+
     private void markSuccess(String state, SysUserAccountEntity user) {
         AuthUserResponse profile = toUserResponse(user);
         String accessToken = issueAccess(user);
@@ -216,6 +255,13 @@ public class AuthService {
         if (session == null) {
             resp.setStatus(3);
             return resp;
+        }
+        if (session.getStatus() == LoginStateStore.Status.PENDING && mockScanSuccessActive()) {
+            session = mockScanSuccess(state, session);
+            if (session == null) {
+                resp.setStatus(3);
+                return resp;
+            }
         }
         return switch (session.getStatus()) {
             case PENDING -> {

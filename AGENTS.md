@@ -82,6 +82,10 @@ Cursor 做派给「后端」的待办；Grok bot 做派给「后端（Grok）」
 
 需要再开服务时，等用户明确说「启动 / 重启」再动手。
 
+## Spring 环境与启动（强制）
+
+默认 profile 是 `local`，只给本机开发用。测试 / 预发 / 生产启动 `admin-service` 或 `live-service` 时，必须分别带 `--spring.profiles.active=test|uat|prod`（或 `SPRING_PROFILES_ACTIVE` 同值），**禁止沿用默认 `local`**。否则生产也会走模拟扫码登录。环境名是 `prod`，不要写 `production`。详见 `../zhibo-shared/docs/Spring环境与启动.md`。
+
 ## 依赖版本（D36，强制）
 
 - `pom.xml`：**禁止**版本区间、`LATEST`、`RELEASE`；Spring Boot parent 与显式依赖都写死具体版本（含补丁号）。

@@ -1,5 +1,6 @@
 package com.zhibo.admin.viewer;
 
+import com.zhibo.admin.viewer.dto.AppendViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.LearningCourseListItem;
 import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
 import com.zhibo.admin.viewer.dto.LearningSummaryListItem;
@@ -8,6 +9,7 @@ import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListItem;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
+import com.zhibo.admin.viewer.dto.ViewerPhoneResponse;
 import com.zhibo.course.CourseCatalogContentKind;
 import com.zhibo.course.CourseCatalogNodeEntity;
 import com.zhibo.course.CourseCatalogNodeRepository;
@@ -494,6 +496,76 @@ public class ViewerAdminService {
         return res;
     }
 
+    /** 点锁看明文手机（D123）。 */
+    @Transactional(readOnly = true)
+    public ViewerPhoneResponse getPhonePlain(String username) {
+        ViewerEntity viewer = requireViewerForPhone(username);
+        String phone = viewer.getPhone();
+        if (phone == null || phone.isBlank()) {
+            throw new IllegalArgumentException("未绑定手机号");
+        }
+        return new ViewerPhoneResponse(viewer.getUsername(), phone.trim());
+    }
+
+    /**
+     * 批量追加手动标签（D123）：保留已有手动与自动；只插入尚未拥有的关系。
+     *
+     * @return 实际有新增关系的用户数
+     */
+    @Transactional
+    public AppendViewerTagsResponse appendTags(List<String> usernames, List<Long> tagIds) {
+        List<String> users = normalizeUsernames(usernames);
+        List<Long> requested = normalizeTagIds(tagIds);
+        if (requested.isEmpty()) {
+            throw new IllegalArgumentException("tagIds 不能为空");
+        }
+        Map<Long, ViewerTagEntity> tagMap = loadActiveTags(requested);
+        for (Long tagId : requested) {
+            ViewerTagEntity tag = tagMap.get(tagId);
+            if (tag == null) {
+                throw new IllegalArgumentException("标签不存在: " + tagId);
+            }
+            if (tag.getType() != ViewerTagType.MANUAL) {
+                throw new IllegalArgumentException("仅可粘贴手动标签");
+            }
+        }
+
+        Map<String, ViewerEntity> viewers = viewerRepository.findByUsernameIn(users).stream()
+                .collect(Collectors.toMap(ViewerEntity::getUsername, v -> v, (a, b) -> a));
+        for (String u : users) {
+            if (!viewers.containsKey(u)) {
+                throw new IllegalArgumentException("用户不存在: " + u);
+            }
+        }
+
+        Map<String, Set<Long>> existingByUser = new HashMap<>();
+        for (ViewerTagMemberEntity m : viewerTagMemberRepository.findByUsernameIn(users)) {
+            existingByUser.computeIfAbsent(m.getUsername(), k -> new HashSet<>()).add(m.getTagId());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int updated = 0;
+        for (String u : users) {
+            Set<Long> have = existingByUser.getOrDefault(u, Set.of());
+            boolean changed = false;
+            for (Long tagId : requested) {
+                if (have.contains(tagId)) {
+                    continue;
+                }
+                ViewerTagMemberEntity row = new ViewerTagMemberEntity();
+                row.setTagId(tagId);
+                row.setUsername(u);
+                row.setCreatedTime(now);
+                viewerTagMemberRepository.save(row);
+                changed = true;
+            }
+            if (changed) {
+                updated++;
+            }
+        }
+        return new AppendViewerTagsResponse(updated);
+    }
+
     /**
      * 本轮消费恒 0：min&gt;0 或 max&lt;0 则无命中。
      */
@@ -770,6 +842,39 @@ public class ViewerAdminService {
         return viewerRepository
                 .findByUsername(username.trim())
                 .orElseThrow(() -> new IllegalArgumentException("观众不存在"));
+    }
+
+    private ViewerEntity requireViewerForPhone(String username) {
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+        return viewerRepository
+                .findByUsername(username.trim())
+                .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+    }
+
+    private static List<String> normalizeUsernames(List<String> usernames) {
+        if (usernames == null || usernames.isEmpty()) {
+            throw new IllegalArgumentException("usernames 不能为空");
+        }
+        LinkedHashMap<String, Boolean> uniq = new LinkedHashMap<>();
+        for (String raw : usernames) {
+            if (raw == null || raw.isBlank()) {
+                throw new IllegalArgumentException("usernames 含空值");
+            }
+            String u = raw.trim();
+            if (u.length() > 16) {
+                throw new IllegalArgumentException("username 无效: " + u);
+            }
+            uniq.put(u, Boolean.TRUE);
+        }
+        if (uniq.isEmpty()) {
+            throw new IllegalArgumentException("usernames 不能为空");
+        }
+        if (uniq.size() > 100) {
+            throw new IllegalArgumentException("usernames 最多 100 个");
+        }
+        return new ArrayList<>(uniq.keySet());
     }
 
     private static void requireFlag(int value, String field) {

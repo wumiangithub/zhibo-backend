@@ -1,0 +1,5 @@
+# 测试环境：微信回调目前打到对方 Java 8，本服务收不到。
+# 账号密码通过后，login/query 直接返回扫码成功。走真实回调时设 WECHAT_MOCK_SCAN_SUCCESS=false。
+auth:
+  wechat:
+    mock-scan-success: ${WECHAT_MOCK_SCAN_SUCCESS:true}

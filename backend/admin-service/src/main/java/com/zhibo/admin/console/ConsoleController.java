@@ -2,6 +2,7 @@ package com.zhibo.admin.console;
 
 import com.zhibo.admin.auth.AuthException;
 import com.zhibo.admin.auth.AuthInterceptor;
+import com.zhibo.admin.console.dto.ConsoleAudienceDetailListResponse;
 import com.zhibo.admin.console.dto.ConsoleCouponHistoryResponse;
 import com.zhibo.admin.console.dto.ConsoleQuestionHistoryResponse;
 import com.zhibo.admin.console.dto.ConsoleSdkSignResponse;
@@ -11,6 +12,9 @@ import com.zhibo.admin.console.dto.ConsoleSummaryResponse;
 import com.zhibo.admin.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +35,7 @@ public class ConsoleController {
 
     private final ConsoleService consoleService;
     private final ConsoleCouponService consoleCouponService;
+    private final ConsoleAudienceDetailService audienceDetailService;
 
     @GetMapping("/summary/{id}")
     public ApiResponse<ConsoleSummaryResponse> summary(@PathVariable String id) {
@@ -67,6 +72,48 @@ public class ConsoleController {
     @GetMapping("/coupon-history/{id}")
     public ApiResponse<ConsoleCouponHistoryResponse> couponHistory(@PathVariable String id) {
         return ApiResponse.ok(consoleCouponService.history(id));
+    }
+
+    /** 中控台底部观众明细列表（D123）。 */
+    @GetMapping("/audience-details/{id}")
+    public ApiResponse<ConsoleAudienceDetailListResponse> audienceDetails(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String onlineStatus,
+            @RequestParam(required = false) String followerKeyword,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        return ApiResponse.ok(audienceDetailService.list(
+                id,
+                page,
+                pageSize,
+                keywordType,
+                keyword,
+                onlineStatus,
+                followerKeyword,
+                sort,
+                order));
+    }
+
+    /** 观众明细按筛选导出 CSV（D123）。 */
+    @GetMapping("/audience-details/export/{id}")
+    public ResponseEntity<byte[]> audienceDetailsExport(
+            @PathVariable String id,
+            @RequestParam(required = false) String keywordType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String onlineStatus,
+            @RequestParam(required = false) String followerKeyword,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String order) {
+        byte[] body = audienceDetailService.exportCsv(
+                id, keywordType, keyword, onlineStatus, followerKeyword, sort, order);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"audience-details.csv\"")
+                .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+                .body(body);
     }
 
     private static long currentUserId(HttpServletRequest request) {

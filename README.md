@@ -25,6 +25,14 @@ java -jar live-service\target\live-service-1.0.0.jar
 
 `admin-service` → 8081，`live-service` → 8082。
 
+本机可省略 Spring profile（默认 `local`）。测试 / 预发 / 生产启动时必须分别带 `--spring.profiles.active=test|uat|prod`，**禁止沿用默认 `local`**，否则生产也会走模拟扫码登录。例如：
+
+```bat
+java -jar admin-service\target\admin-service-1.0.0.jar --spring.profiles.active=test
+```
+
+完整说明：`../zhibo-shared/docs/Spring环境与启动.md`。
+
 若提示找不到 `java`：
 
 ```bat

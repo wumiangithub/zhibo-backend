@@ -47,6 +47,12 @@ public class AuthProperties {
          * 默认 false（正式：未绑定仍提示联系管理员）。勿在生产开启。
          */
         private boolean allowSelfBind = false;
+        /**
+         * 为 true 时，账号密码已通过的 pending state，login/query 直接返回扫码成功，不依赖微信回调。
+         * 测试环境回调目前打到对方 Java 8，本服务收不到。走真实回调时改为 false。生产必须为 false。
+         * Java 字段默认 false，避免单测误开；运行时默认见 application.yml / WECHAT_MOCK_SCAN_SUCCESS。
+         */
+        private boolean mockScanSuccess = false;
     }
 
     public boolean passwordAesKeyMissing() {

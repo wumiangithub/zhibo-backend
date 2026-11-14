@@ -51,4 +51,18 @@ public interface ActivityOrderRepository extends JpaRepository<ActivityOrderEnti
     @Query("SELECT o.orderNo, o.productId FROM ActivityOrderEntity o "
             + "WHERE o.activityId = :activityId AND o.orderNo IS NOT NULL")
     List<Object[]> findOrderNoAndProductIdByActivityId(@Param("activityId") String activityId);
+
+    /** 本场按用户×状态聚合订单笔数（观众明细：待支付 / 本场购买）。 */
+    @Query("SELECT o.username, o.orderStatus, COUNT(o) FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.username IN :usernames "
+            + "GROUP BY o.username, o.orderStatus")
+    List<Object[]> countByActivityUsernameAndStatus(
+            @Param("activityId") String activityId, @Param("usernames") Collection<String> usernames);
+
+    /** 全活动已付：按用户聚合笔数与金额（观众明细累计购买）。 */
+    @Query("SELECT o.username, COUNT(o), COALESCE(SUM(o.payAmount), 0) FROM ActivityOrderEntity o "
+            + "WHERE o.username IN :usernames AND o.orderStatus IN :statuses GROUP BY o.username")
+    List<Object[]> aggregatePaidByUsernames(
+            @Param("usernames") Collection<String> usernames,
+            @Param("statuses") Collection<Integer> statuses);
 }

@@ -13,5 +13,7 @@ public interface ActivityAudienceRepository
 
     List<ActivityAudienceEntity> findByActivityIdAndUsernameIn(String activityId, Collection<String> usernames);
 
+    List<ActivityAudienceEntity> findByActivityId(String activityId);
+
     long countByActivityId(String activityId);
 }

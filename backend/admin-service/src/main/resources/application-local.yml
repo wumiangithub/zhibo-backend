@@ -4,3 +4,8 @@ logging:
 
 vhall:
   fail-on-missing-credentials: false
+
+# 本地开发：账号密码通过后，login/query 直接返回扫码成功。走真实回调时设 WECHAT_MOCK_SCAN_SUCCESS=false。
+auth:
+  wechat:
+    mock-scan-success: ${WECHAT_MOCK_SCAN_SUCCESS:true}

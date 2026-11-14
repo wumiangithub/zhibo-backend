@@ -1,0 +1,4 @@
+# 预发：走真实微信回调。即使误配 WECHAT_MOCK_SCAN_SUCCESS=true，代码侧也不会模拟扫码成功。
+auth:
+  wechat:
+    mock-scan-success: ${WECHAT_MOCK_SCAN_SUCCESS:false}

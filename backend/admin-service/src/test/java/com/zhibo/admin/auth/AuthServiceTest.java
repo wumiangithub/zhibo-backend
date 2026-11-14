@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,6 +48,8 @@ class AuthServiceTest {
     private SysUserAccountRepository userRepository;
     @Mock
     private WechatOAuthClient wechatOAuthClient;
+    @Mock
+    private Environment environment;
 
     private PasswordCryptoService passwordCrypto;
     private AuthProperties properties;
@@ -73,9 +77,11 @@ class AuthServiceTest {
                 new LoginStateStore(clock),
                 jwtTokenService,
                 wechatOAuthClient,
-                properties);
+                properties,
+                environment);
 
         lenient().doNothing().when(captchaService).verifyAndConsume(anyString(), anyString());
+        lenient().when(environment.acceptsProfiles(any(Profiles.class))).thenReturn(true);
     }
 
     @Test
@@ -292,6 +298,70 @@ class AuthServiceTest {
 
         AuthException ex = assertThrows(AuthException.class, () -> authService.refresh(request));
         assertEquals(403, ex.getCode());
+    }
+
+    @Test
+    void query_mockScanSuccess_returnsTokensWithoutCallback() {
+        properties.getWechat().setMockScanSuccess(true);
+        SysUserAccountEntity user = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        when(userRepository.findByUserAccount("admin")).thenReturn(Optional.of(user));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        LoginPendingResponse pending = authService.login(buildLogin("admin", "pass123"));
+        LoginQueryResponse query = authService.query(pending.getState());
+
+        assertEquals(1, query.getStatus());
+        assertNotNull(query.getAccessToken());
+        assertNotNull(query.getRefreshToken());
+        assertEquals(1L, query.getUser().getId());
+        verify(wechatOAuthClient, never()).exchangeCode(anyString());
+    }
+
+    @Test
+    void query_pending_withoutMock_staysPending() {
+        properties.getWechat().setMockScanSuccess(false);
+        SysUserAccountEntity user = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        when(userRepository.findByUserAccount("admin")).thenReturn(Optional.of(user));
+
+        LoginPendingResponse pending = authService.login(buildLogin("admin", "pass123"));
+        LoginQueryResponse query = authService.query(pending.getState());
+
+        assertEquals(0, query.getStatus());
+        assertNull(query.getAccessToken());
+        verify(wechatOAuthClient, never()).exchangeCode(anyString());
+    }
+
+    @Test
+    void query_mockScanSuccess_ignoredOnProdProfile() {
+        properties.getWechat().setMockScanSuccess(true);
+        when(environment.acceptsProfiles(any(Profiles.class))).thenReturn(false);
+        SysUserAccountEntity user = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        when(userRepository.findByUserAccount("admin")).thenReturn(Optional.of(user));
+
+        LoginPendingResponse pending = authService.login(buildLogin("admin", "pass123"));
+        LoginQueryResponse query = authService.query(pending.getState());
+
+        assertEquals(0, query.getStatus());
+        assertNull(query.getAccessToken());
+        verify(wechatOAuthClient, never()).exchangeCode(anyString());
+    }
+
+    @Test
+    void query_mockScanSuccess_disabledAccount_marksFailed() {
+        properties.getWechat().setMockScanSuccess(true);
+        SysUserAccountEntity user = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        when(userRepository.findByUserAccount("admin")).thenReturn(Optional.of(user));
+        SysUserAccountEntity disabled = activeUser(1L, "admin", "pass123", "oid-1", "uid-1");
+        disabled.setRsStatus(0);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(disabled));
+
+        LoginPendingResponse pending = authService.login(buildLogin("admin", "pass123"));
+        LoginQueryResponse query = authService.query(pending.getState());
+
+        assertEquals(2, query.getStatus());
+        assertEquals("账号不存在或已停用", query.getErrorMsg());
+        assertNull(query.getAccessToken());
+        verify(wechatOAuthClient, never()).exchangeCode(anyString());
     }
 
     private String expiredAccess(long userId, String account) {

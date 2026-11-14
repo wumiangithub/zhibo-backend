@@ -72,6 +72,10 @@ auth:
     open-redirect-uri: ${WECHAT_OPEN_REDIRECT_URI:}
     # 本地可开：未绑定账号扫码写库绑定；默认 false（正式行为）
     allow-self-bind: ${AUTH_WECHAT_ALLOW_SELF_BIND:false}
+    # 默认 false。各环境默认值见 application-local/test/uat/prod.yml，也可用 WECHAT_MOCK_SCAN_SUCCESS 覆盖。
+    # 仅 spring profile=local / test 会生效；uat / prod 即使误配为 true 也不走模拟扫码。
+    # 【强制】测试/预发/生产启动必须带 --spring.profiles.active=test|uat|prod，禁止沿用默认 local（否则生产也会模拟扫码）。
+    mock-scan-success: ${WECHAT_MOCK_SCAN_SUCCESS:false}
 # 账号直登接口 /api/v1/auth/dev-account-login 仅在 spring profile=local 或 test 时开放（容器默认 profile 为 local）
 
 # OMS 只读库（直播带货「成功退款金额」）。缺密码则不建连接，该列置 0.00，不拒启动。

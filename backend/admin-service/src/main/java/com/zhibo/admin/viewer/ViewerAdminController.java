@@ -1,5 +1,7 @@
 package com.zhibo.admin.viewer;
 
+import com.zhibo.admin.viewer.dto.AppendViewerTagsRequest;
+import com.zhibo.admin.viewer.dto.AppendViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.LearningCourseListResponse;
 import com.zhibo.admin.viewer.dto.LearningSummaryListResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistRequest;
@@ -7,6 +9,7 @@ import com.zhibo.admin.viewer.dto.UpdateViewerBlacklistResponse;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsRequest;
 import com.zhibo.admin.viewer.dto.UpdateViewerTagsResponse;
 import com.zhibo.admin.viewer.dto.ViewerListResponse;
+import com.zhibo.admin.viewer.dto.ViewerPhoneResponse;
 import com.zhibo.admin.web.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
@@ -14,6 +17,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -128,5 +132,19 @@ public class ViewerAdminController {
     public ApiResponse<UpdateViewerTagsResponse> updateTags(
             @PathVariable String username, @Valid @RequestBody UpdateViewerTagsRequest request) {
         return ApiResponse.ok(viewerAdminService.updateTags(username, request.getTagIds()));
+    }
+
+    /** 点锁看明文手机；路径 id = viewer.username（D123）。 */
+    @GetMapping("/phone/{id}")
+    public ApiResponse<ViewerPhoneResponse> phone(@PathVariable("id") String id) {
+        return ApiResponse.ok(viewerAdminService.getPhonePlain(id));
+    }
+
+    /** 批量追加手动标签（D123）。 */
+    @PostMapping("/append-tags")
+    public ApiResponse<AppendViewerTagsResponse> appendTags(
+            @Valid @RequestBody AppendViewerTagsRequest request) {
+        return ApiResponse.ok(
+                viewerAdminService.appendTags(request.getUsernames(), request.getTagIds()));
     }
 }
