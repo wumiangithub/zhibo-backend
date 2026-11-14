@@ -43,4 +43,12 @@ public interface ActivityOrderRepository extends JpaRepository<ActivityOrderEnti
     List<Object[]> aggregatePaidByProduct(
             @Param("activityId") String activityId,
             @Param("statuses") Collection<Integer> statuses);
+
+    /**
+     * 本场全部订单的订单号与商品，用于对接 OMS 成功退款金额。不限订单状态（已全额退款也要计入）。
+     * {@code product_id} 为空的行无法对上带货表的 spu，调用方可跳过。
+     */
+    @Query("SELECT o.orderNo, o.productId FROM ActivityOrderEntity o "
+            + "WHERE o.activityId = :activityId AND o.orderNo IS NOT NULL")
+    List<Object[]> findOrderNoAndProductIdByActivityId(@Param("activityId") String activityId);
 }

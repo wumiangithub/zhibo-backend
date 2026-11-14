@@ -99,11 +99,27 @@ class AudienceAttributeServiceTest {
         AttributeAudienceRequest req = new AttributeAudienceRequest();
         req.setInviterId(34L);
         req.setInviterKind("audience");
+        req.setUsername("inviter_user");
 
         IllegalArgumentException ex =
                 assertThrows(
                         IllegalArgumentException.class, () -> service.attribute(AID, "12", req));
         assertEquals("不记录观众邀请", ex.getMessage());
+        verify(audienceRepository, never()).save(any());
+    }
+
+    @Test
+    void attribute_audience_requiresInviterUsername() {
+        stubActivityAndViewer();
+
+        AttributeAudienceRequest req = new AttributeAudienceRequest();
+        req.setInviterId(34L);
+        req.setInviterKind("audience");
+
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class, () -> service.attribute(AID, "12", req));
+        assertEquals("观众邀请须传邀请人 username", ex.getMessage());
         verify(audienceRepository, never()).save(any());
     }
 

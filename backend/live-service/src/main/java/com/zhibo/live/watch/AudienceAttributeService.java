@@ -119,6 +119,10 @@ public class AudienceAttributeService {
 
         String kind = normalizeKind(request.getInviterKind());
         if (KIND_AUDIENCE.equals(kind)) {
+            String inviterUsername = request.getUsername() == null ? "" : request.getUsername().trim();
+            if (inviterUsername.isEmpty()) {
+                throw new IllegalArgumentException("观众邀请须传邀请人 username");
+            }
             throw new IllegalArgumentException("不记录观众邀请");
         }
         if (!KIND_EMPLOYEE.equals(kind)) {

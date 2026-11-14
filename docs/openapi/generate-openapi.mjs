@@ -599,7 +599,39 @@ const FIELD_DESC_BY_PATH = {
   'ActivityAudienceListItem.username': '用户中心 viewer.username（D118）',
   'ActivityAudienceCommentItem.username': '发言观众 viewer.username（D118）',
   'WatchAudienceAttributeData.username': '被邀请观众 username（JWT 解析结果）',
-  'WatchCourseEnrollData.username': '学员 viewer.username（JWT 解析结果）',
+  'WatchCourseEnrollData.username': '被邀请学员 viewer.username（JWT 解析结果）',
+  'WatchCourseEnrollRequest.inviterId':
+    '邀请人 id；有邀请时必传。employee 为员工 rs_mainkey_id；audience 亦必传（本轮不落库）',
+  'WatchCourseEnrollRequest.inviterKind':
+    'employee 员工邀请 / audience 观众邀请',
+  'WatchCourseEnrollRequest.username':
+    '邀请人 viewer.username；仅 inviterKind=audience 时使用；不是被邀请学员',
+  'WatchAudienceAttributeRequest.username':
+    '邀请人 viewer.username；仅 inviterKind=audience 时使用；不是被邀请观众',
+  'WatchAudienceAttributeRequest.inviterId':
+    '邀请人 id，必传。employee 为员工 rs_mainkey_id；audience 亦必传（本轮不落库）',
+  'WatchAudienceAttributeRequest.inviterKind':
+    'employee 员工邀请 / audience 观众邀请',
+  'WatchCourseLessonProgressRequest.lessonNodeId':
+    '本课未软删小节节点 id（course_catalog_node.id，须 node_type=小节）',
+  'WatchCourseLessonProgressRequest.event':
+    'open 打开小节 / heartbeat 学习中心跳 / scroll_bottom 文档或文章滚到底 / live_ended 在线直播结束进入结束页',
+  'WatchCourseLessonProgressRequest.deltaLearnDurationSec':
+    '本次学习时长增量（秒），≥0 整数；缺省按 0；负值拒收',
+  'WatchCourseLessonProgressRequest.progressBarSec':
+    '进度条当前位置（秒），≥0；服务端与库内已有值取 max，只升不降',
+  'WatchCourseLessonProgressRequest.progressPercent':
+    '学习进度百分数 0～100；服务端与库内取 max；视频/直播回放达 100 记完成',
+  'WatchCourseLessonProgressData.lessonNodeId': '本课小节节点 id',
+  'WatchCourseLessonProgressData.participateStatus':
+    '参与状态：0 未开始 / 1 进行中 / 2 已完成',
+  'WatchCourseLessonProgressData.learnDurationSec':
+    '累计学习时长（秒）；按历次 deltaLearnDurationSec 累加',
+  'WatchCourseLessonProgressData.progressBarSec':
+    '进度条最远点（秒）；图文档类可空',
+  'WatchCourseLessonProgressData.progressPercent': '学习进度 0～100',
+  'WatchCourseLessonProgressData.completed':
+    '本次上报后是否已完成（participateStatus=2）',
   'VhallSdkPayload.username':
     '微吼 JSSDK 展示昵称（优先 Query nickname；空则默认「观众」）；不是业务身份 viewer.username',
   'VhallSdkPayload.account':
@@ -8506,19 +8538,28 @@ function buildLive() {
     WatchAudienceAttributeRequest: {
       type: 'object',
       required: ['inviterId'],
-      description:
-        '邀请归因（D97/D118）。被邀请观众 username 只从 Authorization 解析，Body 不传 username。inviterKind 区分员工/观众邀请；audience 当前不落库 → 400「不记录观众邀请」（D77）',
+      description: [
+        '直播分享登记邀请人（D97/D118），与课程 enroll 邀请字段同形。',
+        '被邀请观众 username 只从 Authorization 解析，禁止用 Body.username 冒充被邀请人。',
+        'inviterKind 区分员工/观众邀请；audience 须另传邀请人 username，本轮仍 → 400「不记录观众邀请」（D77）。',
+      ].join(''),
       properties: {
         inviterId: {
           type: 'integer',
           format: 'int64',
           description:
-            '邀请人 id；employee 时为员工 rs_mainkey_id；audience 时为观众 username（当前不落库，日后可能改 string）',
+            '邀请人 id，必传（大于 0）。employee：员工 rs_mainkey_id；audience：亦必传，本轮不落库',
         },
         inviterKind: {
           type: 'string',
           enum: ['employee', 'audience'],
           description: 'employee 员工邀请 / audience 观众邀请',
+        },
+        username: {
+          type: 'string',
+          maxLength: 16,
+          description:
+            '邀请人 viewer.username。仅 inviterKind=audience 时使用且必填；不是被邀请观众（被邀请人只从 JWT 取）',
         },
       },
     },
@@ -8588,12 +8629,29 @@ function buildLive() {
     },
     WatchCourseEnrollRequest: {
       type: 'object',
+      description: [
+        '课程分享登记学员的邀请字段（与直播 attribute 同形）。',
+        '被邀请学员 username 只从 Authorization 解析，禁止用 Body.username 冒充学员。',
+        '无邀请字段时可省略 Body 或传空对象，只 upsert 学员行。',
+        '有邀请意图时 inviterId 必传；inviterKind=audience 时另传邀请人 username，本轮 → 400「不记录观众邀请」。',
+      ].join(''),
       properties: {
         inviterId: {
           type: 'integer',
           format: 'int64',
           description:
-            '选填；员工 rs_mainkey_id；有值且行上邀请仍空则写入；省略则只 upsert 学员行',
+            '邀请人 id。有邀请时必传（大于 0）。employee：员工 rs_mainkey_id，行上员工邀请人仍空则写入；audience：亦必传，本轮不落库',
+        },
+        inviterKind: {
+          type: 'string',
+          enum: ['employee', 'audience'],
+          description: 'employee 员工邀请 / audience 观众邀请',
+        },
+        username: {
+          type: 'string',
+          maxLength: 16,
+          description:
+            '邀请人 viewer.username。仅 inviterKind=audience 时使用且必填；不是被邀请学员（学员只从 JWT 取）',
         },
       },
     },
@@ -8605,7 +8663,10 @@ function buildLive() {
           format: 'int64',
           description: 'course_user 行 id',
         },
-        username: { ...VIEWER_USERNAME },
+        username: {
+          ...VIEWER_USERNAME,
+          description: '被邀请学员 viewer.username（JWT 解析结果）',
+        },
         courseId: {
           $ref: '#/components/schemas/BusinessUuid',
           description: '课程 UUID',
@@ -8615,6 +8676,84 @@ function buildLive() {
           description: 'true 新建；false 已有行（不改权益/到期）',
         },
         title: { type: 'string', description: '课程标题' },
+      },
+    },
+    WatchCourseLessonProgressRequest: {
+      type: 'object',
+      required: ['lessonNodeId', 'event'],
+      properties: {
+        lessonNodeId: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '本课未软删小节节点 id（course_catalog_node.id，须 node_type=小节）',
+        },
+        event: {
+          type: 'string',
+          description:
+            'open 打开小节 / heartbeat 学习中心跳 / scroll_bottom 文档或文章滚到底 / live_ended 在线直播结束进入结束页',
+          enum: ['open', 'heartbeat', 'scroll_bottom', 'live_ended'],
+        },
+        deltaLearnDurationSec: {
+          type: 'integer',
+          format: 'int64',
+          description:
+            '本次学习时长增量（秒），≥0 整数；缺省按 0；负值拒收。服务端累加到 learnDurationSec',
+        },
+        progressBarSec: {
+          type: 'integer',
+          description:
+            '进度条当前位置（秒），≥0；服务端与库内已有值取 max，只升不降；图文档类可省略',
+        },
+        progressPercent: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100,
+          description:
+            '学习进度百分数 0～100；服务端与库内取 max。视频/直播回放达到 100 记小节完成',
+        },
+      },
+    },
+    WatchCourseLessonProgressData: {
+      type: 'object',
+      required: [
+        'lessonNodeId',
+        'participateStatus',
+        'learnDurationSec',
+        'progressPercent',
+        'completed',
+      ],
+      properties: {
+        lessonNodeId: {
+          type: 'integer',
+          format: 'int64',
+          description: '本课小节节点 id',
+        },
+        participateStatus: {
+          type: 'integer',
+          description: '参与状态：0 未开始 / 1 进行中 / 2 已完成',
+          enum: [0, 1, 2],
+        },
+        learnDurationSec: {
+          type: 'integer',
+          format: 'int64',
+          description: '累计学习时长（秒）；按历次 deltaLearnDurationSec 累加',
+        },
+        progressBarSec: {
+          type: 'integer',
+          nullable: true,
+          description: '进度条最远点（秒）；图文档类可空',
+        },
+        progressPercent: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 100,
+          description: '学习进度 0～100',
+        },
+        completed: {
+          type: 'boolean',
+          description: '本次上报后是否已完成（participateStatus=2）',
+        },
       },
     },
     IdDataInt: {
@@ -8738,6 +8877,9 @@ function buildLive() {
     ApiResponseWatchAudienceAttribute: { $ref: '#/components/schemas/WatchAudienceAttributeData' },
     ApiResponseWatchAudienceSalesman: { $ref: '#/components/schemas/WatchAudienceSalesmanData' },
     ApiResponseWatchCourseEnroll: { $ref: '#/components/schemas/WatchCourseEnrollData' },
+    ApiResponseWatchCourseLessonProgress: {
+      $ref: '#/components/schemas/WatchCourseLessonProgressData',
+    },
     ApiResponseDictData: { $ref: '#/components/schemas/DictData' },
     ApiResponseIntId: { $ref: '#/components/schemas/IdDataInt' },
 
@@ -9271,12 +9413,13 @@ function buildLive() {
     },
     '/api/v1/watch/audience/salesman/{id}': {
       get: {
-        tags: ['用户运营'],
-        summary: '本场业务员查询',
+        tags: ['直播分享进房'],
+        summary: '查询本场下单业务员',
         description: [
+          '观看页创建订单前调用：根据本场员工邀请人解析订单中心要用的 salesmanId / salesmanDeptId。',
           '须观众 Authorization；观众 id 只从 JWT 取；无票 → 401。路径 {id}=活动 UUID；活动不存在/已软删 → 400。',
           '读本场 activity_audience 当前观众行：仅 employee_inviter_id → sys_useraccount.yhid → hr_uimsyhxx.identifier + 在职岗位最小 id 的 bmid；无邀请人或档案缺失 → salesmanId=null。不回退 importer_id。',
-          '观看页创建订单前调用，有值则把 salesmanId / salesmanDeptId 写入订单中心 POST …/viewer/order/create。',
+          '有值则把 salesmanId / salesmanDeptId 写入订单中心 POST …/viewer/order/create。',
         ].join('\n'),
         operationId: 'watchAudienceSalesman',
         security: viewerBearer,
@@ -9286,14 +9429,15 @@ function buildLive() {
     },
     '/api/v1/watch/audience/attribute/{id}': {
       post: {
-        tags: ['用户运营'],
-        summary: '邀请归因',
+        tags: ['直播分享进房'],
+        summary: '直播分享登记邀请人',
         description: [
-          '须观众 Authorization（D97/D118）；被邀请观众 username 只从 JWT 取，Body 不传 username；无票 → 401。',
-          '区分邀请人类型 inviterKind：employee 员工 / audience 观众。',
-          'employee：写 activity_audience.employee_inviter_*（空则填，先导入后邀请可补填）。',
-          'audience：本站不记录观众邀请 → 400「不记录观众邀请」（D77；分支保留）。',
-          '缺省 inviterKind=employee。',
+          '观众打开直播分享链进房后调用：把邀请人写进本场 activity_audience（与「课程分享登记学员」同形）。',
+          '须观众 Authorization（D97/D118）；被邀请观众 username 只从 JWT 取；无票 → 401。',
+          'Body：inviterId 必传；inviterKind 为 employee 员工 / audience 观众（缺省 employee）；',
+          'username 为邀请人 viewer.username（仅 audience 时必填，不是被邀请人）。',
+          'employee：写 employee_inviter_*（空则填，先导入后邀请可补填）。',
+          'audience：校验邀请人 username 后 → 400「不记录观众邀请」（D77；分支保留）。',
         ].join('\n'),
         operationId: 'watchAudienceAttribute',
         security: viewerBearer,
@@ -9309,10 +9453,14 @@ function buildLive() {
     },
     '/api/v1/watch/course/enroll/{id}': {
       post: {
-        tags: ['用户运营'],
-        summary: '课程分享链进房 enroll',
+        tags: ['课程'],
+        summary: '课程分享登记学员',
         description: [
-          '路径 {id}=课程 UUID。须观众 JWT；username 只从 JWT 取，Body 不接受 username。',
+          '路径 {id}=课程 UUID。学员打开课程/小节分享链后调用，写入 course_user。',
+          '须观众 JWT；被邀请学员 username 只从 JWT 取。',
+          '邀请字段与「直播分享登记邀请人」同形：inviterId（有邀请必传）+ inviterKind（employee/audience，缺省 employee）',
+          '+ username（仅观众邀请时的邀请人 username）。',
+          'employee：行上员工邀请人仍空则写入；audience：校验后 400「不记录观众邀请」（分支保留）。',
           '无行则插入（entitlement_status=1，acquire_way=purchase；按售卖写 expire）并 total_user_count+1；已有行不改权益/到期。',
           '课程不存在/已软删或观众不存在 → 400；无票 → 401。',
         ].join(''),
@@ -9336,6 +9484,41 @@ function buildLive() {
           },
         },
         responses: ok200('#/components/schemas/ApiResponseWatchCourseEnroll'),
+      },
+    },
+    '/api/v1/watch/course/lessons/progress/{courseId}': {
+      post: {
+        tags: ['课程'],
+        summary: '学员上报课程小节学习进度',
+        description: [
+          '路径 courseId=本站课程 UUID。须观众 JWT；username 只从 JWT 取，Body 不接受 username。',
+          '写入 course_lesson_progress（UK：课程+小节+学员）：累加 learnDurationSec；progressBarSec / progressPercent 只升不降取 max。',
+          '完成口径按小节 contentKind：图片 open 即完成；文档/文章 scroll_bottom；视频 progressPercent≥100；',
+          '直播 live_ended（在线结束进结束页）或回放 progressPercent≥100。首次完成写 completed_time。',
+          '课程不存在/已软删、小节不属于本课或非小节 → 400；无票 → 401「未登录」。',
+        ].join(''),
+        operationId: 'watchCourseLessonProgress',
+        security: viewerBearer,
+        parameters: [
+          {
+            name: 'courseId',
+            in: 'path',
+            required: true,
+            schema: { ...BUSINESS_UUID },
+            description: '本站课程 UUID（D74）',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/WatchCourseLessonProgressRequest',
+              },
+            },
+          },
+        },
+        responses: ok200('#/components/schemas/ApiResponseWatchCourseLessonProgress'),
       },
     },
     '/api/v1/callbacks/vhall/presence': {
@@ -9440,7 +9623,7 @@ function buildLive() {
       { name: '我的学习' },
       { name: '回放' },
       { name: '评论' },
-      { name: '用户运营' },
+      { name: '直播分享进房' },
       { name: '开发' },
       { name: '中控台' },
       { name: '回调' },

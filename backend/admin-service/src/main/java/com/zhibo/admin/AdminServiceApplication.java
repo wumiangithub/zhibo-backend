@@ -1,6 +1,7 @@
 package com.zhibo.admin;
 
 import com.zhibo.admin.auth.AuthProperties;
+import com.zhibo.admin.oms.OmsDataSourceProperties;
 import com.zhibo.admin.volc.VolcProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -15,7 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
  * 售卖密码 AES 由 live-common {@code ActivityJpaConfig} 注册。
  */
 @SpringBootApplication
-@EnableConfigurationProperties({VolcProperties.class, AuthProperties.class})
+@EnableConfigurationProperties({VolcProperties.class, AuthProperties.class, OmsDataSourceProperties.class})
 public class AdminServiceApplication {
 
     public static void main(String[] args) {

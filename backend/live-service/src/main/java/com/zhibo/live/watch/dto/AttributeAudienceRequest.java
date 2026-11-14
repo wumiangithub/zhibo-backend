@@ -13,10 +13,16 @@ public class AttributeAudienceRequest {
     private String inviterKind;
 
     /**
-     * 邀请人 id。
-     * {@code employee} → 员工 rs_mainkey_id；{@code audience} → 观众 viewer.id（当前不处理）。
-     * 被邀请观众 id 只从 Authorization 观众 JWT 取（D97），不进 Body。
+     * 邀请人 id（必传）。
+     * {@code employee} → 员工 rs_mainkey_id；{@code audience} → 亦必传（本轮不落库）。
+     * 被邀请观众 username 只从 Authorization 观众 JWT 取（D97），不进 Body。
      */
     @NotNull(message = "inviterId 不能为空")
     private Long inviterId;
+
+    /**
+     * 邀请人 {@code viewer.username}。仅 {@code inviterKind=audience} 时使用且必填。
+     * 不是被邀请观众（被邀请人只从 JWT 取）。与课程 enroll 同形。
+     */
+    private String username;
 }

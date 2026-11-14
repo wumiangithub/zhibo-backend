@@ -73,3 +73,13 @@ auth:
     # 本地可开：未绑定账号扫码写库绑定；默认 false（正式行为）
     allow-self-bind: ${AUTH_WECHAT_ALLOW_SELF_BIND:false}
 # 账号直登接口 /api/v1/auth/dev-account-login 仅在 spring profile=local 或 test 时开放（容器默认 profile 为 local）
+
+# OMS 只读库（直播带货「成功退款金额」）。缺密码则不建连接，该列置 0.00，不拒启动。
+# 密码只来自环境 / .env.local，不要写进本文件或 git。
+oms:
+  datasource:
+    host: ${OMS_DB_HOST:mysql-8c1c7f5fabcf-public.rds.volces.com}
+    port: ${OMS_DB_PORT:35846}
+    database: ${OMS_DB_NAME:oms_db}
+    username: ${OMS_DB_USER:pro_oms_zb_user}
+    password: ${OMS_DB_PASSWORD:}

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -118,10 +119,66 @@ class CourseEnrollServiceTest {
 
         EnrollCourseRequest req = new EnrollCourseRequest();
         req.setInviterId(10001L);
+        req.setInviterKind("employee");
 
         var res = service.enroll(CID, "12", req);
         assertFalse(res.isCreated());
         assertEquals(3, course.getTotalUserCount());
         assertEquals(90001L, existing.getEmployeeInviterId());
+    }
+
+    @Test
+    void enroll_audience_rejectsWithoutPersisting() {
+        CourseEntity course = new CourseEntity();
+        course.setId(CID);
+        course.setTitle("演示课");
+        course.setTotalUserCount(0);
+        when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUsername(CID, "12")).thenReturn(Optional.empty());
+
+        EnrollCourseRequest req = new EnrollCourseRequest();
+        req.setInviterId(1L);
+        req.setInviterKind("audience");
+        req.setUsername("inviter_user");
+
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> service.enroll(CID, "12", req));
+        assertEquals("不记录观众邀请", ex.getMessage());
+    }
+
+    @Test
+    void enroll_audience_requiresInviterUsername() {
+        CourseEntity course = new CourseEntity();
+        course.setId(CID);
+        course.setTitle("演示课");
+        when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUsername(CID, "12")).thenReturn(Optional.empty());
+
+        EnrollCourseRequest req = new EnrollCourseRequest();
+        req.setInviterId(1L);
+        req.setInviterKind("audience");
+
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> service.enroll(CID, "12", req));
+        assertEquals("观众邀请须传邀请人 username", ex.getMessage());
+    }
+
+    @Test
+    void enroll_inviteWithoutInviterId_rejects() {
+        CourseEntity course = new CourseEntity();
+        course.setId(CID);
+        course.setTitle("演示课");
+        when(courseRepository.findById(CID)).thenReturn(Optional.of(course));
+        when(viewerRepository.existsByUsername("12")).thenReturn(true);
+        when(courseUserRepository.findByCourseIdAndUsername(CID, "12")).thenReturn(Optional.empty());
+
+        EnrollCourseRequest req = new EnrollCourseRequest();
+        req.setInviterKind("employee");
+
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> service.enroll(CID, "12", req));
+        assertEquals("inviterId 无效", ex.getMessage());
     }
 }
